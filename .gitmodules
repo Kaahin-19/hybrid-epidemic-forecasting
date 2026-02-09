@@ -1,0 +1,6 @@
+[submodule "third_party/stenglib"]
+	path = third_party/stenglib
+	url = https://github.com/stefanengblom/stenglib
+[submodule "third_party/urdme"]
+	path = third_party/urdme
+	url = https://github.com/URDME/urdme
