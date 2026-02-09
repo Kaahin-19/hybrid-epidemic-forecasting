@@ -1,0 +1,7 @@
+# Windows compatibility
+win_compat.c
+win_compat.h
+
+# Generated artifacts
+SIRS.c
+mexssa_SIRS_SIRS.mexw64
