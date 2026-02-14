@@ -32,8 +32,6 @@ cfg = partA_config();
 dataDir = cfg.output.data_dir;     % Source: Ground Truth
 saveDir = cfg.output.forecast_dir; % Dest: Forecast Results
 
-ensure_dirs(saveDir);
-
 % Get list of scenarios to process
 fileList = dir(fullfile(dataDir, 'synthetic_*.mat'));
 

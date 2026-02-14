@@ -14,8 +14,6 @@ cfg = partA_config();
 forecastDir = cfg.output.forecast_dir; 
 scoreDir    = cfg.output.score_dir;
 
-ensure_dirs(scoreDir);
-
 fprintf('Loading forecast results from: %s\n', forecastDir);
 
 %% 2. Load Raw Data
