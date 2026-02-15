@@ -29,7 +29,7 @@ function cfg = partA_config()
     cfg = struct();
 
     %% 1. Time Grid
-    cfg.time.T_end = 365*2;                       % Duration [days]
+    cfg.time.T_end = 365;                       % Duration [days]
     cfg.time.dt    = 1;                         % Step size [days]
     cfg.time.tspan = 0:cfg.time.dt:cfg.time.T_end;
 
@@ -123,7 +123,7 @@ function cfg = partA_config()
     cfg.sim.seed = 1234;     % Fixed seed
 
     %% 6. Forecasting Hyperparameters
-    cfg.forecast.min_window = 28;   % Initial training window [days]
+    cfg.forecast.min_window = 49;   % Initial training window [days]
     cfg.forecast.step_size  = 7;    % Window expansion step [days]
     cfg.forecast.horizon    = 14;   % Prediction horizon [days]
 

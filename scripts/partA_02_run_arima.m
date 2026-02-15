@@ -144,6 +144,10 @@ function [Rt_curve, aicc] = fit_predict_arima(Rt_hist, p, d, q, horizon)
     else
         fit_data = y;
     end
+
+    if std(fit_data) < 1e-8
+        fit_data = fit_data + (randn(size(fit_data)) * 1e-6);
+    end
     
     n = length(fit_data);
     k = p + q; 
