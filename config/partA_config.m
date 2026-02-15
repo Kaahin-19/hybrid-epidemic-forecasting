@@ -109,8 +109,9 @@ function cfg = partA_config()
     );
 
     %% 4. Simulation Parameters (SIRS)
-    cfg.sirs.gamma = 1/7;    % Recovery rate [1/days]
-    cfg.sirs.xi    = 0;      % Waning immunity rate [1/days]
+    cfg.sirs.gamma = 1/7;       % Recovery rate [1/days]
+    cfg.sirs.xi    = 0;         % Waning immunity rate [1/days]
+    cfg.sirs.pop_size = 100000;  % Total population size
 
     %% 5. Reproducibility
     cfg.sim.seed = 1234;     % Fixed seed

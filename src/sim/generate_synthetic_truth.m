@@ -39,16 +39,15 @@ function generate_synthetic_truth(scenarios, cfg)
         beta_curve = rt_to_beta_sirs(s.Rt, params.gamma);
         
         % 2. Interface Preparation
-        % Construct the 'dynrates' structure required by the solver.
-        dynrates.gamma = params.gamma;
-        dynrates.xi    = params.xi;
-        dynrates.beta  = beta_curve;
+        % Construct the 'params' structure required by the solver.
+        params.beta = beta_curve;
+
         
         % 3. Execution
         % Run the stochastic simulation. We wrap this in a try-catch block 
         % to ensure robust batch processing.
         try
-            umod = genData('SIRS', cfg.sim.seed, dynrates);
+            umod = genData_SIRS('SIRS', params, cfg.sim.seed);
         catch ME
             warning('Simulation failed for %s: %s', s.id, ME.message);
             continue;
@@ -66,9 +65,9 @@ function generate_synthetic_truth(scenarios, cfg)
         % We include 'cfg' and 'dynrates' to ensure the result file is self-documenting.
         if exist('save_mat_atomic', 'file')
             save_mat_atomic(outPath, 'umod', umod, 'Rt_true', Rt_true, ...
-                'I_true', I_true, 'tspan', tspan, 'dynrates', dynrates, 'cfg', cfg);
+                'I_true', I_true, 'tspan', tspan, 'params', params, 'cfg', cfg);
         else
-            save(outPath, 'umod', 'Rt_true', 'I_true', 'tspan', 'dynrates', 'cfg');
+            save(outPath, 'umod', 'Rt_true', 'I_true', 'tspan', 'params', 'cfg');
         end
         
         fprintf('Saved to %s\n', outPath);
