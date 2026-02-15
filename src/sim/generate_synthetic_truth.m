@@ -59,7 +59,7 @@ function generate_synthetic_truth(scenarios, cfg)
         I_true  = umod.U(2, :);
         tspan   = cfg.time.tspan;
         
-        outName = sprintf('synthetic_%s.mat', s.id);
+        outName = sprintf('%s.mat', s.id);
         outPath = fullfile(cfg.output.data_dir, outName);
         
         % Save to disk.

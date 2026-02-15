@@ -56,13 +56,18 @@ function plot_truth_vs_forecast(results, umod_true, tspan, name, cfg)
 
     % Forecast spaghetti
     for k = 1:2:length(results)
+        % X-coordinates: Start day + 14 future days (15 points)
         t_combined = [results(k).window_day, results(k).time_horizon];
-        I_combined = results(k).forecast_I;
+        
+        % Y-coordinates: Get starting point from ground truth, then append forecast
+        idx_T   = results(k).window_day_idx;
+        I_start = umod_true.U(2, idx_T);
+        I_combined = [I_start, results(k).forecast_I]; % Now also 15 points
 
         plot(ax2, t_combined, I_combined, ...
             'b--', 'LineWidth', 1, 'HandleVisibility', 'off');
     end
-
+    
     ylabel(ax2, 'Infected Cases');
     xlabel(ax2, 'Days');
     grid(ax2, 'on');
