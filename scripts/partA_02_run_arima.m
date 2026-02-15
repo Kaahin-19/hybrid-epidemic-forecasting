@@ -16,9 +16,9 @@ fileList = dir(fullfile(dataDir, '*.mat'));
 fprintf('=== Starting Track 1: Parallelized Statistical Forecasts ===\n');
 
 % EXHAUSTIVE GRIDS (No Inductive Bias)
-grid_p = 0:5;            % Contiguous search up to 2 weeks
-grid_d = [0, 1];         % Stationary vs. Constant Trend
-grid_q = 0:2;            % Short-term shock absorption limit
+grid_p = 0:14;              % Contiguous search up to 2 weeks
+grid_d = [0, 1];            % Stationary vs. Constant Trend
+grid_q = 0:2;               % Short-term shock absorption limit
 
 % Flatten grids into a matrix of all possible combinations
 [P, D, Q] = ndgrid(grid_p, grid_d, grid_q);

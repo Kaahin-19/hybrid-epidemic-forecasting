@@ -47,7 +47,7 @@ function generate_synthetic_truth(scenarios, cfg)
         % Run the stochastic simulation. We wrap this in a try-catch block 
         % to ensure robust batch processing.
         try
-            umod = genData_SIRS('SIRS', params, cfg.sim.seed);
+            umod = genData_SIRS(cfg.time.tspan, params, cfg.sim.seed);
         catch ME
             warning('Simulation failed for %s: %s', s.id, ME.message);
             continue;

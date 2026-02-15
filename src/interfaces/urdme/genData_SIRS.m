@@ -1,14 +1,5 @@
 function umod = genData_SIRS(tspan, params, seed)
 %GENDATA_SIRS Generate data from SIRS model using URDME.
-%
-%   Inputs:
-%       tspan  - Time vector (e.g., 0:365)
-%       params - Struct containing all model parameters:
-%                  .beta     (Time-series of transmission rate)
-%                  .gamma    (Recovery rate, 1/days)
-%                  .xi       (Waning immunity rate, 1/days)
-%                  .pop_size (Total population size)
-%       seed   - Random seed for reproducibility (optional)
 
     if nargin < 3 || isempty(seed)
         seed = 220506; 
@@ -37,12 +28,29 @@ function umod = genData_SIRS(tspan, params, seed)
     % 4. Parse the Model
     umod = rparse([], r, species, rates, name);
     
-    % 5. Initialize Physical Domain and Time
+    % 5. Initialize Physical Domain, Time, and Initial Conditions
     umod.vol = pop_size;
     Nspecies = size(umod.N, 1);
     umod.D = sparse(Nspecies, Nspecies);
     umod.sd = 1;
     umod.tspan = tspan; 
+    
+    % Extract specific initial states if provided, otherwise default
+    if isfield(params, 'I0')
+        I0 = params.I0;
+    else
+        I0 = 500; 
+    end
+    
+    if isfield(params, 'R0_init')
+        R0_init = params.R0_init;
+    else
+        R0_init = 0; 
+    end
+    
+    % THE FIX: Initialize u0 BEFORE compilation
+    umod.u0 = zeros(Nspecies, 1);
+    umod.u0(1:3) = [umod.vol - I0 - R0_init; I0; R0_init];
     
     % 6. Map Rates for Compilation
     Rates.gammaI = gammaI;
@@ -65,7 +73,7 @@ function umod = genData_SIRS(tspan, params, seed)
     % Add private fields 
     umod.private.epiid.R0 = beta_curve / gammaI;
     umod.private.epiid.rates = Rates;
-    umod.private.epiid.dynrates = params; % Keep for backward compatibility if needed
+    umod.private.epiid.dynrates = params; 
     
     for i = 1:numel(r)
       ix = find(r{i} == '>');
@@ -73,11 +81,7 @@ function umod = genData_SIRS(tspan, params, seed)
     end
     umod.private.epiid.Propensities = prop;
     
-    % 8. Set Initial Conditions and Simulate
-    I0 = 500; 
-    umod.u0 = zeros(Nspecies, 1);
-    umod.u0(1:3) = [umod.vol - I0; I0; 0];
-    
+    % 8. Simulate
     umod.seed = randi(intmax);
     umod = urdme(umod);
 end

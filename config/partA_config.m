@@ -29,7 +29,7 @@ function cfg = partA_config()
     cfg = struct();
 
     %% 1. Time Grid
-    cfg.time.T_end = 140;                       % Duration [days]
+    cfg.time.T_end = 365;                       % Duration [days]
     cfg.time.dt    = 1;                         % Step size [days]
     cfg.time.tspan = 0:cfg.time.dt:cfg.time.T_end;
 
@@ -110,8 +110,10 @@ function cfg = partA_config()
 
     %% 4. Simulation Parameters (SIRS)
     cfg.sirs.gamma = 1/7;       % Recovery rate [1/days]
-    cfg.sirs.xi    = 0;         % Waning immunity rate [1/days]
+    cfg.sirs.xi    = 1/90;         % Waning immunity rate [1/days]
     cfg.sirs.pop_size = 100000;  % Total population size
+    cfg.sirs.I0       = 500;    % Initial infected
+    cfg.sirs.R0_init  = 0;      % Initial recovered
 
     %% 5. Reproducibility
     cfg.sim.seed = 1234;     % Fixed seed
