@@ -42,6 +42,15 @@ function generate_synthetic_truth(scenarios, cfg)
         % Construct the 'params' structure required by the solver.
         params.beta = beta_curve;
 
+        % Map specific initial conditions for the scenario (if they exist)
+        if isfield(s.params, 'I0')
+            params.I0 = s.params.I0;
+        end
+        
+        if isfield(s.params, 'R0_init')
+            params.R0_init = s.params.R0_init;
+        end
+
         
         % 3. Execution
         % Run the stochastic simulation. We wrap this in a try-catch block 
