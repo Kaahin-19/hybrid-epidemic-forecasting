@@ -1,5 +1,7 @@
 function umod = genData_SIRS(tspan, params, seed)
 %GENDATA_SIRS Generate data from SIRS model using URDME.
+%
+% Dynamically supports both stochastic ('ssa') and deterministic ('uds') solvers.
 
     if nargin < 3 || isempty(seed)
         seed = 220506; 
@@ -59,8 +61,17 @@ function umod = genData_SIRS(tspan, params, seed)
     GDATA = struct2cell(Rates);
     GDATA = cat(1, GDATA{:});
     
+    % --- HYBRID UPDATE: Determine Solver Type ---
+    % Defaults to stochastic 'ssa' for Part A. 
+    % Accepts 'uds' for deterministic ODEs in Part B.
+    if isfield(params, 'solver')
+        sim_solver = params.solver;
+    else
+        sim_solver = 'ssa';
+    end
+    
     % 7. Parse and Compile the URDME Model
-    umod = urdme(umod, 'solve', 0, 'compile', 1, 'solver', 'ssa', ...
+    umod = urdme(umod, 'solve', 0, 'compile', 1, 'solver', sim_solver, ...
                  'modelname', name, ...
                  'gdata', GDATA, ...
                  'ldata_time', reshape(beta_curve, [1, numel(umod.vol), numel(umod.tspan)]), ...

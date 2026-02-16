@@ -64,6 +64,7 @@ function generate_synthetic_truth(scenarios, cfg)
         
         % 4. Persistence
         Rt_true = s.Rt;
+        S_true = umod.U(1, :);
         I_true  = umod.U(2, :);
         tspan   = cfg.time.tspan;
         
@@ -74,9 +75,10 @@ function generate_synthetic_truth(scenarios, cfg)
         % We include 'cfg' and 'dynrates' to ensure the result file is self-documenting.
         if exist('save_mat_atomic', 'file')
             save_mat_atomic(outPath, 'umod', umod, 'Rt_true', Rt_true, ...
-                'I_true', I_true, 'tspan', tspan, 'params', params, 'cfg', cfg);
+                'I_true', I_true, 'S_true', S_true , 'tspan', ...
+                tspan, 'params', params, 'cfg', cfg);
         else
-            save(outPath, 'umod', 'Rt_true', 'I_true', 'tspan', 'params', 'cfg');
+            save(outPath, 'umod', 'Rt_true', 'I_true', 'S_true', 'tspan', 'params', 'cfg');
         end
         
         fprintf('Saved to %s\n', outPath);
