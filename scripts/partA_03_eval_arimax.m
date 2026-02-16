@@ -1,16 +1,19 @@
-%PARTB_03_EVAL_ARIMAX Score Track 2 (ARIMAX / Hybrid Baseline) performance.
+%PARTA_03_EVAL_ARIMAX Score Track 2 (ARIMAX / Hybrid Baseline) performance.
 %% 1. Initialization
 clear; clc; close all;
-cfg = partA_config(); % Assuming you still use the same config paths
+cfg = partA_config(); 
 forecastDir = cfg.output.forecast_dir; 
 scoreDir    = cfg.output.score_dir;
 
-fprintf('Loading Track 2 results from: %s\n', forecastDir);
-% Update search to look for track2 files
-files = dir(fullfile(forecastDir, 'track2_results_*.mat'));
+% Set this to match the run you just completed!
+exo_mode = 'Both'; % Change to 'S' or 'I' if evaluating those runs
+run_tag = ['_', exo_mode];
+
+fprintf('Loading Track 2 (%s) results from: %s\n', exo_mode, forecastDir);
+files = dir(fullfile(forecastDir, ['track2_results_*', run_tag, '.mat']));
 
 if isempty(files)
-    error('EVAL:NoData', 'No Track 2 results found. Run partB_01_run_arimax first.');
+    error('EVAL:NoData', 'No Track 2 results found for mode: %s.', exo_mode);
 end
 
 %% 2. Aggregate Rt Scores
@@ -22,14 +25,14 @@ for i = 1:length(files)
     data = load_mat_safe(fullPath);
     results = data.results;
     
-    % Clean scenario name for the table (Updated regex for track2)
-    cleanName = regexprep(filename, {'^track2_results_', '\.mat$'}, '');
+    % Clean scenario name for the table 
+    % Removes 'track2_results_' and the run_tag (e.g., '_Both.mat')
+    cleanName = regexprep(filename, {'^track2_results_', [run_tag, '\.mat$']}, '');
     
     for k = 1:length(results)
         pred_Rt  = double(results(k).forecast_Rt(:));
         truth_Rt = double(results(k).truth_Rt_window(:));
         
-        % Calculate Root Mean Square Error
         rmse_val = sqrt(mean((pred_Rt - truth_Rt).^2));
         
         newRow = {categorical(string(cleanName)), results(k).window_day, rmse_val};
@@ -39,14 +42,13 @@ end
 scores.Properties.VariableNames = {'Scenario', 'WindowDay', 'RMSE_Rt'};
 
 %% 3. Visualization
-fig = figure('Name', 'Track 2 Evaluation', 'Position', [100 100 600 500]);
+fig = figure('Name', ['Track 2 Evaluation (', exo_mode, ')'], 'Position', [100 100 600 500]);
 boxchart(scores.Scenario, scores.RMSE_Rt);
 ylabel('RMSE (R_t)');
-title('Track 2: Transmission Rate Accuracy (ARIMAX)');
+title(['Track 2: Transmission Rate Accuracy (ARIMAX - ', exo_mode, ')']);
 grid on;
 
-% Save updated figure
-plotFile = fullfile(scoreDir, 'track2_evaluation_boxplot.png');
+plotFile = fullfile(scoreDir, ['track2_evaluation_boxplot_', exo_mode, '.png']);
 saveas(fig, plotFile);
 fprintf('Saved visualization to: %s\n', plotFile);
 
@@ -58,9 +60,8 @@ summaryTable.Scenario    = stats.Scenario;
 summaryTable.Rt_Mean     = stats.mean_RMSE_Rt;
 summaryTable.Rt_Std      = stats.std_RMSE_Rt;
 
-fprintf('\n=== TRACK 2: FINAL SCORECARD ===\n');
+fprintf('\n=== TRACK 2 (%s): FINAL SCORECARD ===\n', upper(exo_mode));
 disp(summaryTable);
 
-% Save updated CSV
-fileSummary = fullfile(scoreDir, 'track2_summary_scores.csv');
+fileSummary = fullfile(scoreDir, ['track2_summary_scores_', exo_mode, '.csv']);
 writetable(summaryTable, fileSummary);
