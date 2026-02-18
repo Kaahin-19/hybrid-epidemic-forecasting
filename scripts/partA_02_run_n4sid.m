@@ -15,7 +15,7 @@ fileList = dir(fullfile(dataDir, '*.mat'));
 % =========================================================================
 % CONFIGURATION: EXOGENOUS VARIABLE
 % =========================================================================
-exo_mode = 'Both';    % Options: 'None', 'S', 'I', or 'Both'
+exo_mode = 'S';    % Options: 'None', 'S', 'I', or 'Both'
 % =========================================================================
 
 fprintf('=== Starting TRACK 3 Forecasts (N4SID | Exo: %s) ===\n', exo_mode);

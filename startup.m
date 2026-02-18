@@ -1,11 +1,12 @@
 % STARTUP Initialize environment for the project.
-%
-%   Description:
-%       Configures the MATLAB search path and verifies the presence of 
-%       the required directory structure for data storage and results.
 
-% Add all project subdirectories to the MATLAB search path
-addpath(genpath(pwd));
+% Explicitly add specific top-level script and configuration folders
+addpath(fullfile(pwd, 'config'));
+addpath(fullfile(pwd, 'scripts'));
+addpath(fullfile(pwd, 'sandbox'));
+
+% Recursively add the 'src' directory, as it contains safe, nested function modules
+addpath(genpath(fullfile(pwd, 'src')));
 
 % Initialize required directory structure
 required_dirs = {'data/ground_truth', 'results/forecasts', ...
@@ -16,3 +17,5 @@ for i = 1:length(required_dirs)
         mkdir(required_dirs{i});
     end
 end
+
+disp('Project environment initialized successfully.');
