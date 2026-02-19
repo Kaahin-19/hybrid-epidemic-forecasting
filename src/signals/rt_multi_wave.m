@@ -14,7 +14,7 @@ function Rt = rt_multi_wave(t, p)
 %       p - Parameter structure containing:
 %           .baseline - Constant baseline Rt level.
 %           .mu1, .mu2, .mu3, .mu4 - Center time points for each peak.
-%           .A1, .A2, .A3, .A4     - Amplitudes (heights) of each peak.
+%           .A1, .A2, .A3, .A4     - Amplitudes of each peak.
 %           .denom                 - Variance parameter controlling wave duration.
 %
 %   Outputs:

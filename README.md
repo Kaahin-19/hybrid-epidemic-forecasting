@@ -32,8 +32,6 @@ This repository contains the codebase for evaluating statistical (ARIMA/ARIMAX) 
 * `src/plot/plot_rt_scenarios.m`: Generates a tiled summary figure displaying the predefined synthetic reproduction number profiles.
 * `src/plot/plot_rt_forecast_comparison.m`: Generates a two-panel visualization comparing the expanding window forecasts against the ground truth and tracking AICc stability.
 * `src/plot/plot_model_performance.m`: Visualizes the comparative RMSE distributions across various model configurations and scenarios.
-* `src/signals/rt_double_wave.m`: Generates a double-peak Gaussian trajectory to model an initial epidemic wave followed by a single resurgence.
 * `src/signals/rt_multi_wave.m`: Generates a four-peak Gaussian trajectory to model sustained, sequentially damping or amplifying epidemic resurgences.
 * `src/signals/rt_seasonal.m`: Generates a deterministic, sinusoidal reproduction number trajectory to simulate recurrent epidemic waves.
 * `src/signals/rt_sigmoid.m`: Generates a smooth sigmoid transition to model the impact of a targeted policy intervention.
-* `src/signals/rt_trend.m`: Generates a linear drift trajectory to simulate slow, directional changes in transmission potential.
