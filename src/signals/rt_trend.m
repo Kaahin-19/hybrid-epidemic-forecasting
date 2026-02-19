@@ -21,7 +21,9 @@ function Rt = rt_trend(t, p)
 %   Outputs:
 %       Rt - Vector of linearly interpolated Rt values matching the length of t.
 %
-%   See also RT_SEASONAL, RT_TRANSIENT, PARTA_CONFIG.
+%   See also RT_SEASONAL, RT_SIGMOID, RT_DOUBLE_WAVE, RT_MULTI_WAVE.
+
+% A. M. Kaahin 2026-02-19
 
     Rt = linspace(p.start, p.stop, numel(t));
     
