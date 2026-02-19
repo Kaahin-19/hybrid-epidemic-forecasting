@@ -79,9 +79,7 @@ function [Rt_curve, aicc] = fit_arima(Rt_hist, p, d, q, horizon)
         end
         
         % Reverse log-transform and constrain to physical bounds
-        Rt_curve = exp(pred_y);
-        Rt_curve = max(0, min(10, Rt_curve));
-        
+        Rt_curve = exp(pred_y);        
     catch
         % Fallback to persistence forecast on numerical estimation failure
         Rt_curve = repmat(Rt_hist(end), horizon, 1);
