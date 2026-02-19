@@ -1,94 +1,91 @@
-function plot_rt_forecast_comparison(results, Rt_true, tspan, name, cfg)
-%PLOT_RT_FORECAST_COMPARISON Reusable 2-panel plotter for Rt truth vs forecasts.
+function plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
+%PLOT_RT_FORECAST_COMPARISON Visualize forecast performance against ground truth.
 %
-%   Produces thesis-quality, 300 DPI multi-panel figures.
+%   Syntax:
+%       plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
+%
+%   Description:
+%       Generates a summary figure comparing the expanding window forecasts 
+%       against the synthetic ground truth.
+%
+%   Inputs:
+%       results   - Struct array of forecast results per window.
+%       Rt_true   - Numeric vector of the ground truth Rt curve.
+%       tspan     - Numeric vector of time points.
+%       plot_name - String identifier for the plot title (scenario name).
+%       cfg       - Configuration struct containing output directories.
 
-    %% 1. Setup & Dimensions
-    % Force a specific figure size (800x600) for consistent aspect ratios in print
-    fig = figure('Visible', 'off', 'Name', ['Rt Comparison: ' name], ...
-                 'Position', [100, 100, 800, 600]);
-    
+% A. M. Kaahin 2026-02-19
+
+    %% 1. Initialization
+    % Use the specific figure directory from config, or fallback to default
     if isfield(cfg, 'output') && isfield(cfg.output, 'fig_dir')
-        outDir = cfg.output.fig_dir;
+        figDir = cfg.output.fig_dir;
     else
-        outDir = fullfile('results', 'figures');
+        figDir = fullfile(pwd, 'results', 'figures');
     end
-
-    % Tiledlayout with minimal whitespace
-    tlo = tiledlayout(fig, 2, 1, 'TileSpacing', 'compact', 'Padding', 'compact');
-
-    % Shared Y-limits + dynamic buffer
-    y_max = max(max(Rt_true)*1.2, 3);
     
-    % Professional Color Palette (RGB)
-    color_truth_top = [0.15 0.15 0.15];        % Near black for high contrast
-    color_truth_bot = [0 0.4470 0.7410];       % Dark blue for the clean reference
-    color_forecast  = [0.8500 0.3250 0.0980];  % Orange-Red
-    color_ref_line  = [0.5 0.5 0.5];           % Subdued gray
+    % Standardized filename: partA_02_forecast_plot_[ScenarioName].png
+    filename = sprintf("partA_02_forecast_plot_%s.png", plot_name);
+    outPath  = fullfile(figDir, filename);
 
-    %% 2. TOP PANEL: Spaghetti Forecasts + Ground Truth
-    ax1 = nexttile_clean(tlo);
+    %% 2. Visualization
+    % Match the "Visible", "off" style from plot_rt_scenarios
+    fig = figure("Name", ["Forecast Comparison: " + plot_name], "Visible", "off");
+    
+    tiledlayout(2, 1, "Padding", "compact", "TileSpacing", "compact");
+    
+    % --- Panel 1: Trajectories ---
+    ax1 = nexttile();
     hold(ax1, "on");
     
-    % Clean title using LaTeX interpreter
-    clean_name = strrep(name, '_', '\_'); % Escape underscores for LaTeX
-    title(ax1, sprintf('Forecast vs. Ground Truth: %s', clean_name), ...
-          'Interpreter', 'latex', 'FontSize', 12);
-
-    % Plot Ground Truth (Thickened for hierarchy)
-    plot(ax1, tspan, Rt_true, 'Color', color_truth_top, 'LineWidth', 2.0, 'DisplayName', 'True $R_t$');
+    % Disable toolbar to prevent export warnings
+    axtoolbar(ax1, {'export'});
     
-    % Subdued threshold line
-    yline(ax1, 1, '--', 'Color', color_ref_line, 'LineWidth', 1.2, 'HandleVisibility', 'off');
-
-    % Plot Forecast Spaghetti with transparency (Alpha = 0.4)
-    for k = 1:2:length(results)
-        t_combined = [results(k).window_day, results(k).time_horizon(:)'];
+    % Plot Ground Truth (Black, LineWidth 2) - Matches plot_rt_scenarios style
+    plot(ax1, tspan, Rt_true, "k-", "LineWidth", 2, "DisplayName", "Ground Truth");
+    
+    % Plot Forecasts (Blue, thinner)
+    % Only add the first one to the legend to prevent clutter
+    first_plot = true;
+    for i = 1:numel(results)
+        t_f = results(i).time_horizon;
+        y_f = results(i).forecast_Rt;
         
-        idx_T = results(k).window_day_idx;
-        Rt_combined = [Rt_true(idx_T), results(k).forecast_Rt(:)'];
-        
-        % Using 4-element RGBA array for transparency
-        plot(ax1, t_combined, Rt_combined, 'Color', [color_forecast, 0.4], ...
-            'LineWidth', 1.0, 'HandleVisibility', 'off');
+        if first_plot
+            plot(ax1, t_f, y_f, "b-", "LineWidth", 1, "DisplayName", "Forecasts");
+            first_plot = false;
+        else
+            plot(ax1, t_f, y_f, "b-", "LineWidth", 1, "HandleVisibility", "off");
+        end
     end
-
-    ylabel(ax1, 'Predicted $R_t$', 'Interpreter', 'latex', 'FontSize', 11);
-    grid(ax1, 'on');
-    ylim(ax1, [0, y_max]);
     
-    % Legend formatting
-    leg = legend(ax1, 'show', 'Location', 'northeast', 'Interpreter', 'latex');
-    leg.ItemTokenSize = [20, 18]; % Keeps the legend box compact
-
-    % Remove X-axis labels to prevent clutter on shared axes
-    xticklabels(ax1, {});
-
-    %% 3. BOTTOM PANEL: Ground Truth Only (Clean Reference)
-    ax2 = nexttile_clean(tlo);
+    title(ax1, sprintf("Forecast vs Truth: %s", strrep(plot_name, '_', ' ')));
+    ylabel(ax1, "R_t Value");
+    grid(ax1, "on");
+    legend(ax1, "show", "Location", "best");
+    
+    % Align X-limits to data
+    xlim(ax1, [tspan(1), tspan(end)]);
+    
+    % --- Panel 2: AICc Landscape ---
+    ax2 = nexttile();
     hold(ax2, "on");
+    axtoolbar(ax2, {'export'});
     
-    % Explicit distinct color for the bottom panel
-    plot(ax2, tspan, Rt_true, 'Color', color_truth_bot, 'LineWidth', 2.0);
+    % Extract metrics
+    win_days = [results.window_day];
+    scores   = arrayfun(@(x) x.aic_landscape(1, end), results);
     
-    % Subdued threshold line matching the top panel
-    yline(ax2, 1, '--', 'Color', color_ref_line, 'LineWidth', 1.2, 'HandleVisibility', 'off');
-
-    ylabel(ax2, 'Reference $R_t$', 'Interpreter', 'latex', 'FontSize', 11);
-    xlabel(ax2, 'Days', 'Interpreter', 'latex', 'FontSize', 11);
-    grid(ax2, 'on');
-    ylim(ax2, [0, y_max]);
-
-    %% 4. Link Axes & Save
-    linkaxes([ax1, ax2], 'x');
-    xlim(ax1, [min(tspan) max(tspan)]);
+    plot(ax2, win_days, scores, "ro-", "LineWidth", 1.5, "MarkerFaceColor", "r");
     
-    % Apply LaTeX font globally to axis tick labels
-    set([ax1, ax2], 'TickLabelInterpreter', 'latex');
-
-    % Export at 300 DPI for thesis print quality
-    saveName = fullfile(outDir, sprintf('comparison_Rt_%s.png', name));
-    exportgraphics(fig, saveName, 'Resolution', 300);
+    title(ax2, "Model Selection Stability (AICc)");
+    xlabel(ax2, "Time (days)");
+    ylabel(ax2, "Best AICc Score");
+    grid(ax2, "on");
+    xlim(ax2, [tspan(1), tspan(end)]);
     
-    close(fig);
+    %% 3. Persistence
+    % Match the resolution of plot_rt_scenarios (or use 300 for higher quality)
+    exportgraphics(fig, outPath, "Resolution", 300);
 end

@@ -45,5 +45,5 @@ function plot_rt_scenarios(scenarios, cfg)
     end
 
     %% 3. Persistence
-    exportgraphics(fig, outPath, "Resolution", 200);
+    exportgraphics(fig, outPath, "Resolution", 300);
 end
