@@ -1,15 +1,19 @@
-% STARTUP Initialize environment for the project.
+%STARTUP Initialize environment for the hybrid epidemic forecasting project.
+%
+%   Description:
+%       Explicitly adds specific top-level script, configuration, and nested
+%       source folders to the MATLAB path. Also initializes the required
+%       directory structure for data and results artifacts.
 
-% Explicitly add specific top-level script and configuration folders
+% A. M. Kaahin 2026-02-18
+
+%% 1. Path Management
 addpath(fullfile(pwd, 'config'));
 addpath(fullfile(pwd, 'scripts'));
-addpath(fullfile(pwd, 'sandbox'));
-
-% Recursively add the 'src' directory, as it contains safe, nested function modules
 addpath(genpath(fullfile(pwd, 'src')));
 
-% Initialize required directory structure
-required_dirs = {'data/ground_truth', 'results/forecasts', ...
+%% 2. Directory Initialization
+required_dirs = {'data/synthetic', 'results/forecasts', ...
                  'results/figures', 'results/scores'};
 
 for i = 1:length(required_dirs)
@@ -17,5 +21,3 @@ for i = 1:length(required_dirs)
         mkdir(required_dirs{i});
     end
 end
-
-disp('Project environment initialized successfully.');

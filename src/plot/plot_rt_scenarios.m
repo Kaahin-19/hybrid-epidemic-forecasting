@@ -6,23 +6,22 @@ function plot_rt_scenarios(scenarios, cfg)
 %
 %   Description:
 %       Generates a tiled summary figure of the synthetic Reproduction Number
-%       (Rt) curves defined in the configuration. This serves as a visual
-%       verification artifact for the experiment setup, ensuring the signals
-%       look as expected before simulation begins.
+%       (Rt) curves.
 %
 %   Inputs:
 %       scenarios - Struct array containing .t, .Rt, .id, and .name.
-%       cfg       - Configuration struct containing .output.fig_dir and
-%                   .Rt.bounds.
+%       cfg       - Configuration struct containing output paths and bounds.
 %
 %   See also PARTA_00_MAKE_SCENARIOS, PARTA_CONFIG.
 
+% A. M. Kaahin 2026-02-18
+
     %% 1. Initialization
     figDirAbs = cfg.output.fig_dir;
-    outPath   = fullfile(figDirAbs, cfg.output.fig_name);
+    outPath   = fullfile(figDirAbs, "partA_00_rt_scenarios.png");
 
     %% 2. Visualization
-    fig = figure("Name", "Synthetic Rt Scenarios (Part A)");
+    fig = figure("Name", "Synthetic Rt Scenarios (Part A)", "Visible", "off");
 
     n     = numel(scenarios);
     nRows = 2;
@@ -31,7 +30,7 @@ function plot_rt_scenarios(scenarios, cfg)
     tiledlayout(nRows, nCols, "Padding", "compact", "TileSpacing", "compact");
 
     for i = 1:n
-        ax = nexttile_clean();
+        ax = nexttile();
 
         plot(ax, scenarios(i).t, scenarios(i).Rt, "LineWidth", 2);
 
@@ -47,5 +46,4 @@ function plot_rt_scenarios(scenarios, cfg)
 
     %% 3. Persistence
     exportgraphics(fig, outPath, "Resolution", 200);
-    fprintf("Saved: %s\n", outPath);
 end
