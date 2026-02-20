@@ -13,7 +13,7 @@ addpath(fullfile(pwd, 'scripts'));
 addpath(genpath(fullfile(pwd, 'src')));
 
 %% 2. Directory Initialization
-required_dirs = {'data/synthetic', 'results/build', 'results/figures', ...
+required_dirs = {'data/synthetic', 'results/figures', ...
                  'results/forecasts', 'results/scores'};
 
 for i = 1:length(required_dirs)

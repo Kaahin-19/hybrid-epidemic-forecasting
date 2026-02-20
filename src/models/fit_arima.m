@@ -67,7 +67,7 @@ function [Rt_curve, aicc] = fit_arima(Rt_hist, p, d, q, horizon)
         aicc = sys.Report.Fit.AICc;
         
         %% 5. Forecasting
-        opt      = forecastOptions('InitialCondition', 'z');
+        opt      = forecastOptions('InitialCondition', 'e');
         f_obj    = forecast(sys, data, horizon, opt);
         pred_fit = f_obj.OutputData;
         

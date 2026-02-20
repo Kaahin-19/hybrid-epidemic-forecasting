@@ -70,7 +70,7 @@ function [Rt_curve, aicc] = fit_n4sid(Rt_hist, U_hist, U_future, n, d, horizon)
         
         %% 4. Forecasting
         fut_data = iddata([], fit_u_fut, 1);
-        opt      = forecastOptions('InitialCondition', 'z');
+        opt      = forecastOptions('InitialCondition', 'e');
         f_obj    = forecast(sys, data, horizon, fut_data, opt);
         pred_fit = f_obj.OutputData;
         
