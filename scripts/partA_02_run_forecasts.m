@@ -1,40 +1,38 @@
-%PARTA_02_RUN_FORECASTS Unified Execution Pipeline for Epidemic Forecasting
+%PARTA_02_RUN_FORECASTS Execute expanding-window epidemic forecasts.
 %
 %   Description:
-%       Executes expanding-window forecasts over synthetic ground truth data. 
-%       Supports pure statistical (ARIMA), hybrid statistical (ARIMAX), and 
-%       State-Space (N4SID, SSEST) model configurations.
+%       Executes an expanding-window forecasting pipeline over synthetic 
+%       ground truth data. Evaluates statistical (ARIMA, ARIMAX) and 
+%       State-Space (N4SID, SSEST) models. Future exogenous covariates 
+%       (Susceptible and Infected populations) are projected dynamically 
+%       using a deterministic compartmental solver to ensure causality.
 %
 %   Workflow:
-%       1. Define the experiment configuration
-%       2. Generate the parameter search grid
-%       3. Iterate through synthetic truth datasets
-%       4. Perform parallelized expanding-window model evaluation
-%       5. Persist results and generate comparative plots
+%       1. Initialize experiment and model configurations.
+%       2. Define the hyperparameter search grid.
+%       3. Process synthetic ground truth datasets iteratively.
+%       4. Perform parallelized expanding-window model evaluation.
+%       5. Aggregate results and generate performance visualizations.
+%
+%   See also PARTA_CONFIG, GENDATA_SIRS, PLOT_RT_FORECAST_COMPARISON.
 
 % A. M. Kaahin 2026-02-19
 
-%% 1. Experiment Configuration
+%% Initialization
 clear; clc; close all;
 
-% Model Configuration
-%   MODEL_TYPE: 'ARIMA', 'ARIMAX', 'N4SID', 'SSEST'
-%   EXO_MODE:   'None', 'S', 'I', 'Both'
-MODEL_TYPE = 'SSEST'; 
+MODEL_TYPE = 'ARIMAX'; 
 EXO_MODE   = 'Both';    
 
-% Validate configuration compatibility
 EXO_MODE = validate_configuration(MODEL_TYPE, EXO_MODE);
+fprintf('Starting %s forecast pipeline (Mode: %s)\n', MODEL_TYPE, EXO_MODE);
 
-fprintf('=== Starting %s Forecast Pipeline (Exogenous Mode: %s) ===\n', MODEL_TYPE, EXO_MODE);
-
-%% 2. Initialization & Grid Setup
+%% Configuration and Grid Setup
 cfg      = partA_config(); 
 dataDir  = cfg.output.data_dir;     
 saveDir  = cfg.output.forecast_dir; 
 fileList = dir(fullfile(dataDir, '*.mat'));
 
-% Define model-specific parameter search space
 switch MODEL_TYPE
     case 'ARIMA'
         [P, D, Q] = ndgrid(0:14, [0, 1], 0:2);
@@ -53,13 +51,12 @@ switch MODEL_TYPE
 end
 
 num_models = size(candidate_models, 1);
-fprintf('Evaluating %d unique parameter configurations per window.\n', num_models);
 
 if isempty(gcp('nocreate'))
     parpool; 
 end
 
-%% 3. Main Experiment Loop
+%% Evaluation Loop
 for i = 1:length(fileList)
     filename = fileList(i).name;
     fullPath = fullfile(dataDir, filename);
@@ -72,9 +69,10 @@ for i = 1:length(fileList)
     Rt_true = loaded.Rt_true;
     tspan   = loaded.tspan;
     
-    % Normalize exogenous variables to [0, 1] to ensure numerical stability during estimation
-    norm_S = loaded.S_true(:) / max(loaded.S_true(:));
-    norm_I = loaded.I_true(:) / max(loaded.I_true(:));
+    max_S = max(loaded.S_true(:));
+    max_I = max(loaded.I_true(:));
+    norm_S = loaded.S_true(:) / max_S;
+    norm_I = loaded.I_true(:) / max_I;
     
     switch EXO_MODE
         case 'None', U_true = [];
@@ -106,8 +104,35 @@ for i = 1:length(fileList)
             U_past   = [];
             U_future = [];
         else
-            U_past   = U_true(1:idx_T, :);
-            U_future = U_true(idx_T+1 : idx_end, :); 
+            U_past = U_true(1:idx_T, :);
+            
+            current_Rt = Rt_true(idx_T);
+            current_I  = loaded.I_true(idx_T);
+            current_S  = loaded.S_true(idx_T);
+            current_R  = cfg.sirs.pop_size - current_S - current_I;
+            
+            future_tspan = 0:horizon; 
+            flat_beta    = repmat(current_Rt * cfg.sirs.gamma, 1, length(future_tspan));
+            
+            uds_params = cfg.sirs;
+            uds_params.beta    = flat_beta;
+            uds_params.I0      = current_I;
+            uds_params.R0_init = current_R;
+            uds_params.solver  = 'uds'; 
+            
+            uds_mod = genData_SIRS(future_tspan, uds_params, cfg.sim.seed);
+            
+            S_future_raw = uds_mod.U(1, 2:end)';
+            I_future_raw = uds_mod.U(2, 2:end)';
+            
+            norm_S_fut = S_future_raw / max_S;
+            norm_I_fut = I_future_raw / max_I;
+            
+            switch EXO_MODE
+                case 'S',    U_future = norm_S_fut;
+                case 'I',    U_future = norm_I_fut;
+                case 'Both', U_future = [norm_S_fut, norm_I_fut];
+            end
         end
         
         par_landscape = zeros(num_models, size(candidate_models, 2) + 1); 
@@ -139,7 +164,6 @@ for i = 1:length(fileList)
             par_forecasts{idx}    = Rt_pred;
         end
         
-        % Isolate the optimal model according to AICc score
         [~, sort_idx]    = sort(par_landscape(:, end));
         sorted_landscape = par_landscape(sort_idx, :);
         
@@ -159,15 +183,13 @@ for i = 1:length(fileList)
         count = count + 1;
     end
     
-    %% 4. Artifact Generation
+    %% Artifact Generation
     [uq_models, ~, uq_idx] = unique(selected_models_log, 'rows');
     model_counts           = accumarray(uq_idx, 1);
     [model_counts, sort_count_idx] = sort(model_counts, 'descend');
     uq_models              = uq_models(sort_count_idx, :);
     
     summary_table = array2table([uq_models, model_counts], 'VariableNames', table_headers);
-    fprintf('  Model Selection Summary:\n');
-    disp(summary_table);
     
     file_prefix = sprintf('partA_02_forecast_%s_%s_%s', scenario_id, MODEL_TYPE, EXO_MODE);
     
@@ -181,19 +203,16 @@ for i = 1:length(fileList)
     plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg);
 end
 
-fprintf('\n=== %s Forecast Pipeline Complete ===\n', MODEL_TYPE);
+fprintf('\nPipeline execution complete.\n');
 
-
+%% Local Functions
 function valid_exo_mode = validate_configuration(model_type, exo_mode)
-%VALIDATE_CONFIGURATION Check for logical conflicts in user settings.
-    
+%VALIDATE_CONFIGURATION Resolve logical conflicts in configuration.
     valid_exo_mode = exo_mode;
-
     if strcmp(model_type, 'ARIMA') && ~strcmp(exo_mode, 'None')
         warning('ARIMA is strictly autoregressive. Forcing EXO_MODE to ''None''.');
         valid_exo_mode = 'None';
-        
     elseif strcmp(model_type, 'ARIMAX') && strcmp(exo_mode, 'None')
-        error('ARIMAX requires exogenous covariates. Change EXO_MODE to ''S'', ''I'', or ''Both''.');
+        error('ARIMAX requires exogenous covariates. Set EXO_MODE to ''S'', ''I'', or ''Both''.');
     end
 end

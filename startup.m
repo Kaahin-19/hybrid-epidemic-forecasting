@@ -13,8 +13,8 @@ addpath(fullfile(pwd, 'scripts'));
 addpath(genpath(fullfile(pwd, 'src')));
 
 %% 2. Directory Initialization
-required_dirs = {'data/synthetic', 'results/forecasts', ...
-                 'results/figures', 'results/scores'};
+required_dirs = {'data/synthetic', 'results/build', 'results/figures', ...
+                 'results/forecasts', 'results/scores'};
 
 for i = 1:length(required_dirs)
     if ~exist(required_dirs{i}, 'dir')

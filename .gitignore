@@ -1,7 +1,11 @@
 # Windows compatibility
 win_compat.c
 win_compat.h
+win_compat_uds.c
+win_compat_uds.h
 
 # Generated artifacts
 SIRS.c
 mexssa_SIRS_SIRS.mexw64
+mexuds_SIRS_SIRS_mexjac.mexw64
+mexuds_SIRS_SIRS_mexrhs.mexw64
