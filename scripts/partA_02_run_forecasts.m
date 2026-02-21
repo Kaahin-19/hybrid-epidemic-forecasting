@@ -24,7 +24,7 @@ clear; close all; clc;
 
 fprintf('=== Forecast Pipeline Execution ===\n');
 
-MODEL_TYPE = 'N4SID'; 
+MODEL_TYPE = 'SSEST'; 
 EXO_MODE   = 'Both';    
 
 EXO_MODE = validate_configuration(MODEL_TYPE, EXO_MODE);

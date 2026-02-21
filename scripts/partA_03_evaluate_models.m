@@ -13,7 +13,7 @@
 %       4. Aggregate statistics to identify the optimal model configuration.
 %       5. Generate comparative boxplots via a dedicated plotting function.
 %
-%   See also PARTA_02_RUN_FORECASTS, PLOT_MODEL_PERFORMANCE.
+%   See also PARTA_CONFIG, PLOT_MODEL_PERFORMANCE.
 
 % A. M. Kaahin 2026-02-19
 
