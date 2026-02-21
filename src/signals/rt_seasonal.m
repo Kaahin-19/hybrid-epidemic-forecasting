@@ -1,15 +1,13 @@
 function Rt = rt_seasonal(t, p)
-%RT_SEASONAL Generate a deterministic seasonal reproduction number signal.
+%RT_SEASONAL Generate a seasonal reproduction number signal.
 %
 %   Syntax:
 %       Rt = rt_seasonal(t, p)
 %
 %   Description:
-%       Generates a sinusoidal Rt trajectory. This signal is deterministic
-%       and fully defined by the input parameters, useful for simulating
-%       recurrent epidemic waves or seasonal environmental forcing.
-%
-%       Formula: Rt(t) = center + amp * sin(2*pi * t / period)
+%       Generates a sinusoidal Rt trajectory. This signal is fully defined
+%       by the input parameters, useful for simulating recurrent epidemic 
+%       waves or seasonal environmental forcing.
 %
 %   Inputs:
 %       t - Time vector [days].
@@ -21,10 +19,9 @@ function Rt = rt_seasonal(t, p)
 %   Outputs:
 %       Rt - Vector of Rt values evaluated at t.
 %
-%   See also RT_TREND, RT_SIGMOID, RT_DOUBLE_WAVE, RT_MULTI_WAVE.
+%   See also PARTA_CONFIG, RT_MULTI_WAVE, RT_SIGMOID.
 
 % A. M. Kaahin 2026-02-19
 
     Rt = p.center + p.amp * sin((2*pi/p.period) * t);
-    
 end

@@ -14,11 +14,13 @@ function Rt = rt_sigmoid(t, p)
 %       p - Parameter structure containing:
 %           .high - Initial Rt level.
 %           .low  - Final Rt level.
-%           .t0   - Inflection point of the curve (day).
+%           .t0   - Inflection point of the curve [days].
 %           .k    - Steepness of the transition.
 %
 %   Outputs:
 %       Rt - Vector of Rt values evaluated at t.
+%
+%   See also PARTA_CONFIG, RT_MULTI_WAVE, RT_SEASONAL.
 
 % A. M. Kaahin 2026-02-19
 
