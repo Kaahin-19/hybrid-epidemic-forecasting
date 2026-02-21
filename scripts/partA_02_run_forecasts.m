@@ -21,7 +21,7 @@
 %% Initialization
 clear; clc; close all;
 
-MODEL_TYPE = 'SSEST'; 
+MODEL_TYPE = 'ARIMA'; 
 EXO_MODE   = 'Both';    
 
 EXO_MODE = validate_configuration(MODEL_TYPE, EXO_MODE);

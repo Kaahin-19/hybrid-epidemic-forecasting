@@ -95,6 +95,7 @@ function [Rt_curve, aicc] = fit_arimax(Rt_hist, U_hist, U_future, p, d, q, nb_ve
         
         % Reverse log-transform and constrain to physical bounds
         Rt_curve = exp(pred_y);
+        Rt_curve = max(0, min(10, Rt_curve));
         
     catch
         % Fallback to persistence forecast on numerical estimation failure
