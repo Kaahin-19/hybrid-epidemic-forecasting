@@ -13,25 +13,31 @@ function plot_model_performance(score_registry, cfg)
 %   Inputs:
 %       score_registry - Table containing merged evaluation scores.
 %       cfg            - Configuration struct containing output paths.
+%
+%   See also PARTA_03_EVALUATE_MODELS, PARTA_CONFIG.
 
 % A. M. Kaahin 2026-02-19
 
-    % Initialize figure with standard dimensions
+    %% 1. Initialization
+    if isfield(cfg, 'output') && isfield(cfg.output, 'fig_dir')
+        figDir = cfg.output.fig_dir;
+    else
+        figDir = fullfile(pwd, 'results', 'figures');
+    end
+    out_path = fullfile(figDir, 'partA_03_performance_boxplot.png');
+
+    %% 2. Visualization
     fig = figure('Name', 'Forecast Performance Comparison', ...
-                 'Position', [100, 100, 1200, 700]);
+                 'Position', [100, 100, 1200, 700], 'Visible', 'off');
     tlo = tiledlayout(1, 1, 'Padding', 'compact');
 
     ax = nexttile(tlo);
     hold(ax, 'on');
 
-    % Disable interactive toolbar to prevent artifacts during exportgraphics
     axtoolbar(ax, {'export'});
 
-    % Create composite grouping variable for X-axis labels
-    % Format: "Model (ExoMode)"
     config_id = string(score_registry.Model) + " (" + string(score_registry.ExoMode) + ")";
     
-    % Filter out Inf/NaN values to ensure plot stability
     valid_idx = isfinite(score_registry.RMSE);
     
     if ~any(valid_idx)
@@ -43,7 +49,6 @@ function plot_model_performance(score_registry, cfg)
     plot_data = score_registry(valid_idx, :);
     plot_config = config_id(valid_idx);
 
-    % Boxplot grouped by Scenario (Color) and Configuration (X-axis)
     boxchart(ax, categorical(plot_config), plot_data.RMSE, ...
         'GroupByColor', plot_data.Scenario);
 
@@ -52,14 +57,11 @@ function plot_model_performance(score_registry, cfg)
     legend(ax, 'Location', 'bestoutside');
     grid(ax, 'on');
 
-    % Apply logarithmic scale if error magnitudes vary significantly
-    % (e.g., spanning from 10^-2 to 10^50)
     if max(plot_data.RMSE) > 100
         set(ax, 'YScale', 'log');
         ylabel(ax, 'RMSE (R_t) [Log Scale]');
     end
 
-    % Save Artifact
-    out_path = fullfile(cfg.output.fig_dir, 'partA_03_performance_boxplot.png');
+    %% 3. Persistence
     exportgraphics(fig, out_path, 'Resolution', 300);
 end

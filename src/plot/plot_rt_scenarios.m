@@ -17,32 +17,37 @@ function plot_rt_scenarios(scenarios, cfg)
 % A. M. Kaahin 2026-02-18
 
     %% 1. Initialization
-    outPath   = fullfile(cfg.output.fig_dir, "partA_00_rt_scenarios.png");
+    if isfield(cfg, 'output') && isfield(cfg.output, 'fig_dir')
+        figDir = cfg.output.fig_dir;
+    else
+        figDir = fullfile(pwd, 'results', 'figures');
+    end
+    outPath = fullfile(figDir, 'partA_00_rt_scenarios.png');
 
     %% 2. Visualization
-    fig = figure("Name", "Synthetic Rt Scenarios (Part A)", "Visible", "off");
+    fig = figure('Name', 'Synthetic Rt Scenarios (Part A)', 'Visible', 'off');
 
     n     = numel(scenarios);
     nRows = 2;
     nCols = ceil(n / nRows);
 
-    tiledlayout(nRows, nCols, "Padding", "compact", "TileSpacing", "compact");
+    tiledlayout(nRows, nCols, 'Padding', 'compact', 'TileSpacing', 'compact');
 
     for i = 1:n
         ax = nexttile();
 
-        plot(ax, scenarios(i).t, scenarios(i).Rt, "LineWidth", 2);
+        plot(ax, scenarios(i).t, scenarios(i).Rt, 'LineWidth', 2);
 
-        title(ax, sprintf("%s: %s", scenarios(i).id, scenarios(i).name));
-        xlabel(ax, "Time (days)");
-        ylabel(ax, "R_t");
-        grid(ax, "on");
+        title(ax, sprintf('%s: %s', scenarios(i).id, scenarios(i).name));
+        xlabel(ax, 'Time (days)');
+        ylabel(ax, 'R_t');
+        grid(ax, 'on');
 
-        if isfield(cfg, "Rt") && isfield(cfg.Rt, "bounds")
+        if isfield(cfg, 'Rt') && isfield(cfg.Rt, 'bounds')
             ylim(ax, cfg.Rt.bounds);
         end
     end
 
     %% 3. Persistence
-    exportgraphics(fig, outPath, "Resolution", 300);
+    exportgraphics(fig, outPath, 'Resolution', 300);
 end
