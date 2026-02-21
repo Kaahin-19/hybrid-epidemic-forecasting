@@ -62,5 +62,4 @@ function plot_model_performance(score_registry, cfg)
     % Save Artifact
     out_path = fullfile(cfg.output.fig_dir, 'partA_03_performance_boxplot.png');
     exportgraphics(fig, out_path, 'Resolution', 300);
-    fprintf('Performance visualization saved to: %s\n', out_path);
 end

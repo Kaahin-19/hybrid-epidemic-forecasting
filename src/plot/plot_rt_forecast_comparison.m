@@ -64,6 +64,10 @@ function plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
     ylabel(ax1, "R_t Value");
     grid(ax1, "on");
     legend(ax1, "show", "Location", "best");
+
+    if isfield(cfg, "Rt") && isfield(cfg.Rt, "bounds")
+        ylim(ax1, cfg.Rt.bounds);
+    end
     
     % Align X-limits to data
     xlim(ax1, [tspan(1), tspan(end)]);
@@ -86,6 +90,5 @@ function plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
     xlim(ax2, [tspan(1), tspan(end)]);
     
     %% 3. Persistence
-    % Match the resolution of plot_rt_scenarios (or use 300 for higher quality)
     exportgraphics(fig, outPath, "Resolution", 300);
 end

@@ -17,8 +17,7 @@ function plot_rt_scenarios(scenarios, cfg)
 % A. M. Kaahin 2026-02-18
 
     %% 1. Initialization
-    figDirAbs = cfg.output.fig_dir;
-    outPath   = fullfile(figDirAbs, "partA_00_rt_scenarios.png");
+    outPath   = fullfile(cfg.output.fig_dir, "partA_00_rt_scenarios.png");
 
     %% 2. Visualization
     fig = figure("Name", "Synthetic Rt Scenarios (Part A)", "Visible", "off");

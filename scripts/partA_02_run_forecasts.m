@@ -5,7 +5,8 @@
 %       ground truth data. Evaluates statistical (ARIMA, ARIMAX) and 
 %       State-Space (N4SID, SSEST) models. Future exogenous covariates 
 %       (Susceptible and Infected populations) are projected dynamically 
-%       using a deterministic compartmental solver to ensure causality.
+%       using the deterministic compartmental solver ('uds') to ensure 
+%       causality.
 %
 %   Workflow:
 %       1. Initialize experiment and model configurations.
@@ -18,16 +19,18 @@
 
 % A. M. Kaahin 2026-02-19
 
-%% Initialization
-clear; clc; close all;
+%% 1. Initialization
+clear; close all; clc;
 
-MODEL_TYPE = 'ARIMA'; 
+fprintf('=== Forecast Pipeline Execution ===\n');
+
+MODEL_TYPE = 'N4SID'; 
 EXO_MODE   = 'Both';    
 
 EXO_MODE = validate_configuration(MODEL_TYPE, EXO_MODE);
-fprintf('Starting %s forecast pipeline (Mode: %s)\n', MODEL_TYPE, EXO_MODE);
+fprintf('Configuration: Model = %s | Exogenous Mode = %s\n', MODEL_TYPE, EXO_MODE);
 
-%% Configuration and Grid Setup
+%% 2. Configuration and Grid Setup
 cfg      = partA_config(); 
 dataDir  = cfg.output.data_dir;     
 saveDir  = cfg.output.forecast_dir; 
@@ -35,12 +38,12 @@ fileList = dir(fullfile(dataDir, '*.mat'));
 
 switch MODEL_TYPE
     case 'ARIMA'
-        [P, D, Q] = ndgrid(0:14, [0, 1], 0:2);
+        [P, D, Q] = ndgrid(0:3, [0, 1], 0:2);
         candidate_models = [P(:), D(:), Q(:)];
         table_headers    = {'p', 'd', 'q', 'Times_Selected'};
         
     case 'ARIMAX'
-        [P, D, Q, NB, NK] = ndgrid(0:14, [0, 1], 0:2, 1:2, 1);
+        [P, D, Q, NB, NK] = ndgrid(0:3, [0, 1], 0:2, 1:2, 1);
         candidate_models  = [P(:), D(:), Q(:), NB(:), NK(:)];
         table_headers     = {'p', 'd', 'q', 'nb', 'nk', 'Times_Selected'};
         
@@ -56,14 +59,14 @@ if isempty(gcp('nocreate'))
     parpool; 
 end
 
-%% Evaluation Loop
+%% 3. Evaluation Loop
 for i = 1:length(fileList)
     filename = fileList(i).name;
     fullPath = fullfile(dataDir, filename);
     [~, name_core] = fileparts(filename);
     
     scenario_id = strrep(name_core, 'partA_01_truth_', '');
-    fprintf('\nProcessing Scenario: %s\n', scenario_id);
+    fprintf('  - Processing Scenario: %s...\n', scenario_id);
     
     loaded  = load(fullPath);
     Rt_true = loaded.Rt_true;
@@ -119,6 +122,7 @@ for i = 1:length(fileList)
             uds_params.I0      = current_I;
             uds_params.R0_init = current_R;
             uds_params.solver  = 'uds'; 
+            uds_params.compile = 0; 
             
             uds_mod = genData_SIRS(future_tspan, uds_params, cfg.sim.seed);
             
@@ -183,7 +187,7 @@ for i = 1:length(fileList)
         count = count + 1;
     end
     
-    %% Artifact Generation
+    %% 4. Artifact Generation
     [uq_models, ~, uq_idx] = unique(selected_models_log, 'rows');
     model_counts           = accumarray(uq_idx, 1);
     [model_counts, sort_count_idx] = sort(model_counts, 'descend');
@@ -203,16 +207,16 @@ for i = 1:length(fileList)
     plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg);
 end
 
-fprintf('\nPipeline execution complete.\n');
+fprintf('=== Forecast Pipeline Complete ===\n\n');
 
-%% Local Functions
+%% 5. Local Functions
 function valid_exo_mode = validate_configuration(model_type, exo_mode)
 %VALIDATE_CONFIGURATION Resolve logical conflicts in configuration.
     valid_exo_mode = exo_mode;
     if strcmp(model_type, 'ARIMA') && ~strcmp(exo_mode, 'None')
-        warning('ARIMA is strictly autoregressive. Forcing EXO_MODE to ''None''.');
+        warning('CFG:ArimaExo', 'ARIMA is strictly autoregressive. Forcing EXO_MODE to None.');
         valid_exo_mode = 'None';
     elseif strcmp(model_type, 'ARIMAX') && strcmp(exo_mode, 'None')
-        error('ARIMAX requires exogenous covariates. Set EXO_MODE to ''S'', ''I'', or ''Both''.');
+        error('CFG:ArimaxExo', 'ARIMAX requires exogenous covariates. Set EXO_MODE to S, I, or Both.');
     end
 end
