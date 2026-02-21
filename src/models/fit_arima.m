@@ -7,24 +7,26 @@ function [Rt_curve, aicc] = fit_arima(Rt_hist, p, d, q, horizon)
 %   Description:
 %       Fits an Autoregressive Integrated Moving Average model to a historical
 %       Rt time series. Employs a threshold-clipped logarithmic transform for 
-%       numerical stability and positivity. Model selection is driven by the 
-%       Corrected Akaike Information Criterion (AICc).
+%       numerical stability. Model selection is driven by the Corrected Akaike 
+%       Information Criterion (AICc).
 %
 %   Inputs:
-%       Rt_hist - Numeric vector of historical Rt values.
-%       p       - Autoregressive polynomial order.
-%       d       - Degree of differencing (0 or 1).
-%       q       - Moving average polynomial order.
-%       horizon - Number of time steps to forecast.
+%       Rt_hist  - Numeric vector of historical Rt values.
+%       p        - Autoregressive polynomial order.
+%       d        - Degree of differencing (0 or 1).
+%       q        - Moving average polynomial order.
+%       horizon  - Number of time steps to forecast.
 %
 %   Outputs:
 %       Rt_curve - Numeric vector of forecasted Rt values.
 %       aicc     - Corrected Akaike Information Criterion score.
+%
+%   See also FIT_ARIMAX, FIT_N4SID, FIT_SSEST, PARTA_02_RUN_FORECASTS.
 
 % A. M. Kaahin 2026-02-19
 
     %% 1. Preprocessing
-    % Threshold clip before log-transform to handle zero-values without biasing non-zero data
+    % Apply threshold clipping prior to log-transformation
     y = log(max(Rt_hist(:), eps));
     
     if d == 1
@@ -34,8 +36,7 @@ function [Rt_curve, aicc] = fit_arima(Rt_hist, p, d, q, horizon)
     end
 
     %% 2. Signal Integrity Check
-    % If signal variance is negligible, model identification is ill-posed.
-    % Return a persistence forecast with theoretically infinite information loss.
+    % Return persistence forecast if signal variance is negligible
     if std(fit_data) < 1e-8
         Rt_curve = repmat(Rt_hist(end), horizon, 1);
         aicc     = inf; 
@@ -57,13 +58,12 @@ function [Rt_curve, aicc] = fit_arima(Rt_hist, p, d, q, horizon)
     
     try
         if q == 0
-            % Burg's method guarantees stability for purely autoregressive models on short data windows
             sys = ar(data, p, 'burg');
         else
             sys = armax(data, [p, q], 'Display', 'off');
         end
         
-        % Utilize native System Identification Toolbox AICc calculation
+        % Extract AICc score
         aicc = sys.Report.Fit.AICc;
         
         %% 5. Forecasting
@@ -78,12 +78,12 @@ function [Rt_curve, aicc] = fit_arima(Rt_hist, p, d, q, horizon)
             pred_y = pred_fit;
         end
         
-        % Reverse log-transform and constrain to physical bounds
+        % Reverse transformation and enforce physical bounds
         Rt_curve = exp(pred_y);
         Rt_curve = max(0, min(10, Rt_curve));
         
     catch
-        % Fallback to persistence forecast on numerical estimation failure
+        % Fallback to persistence forecast on estimation failure
         Rt_curve = repmat(Rt_hist(end), horizon, 1);
         aicc     = inf;
     end

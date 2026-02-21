@@ -24,7 +24,7 @@ function umod = genData_SIRS(tspan, params, seed)
 %   Outputs:
 %       umod   - URDME model object containing simulation results.
 %
-%   See also GENDATA.
+%   See also GENDATA, PARTA_01_GENERATE_TRUTH, PARTA_02_RUN_FORECASTS.
 
 % A. M. Kaahin 2026-02-19
 

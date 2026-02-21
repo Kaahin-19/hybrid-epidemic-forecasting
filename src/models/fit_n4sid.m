@@ -22,11 +22,13 @@ function [Rt_curve, aicc] = fit_n4sid(Rt_hist, U_hist, U_future, n, d, horizon)
 %   Outputs:
 %       Rt_curve - Numeric vector of forecasted Rt values.
 %       aicc     - Corrected Akaike Information Criterion score.
+%
+%   See also FIT_ARIMA, FIT_ARIMAX, FIT_SSEST, PARTA_02_RUN_FORECASTS.
 
 % A. M. Kaahin 2026-02-19
 
     %% 1. Preprocessing
-    % Threshold clip before log-transform to handle zero-values without biasing non-zero data
+    % Apply threshold clipping prior to log-transformation
     y = log(max(Rt_hist(:), eps));
     
     if d == 1
@@ -38,7 +40,7 @@ function [Rt_curve, aicc] = fit_n4sid(Rt_hist, U_hist, U_future, n, d, horizon)
         else
             fit_u = diff(U_hist, 1, 1); 
             
-            % Difference future exogenous inputs connecting to the last historical row
+            % Difference future exogenous inputs relative to final historical value
             combined_fut = [U_hist(end, :); U_future];
             fit_u_fut    = diff(combined_fut, 1, 1);
         end
@@ -49,8 +51,7 @@ function [Rt_curve, aicc] = fit_n4sid(Rt_hist, U_hist, U_future, n, d, horizon)
     end
 
     %% 2. Signal Integrity Check
-    % If signal variance is negligible, model identification is ill-posed.
-    % Return a persistence forecast with theoretically infinite information loss.
+    % Return persistence forecast if signal variance is negligible
     if std(fit_y) < 1e-8
         Rt_curve = repmat(Rt_hist(end), horizon, 1);
         aicc     = inf; 
@@ -65,7 +66,7 @@ function [Rt_curve, aicc] = fit_n4sid(Rt_hist, U_hist, U_future, n, d, horizon)
         opt_est = n4sidOptions('Display', 'off');
         sys     = n4sid(data, n, opt_est);
         
-        % Utilize native System Identification Toolbox AICc calculation
+        % Extract AICc score
         aicc = sys.Report.Fit.AICc;
         
         %% 4. Forecasting
@@ -81,12 +82,12 @@ function [Rt_curve, aicc] = fit_n4sid(Rt_hist, U_hist, U_future, n, d, horizon)
             pred_y = pred_fit;
         end
         
-        % Reverse log-transform and constrain to physical bounds
+        % Reverse transformation and enforce physical bounds
         Rt_curve = exp(pred_y);
         Rt_curve = max(0, min(10, Rt_curve));
         
     catch
-        % Fallback to persistence forecast on numerical estimation failure
+        % Fallback to persistence forecast on estimation failure
         Rt_curve = repmat(Rt_hist(end), horizon, 1);
         aicc     = inf;
     end
