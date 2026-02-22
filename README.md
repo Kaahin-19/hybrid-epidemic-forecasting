@@ -8,9 +8,9 @@ The implementation is divided into three major phases as outlined in the project
 
 | Phase | Scope / Description | Current Status | Last Revised | Supervisor Validated | Validation Date |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Part A** | Synthetic Validation (Baseline limits) | Completed | 2026-02-22 | [ ] Pending | - |
-| **Part B** | Robustness Testing (Complex SIR/SEIR) | Not Started | - | [ ] Pending | - |
-| **Part C** | Real-world Application (Swedish Covid-19) | Not Started | - | [ ] Pending | - |
+| **Part A** | Synthetic Validation | Completed | 2026-02-22 | [ ] Pending | - |
+| **Part B** | Robustness Testing | Not Started | - | [ ] Pending | - |
+| **Part C** | Real-world Application | Not Started | - | [ ] Pending | - |
 
 ## Directory Structure
 
