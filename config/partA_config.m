@@ -37,7 +37,6 @@ function cfg = partA_config()
     %% 3. Scenario Slots
     cfg.scenarios = repmat(struct( ...
         "id", "", ...
-        "class", "", ...
         "name", "", ...
         "generator", [], ...
         "params", struct() ...
@@ -48,9 +47,8 @@ function cfg = partA_config()
     wave_denom = (wave_space^2) / 8;
 
     % Slot A1
-    cfg.scenarios(1).id        = "A1";
-    cfg.scenarios(1).class     = "seasonal";
-    cfg.scenarios(1).name      = "Seasonality";
+    cfg.scenarios(1).id        = "A1"; 
+    cfg.scenarios(1).name      = "Seasonal Forcing";
     cfg.scenarios(1).generator = @rt_seasonal;
     cfg.scenarios(1).params    = struct( ...
         "center", 1.2, ...
@@ -60,8 +58,7 @@ function cfg = partA_config()
 
     % Slot A2
     cfg.scenarios(2).id        = "A2";
-    cfg.scenarios(2).class     = "transient";
-    cfg.scenarios(2).name      = "Intervention";
+    cfg.scenarios(2).name      = "Policy Intervention";
     cfg.scenarios(2).generator = @rt_sigmoid;
     cfg.scenarios(2).params    = struct( ...
         "high", 1.8, ...
@@ -73,7 +70,6 @@ function cfg = partA_config()
 
     % Slot A3
     cfg.scenarios(3).id        = "A3";
-    cfg.scenarios(3).class     = "transient";
     cfg.scenarios(3).name      = "Damping Resurgence"; 
     cfg.scenarios(3).generator = @rt_multi_wave;
     cfg.scenarios(3).params    = struct( ...
@@ -91,7 +87,6 @@ function cfg = partA_config()
 
     % Slot A4
     cfg.scenarios(4).id        = "A4";
-    cfg.scenarios(4).class     = "transient";
     cfg.scenarios(4).name      = "Amplifying Resurgence";
     cfg.scenarios(4).generator = @rt_multi_wave;
     cfg.scenarios(4).params    = struct( ...

@@ -80,7 +80,7 @@ for i = 1:length(files)
             rmse_val ...
         };
         
-        score_registry = [score_registry; newRow]; %#ok<AGROW>
+        score_registry = [score_registry; newRow]; 
     end
 end
 

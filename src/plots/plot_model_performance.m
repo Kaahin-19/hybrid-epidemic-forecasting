@@ -27,8 +27,11 @@ function plot_model_performance(score_registry, cfg)
     out_path = fullfile(figDir, 'partA_03_performance_boxplot.png');
 
     %% 2. Visualization
-    fig = figure('Name', 'Forecast Performance Comparison', ...
-                 'Position', [100, 100, 1200, 700], 'Visible', 'off');
+    fig = figure('Name', 'Forecast Performance Comparison', 'Visible', 'off');
+    fig.Units = 'centimeters';
+    fig.Position(3) = 17.0;
+    fig.Position(4) = 8.5;
+
     tlo = tiledlayout(1, 1, 'Padding', 'compact');
 
     ax = nexttile(tlo);

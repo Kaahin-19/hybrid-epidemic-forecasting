@@ -31,6 +31,9 @@ function plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
 
     %% 2. Visualization
     fig = figure('Name', ['Forecast Comparison: ', plot_name], 'Visible', 'off');
+    fig.Units = 'centimeters';
+    fig.Position(3) = 17.0;
+    fig.Position(4) = 8.5;
     
     tiledlayout(2, 1, 'Padding', 'compact', 'TileSpacing', 'compact');
     
@@ -40,7 +43,7 @@ function plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
     
     axtoolbar(ax1, {'export'});
     
-    plot(ax1, tspan, Rt_true, 'k-', 'LineWidth', 2, 'DisplayName', 'Ground Truth');
+    plot(ax1, tspan, Rt_true, 'k-', 'LineWidth', 2.2, 'DisplayName', 'Ground Truth');
     
     first_plot = true;
     for i = 1:numel(results)
@@ -48,17 +51,17 @@ function plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
         y_f = results(i).forecast_Rt;
         
         if first_plot
-            plot(ax1, t_f, y_f, 'b-', 'LineWidth', 1, 'DisplayName', 'Forecasts');
+            plot(ax1, t_f, y_f, 'b--', 'LineWidth', 1.4, 'DisplayName', 'Forecasts');
             first_plot = false;
         else
-            plot(ax1, t_f, y_f, 'b-', 'LineWidth', 1, 'HandleVisibility', 'off');
+            plot(ax1, t_f, y_f, 'b--', 'LineWidth', 1, 'HandleVisibility', 'off');
         end
     end
     
     title(ax1, sprintf('Forecast vs Truth: %s', strrep(plot_name, '_', ' ')));
     ylabel(ax1, 'R_t Value');
     grid(ax1, 'on');
-    legend(ax1, 'show', 'Location', 'best');
+    legend(ax1, 'show', 'Location', 'northwest');
 
     if isfield(cfg, 'Rt') && isfield(cfg.Rt, 'bounds')
         ylim(ax1, cfg.Rt.bounds);

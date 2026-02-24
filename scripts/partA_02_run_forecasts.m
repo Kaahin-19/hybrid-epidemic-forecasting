@@ -24,7 +24,7 @@ clear; close all; clc;
 
 fprintf('=== Forecast Pipeline Execution ===\n');
 
-MODEL_TYPE = 'SSEST'; 
+MODEL_TYPE = 'ARIMA'; 
 EXO_MODE   = 'Both';    
 
 EXO_MODE = validate_configuration(MODEL_TYPE, EXO_MODE);
@@ -38,12 +38,12 @@ fileList = dir(fullfile(dataDir, '*.mat'));
 
 switch MODEL_TYPE
     case 'ARIMA'
-        [P, D, Q] = ndgrid(0:3, [0, 1], 0:2);
+        [P, D, Q] = ndgrid(0:14, 0, 0);
         candidate_models = [P(:), D(:), Q(:)];
         table_headers    = {'p', 'd', 'q', 'Times_Selected'};
         
     case 'ARIMAX'
-        [P, D, Q, NB, NK] = ndgrid(0:3, [0, 1], 0:2, 1:2, 1);
+        [P, D, Q, NB, NK] = ndgrid(0:14, 0, 0, 1:7, 1:7);
         candidate_models  = [P(:), D(:), Q(:), NB(:), NK(:)];
         table_headers     = {'p', 'd', 'q', 'nb', 'nk', 'Times_Selected'};
         
@@ -183,7 +183,7 @@ for i = 1:length(fileList)
         results(count).truth_Rt_window = Rt_true(idx_T+1 : idx_end);
         results(count).time_horizon    = tspan(idx_T+1 : idx_end);
         
-        selected_models_log = [selected_models_log; best_params]; %#ok<AGROW>
+        selected_models_log = [selected_models_log; best_params]; 
         count = count + 1;
     end
     

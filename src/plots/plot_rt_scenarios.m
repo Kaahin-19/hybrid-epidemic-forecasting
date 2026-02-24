@@ -26,6 +26,9 @@ function plot_rt_scenarios(scenarios, cfg)
 
     %% 2. Visualization
     fig = figure('Name', 'Synthetic Rt Scenarios (Part A)', 'Visible', 'off');
+    fig.Units = 'centimeters';
+    fig.Position(3) = 17.0;   
+    fig.Position(4) = 12.0;  
 
     n     = numel(scenarios);
     nRows = 2;
