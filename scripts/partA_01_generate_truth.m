@@ -33,6 +33,7 @@ for i = 1:numel(cfg.scenarios)
     params      = cfg.sirs;
     Rt_true     = slot.generator(t, slot.params);
     params.beta = Rt_true .* params.gamma;
+    params.solver  = 'uds';
 
     if isfield(slot.params, 'I0')
         params.I0 = slot.params.I0;
