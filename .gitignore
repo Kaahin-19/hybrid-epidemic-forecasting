@@ -12,3 +12,6 @@ mexuds_SIRS_SIRS_mexrhs.mexw64
 mexssa_SIRS_SIRS.mexa64
 mexuds_SIRS_SIRS_mexjac.mexa64
 mexuds_SIRS_SIRS_mexrhs.mexa64
+
+# Output 
+results
