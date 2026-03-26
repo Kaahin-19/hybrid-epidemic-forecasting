@@ -43,6 +43,8 @@ end
 %% 2. Score Aggregation
 score_registry    = table();
 pointwise_details = table();
+score_blocks      = cell(length(files), 1);
+detail_blocks     = cell(length(files), 1);
 valid_models      = {'AR', 'ARX', 'N4SID', 'SSEST'};
 
 for i = 1:length(files)
@@ -73,6 +75,9 @@ for i = 1:length(files)
     if ~all(isfield(results, {'forecast_median', 'forecast_interval_alphas', 'forecast_lower', 'forecast_upper'}))
         continue;
     end
+
+    file_score_blocks  = cell(length(results), 1);
+    file_detail_blocks = cell(length(results), 1);
     
     for k = 1:length(results)
         truth_Rt = double(results(k).truth_Rt_window(:));
@@ -100,15 +105,15 @@ for i = 1:length(files)
 
         window_wis = mean(pointwise_wis);
 
-        score_registry = [score_registry; table( ...
+        file_score_blocks{k} = table( ...
             categorical(string(scenario_id)), ...
             categorical(string(model_type)), ...
             categorical(string(exo_mode)), ...
             results(k).window_day, ...
-            window_wis)];
+            window_wis);
 
         horizon_idx = (1:numel(truth_Rt))';
-        pointwise_details = [pointwise_details; table( ...
+        file_detail_blocks{k} = table( ...
             repmat(categorical(string(scenario_id)), numel(truth_Rt), 1), ...
             repmat(categorical(string(model_type)), numel(truth_Rt), 1), ...
             repmat(categorical(string(exo_mode)), numel(truth_Rt), 1), ...
@@ -117,8 +122,28 @@ for i = 1:length(files)
             double(results(k).time_horizon(:)), ...
             truth_Rt, ...
             pred_Rt, ...
-            pointwise_wis)];
+            pointwise_wis);
     end
+
+    file_score_blocks = file_score_blocks(~cellfun('isempty', file_score_blocks));
+    if ~isempty(file_score_blocks)
+        score_blocks{i} = vertcat(file_score_blocks{:});
+    end
+
+    file_detail_blocks = file_detail_blocks(~cellfun('isempty', file_detail_blocks));
+    if ~isempty(file_detail_blocks)
+        detail_blocks{i} = vertcat(file_detail_blocks{:});
+    end
+end
+
+score_blocks = score_blocks(~cellfun('isempty', score_blocks));
+if ~isempty(score_blocks)
+    score_registry = vertcat(score_blocks{:});
+end
+
+detail_blocks = detail_blocks(~cellfun('isempty', detail_blocks));
+if ~isempty(detail_blocks)
+    pointwise_details = vertcat(detail_blocks{:});
 end
 
 if isempty(score_registry)

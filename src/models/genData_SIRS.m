@@ -27,6 +27,7 @@ function umod = genData_SIRS(tspan, params, seed)
 %   See also GENDATA, PARTA_01_GENERATE_TRUTH, PARTA_02_RUN_FORECASTS.
 
 % A. M. Kaahin 2026-02-19
+% Modified: 2026-03-26
 
     if nargin < 3 || isempty(seed)
         seed = 220506; 
@@ -108,6 +109,7 @@ function umod = genData_SIRS(tspan, params, seed)
     umod.private.epiid.rates = Rates;
     umod.private.epiid.dynrates = params; 
     
+    prop = cell(size(r));
     for i = 1:numel(r)
       ix = find(r{i} == '>');
       prop{i} = r{i}(ix(1)+1:ix(2)-1);
