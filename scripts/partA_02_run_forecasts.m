@@ -1,12 +1,12 @@
 %PARTA_02_RUN_FORECASTS Execute expanding-window epidemic forecasts.
 %
 %   Description:
-%       Executes an expanding-window forecasting pipeline over synthetic 
-%       ground truth data. Evaluates statistical (ARIMA, ARIMAX) and 
-%       State-Space (N4SID, SSEST) models. Future exogenous covariates 
-%       (Susceptible and Infected populations) are projected dynamically 
-%       using the deterministic compartmental solver ('uds') to ensure 
-%       causality.
+%       Executes an expanding-window forecasting pipeline over synthetic
+%       ground truth data. Evaluates autoregressive and state-space models
+%       and computes analytic predictive intervals. Future exogenous
+%       covariates (Susceptible and Infected populations) are projected
+%       dynamically using the deterministic compartmental solver ('uds') to
+%       ensure causality.
 %
 %   Workflow:
 %       1. Initialize experiment and model configurations.
@@ -18,14 +18,15 @@
 %   See also PARTA_CONFIG, GENDATA_SIRS, PLOT_RT_FORECAST_COMPARISON.
 
 % A. M. Kaahin 2026-02-19
+% Modified: 2026-03-26
 
 %% 1. Initialization
 clear; close all; clc;
 
 fprintf('=== Forecast Pipeline Execution ===\n');
 
-MODEL_TYPE = 'ARIMA'; 
-EXO_MODE   = 'Both';    
+MODEL_TYPE = 'AR';
+EXO_MODE   = 'None';
 
 EXO_MODE = validate_configuration(MODEL_TYPE, EXO_MODE);
 fprintf('Configuration: Model = %s | Exogenous Mode = %s\n', MODEL_TYPE, EXO_MODE);
@@ -37,20 +38,27 @@ saveDir  = cfg.output.forecast_dir;
 fileList = dir(fullfile(dataDir, '*.mat'));
 
 switch MODEL_TYPE
-    case 'ARIMA'
-        [P, D, Q] = ndgrid(0:14, 0, 0);
-        candidate_models = [P(:), D(:), Q(:)];
-        table_headers    = {'p', 'd', 'q', 'Times_Selected'};
-        
-    case 'ARIMAX'
-        [P, D, Q, NB, NK] = ndgrid(0:14, 0, 0, 1:7, 1:7);
-        candidate_models  = [P(:), D(:), Q(:), NB(:), NK(:)];
-        table_headers     = {'p', 'd', 'q', 'nb', 'nk', 'Times_Selected'};
-        
+    case 'AR'
+        candidate_models = (0:cfg.forecast.max_ar_order)';
+        table_headers    = {'p', 'Times_Selected'};
+
+    case 'ARX'
+        [P, NB, NK] = ndgrid( ...
+            0:cfg.forecast.max_ar_order, ...
+            1:cfg.forecast.max_exo_order, ...
+            1:cfg.forecast.max_exo_delay);
+        candidate_models = [P(:), NB(:), NK(:)];
+        table_headers    = {'na', 'nb', 'nk', 'Times_Selected'};
+
     case {'N4SID', 'SSEST'}
-        [N_order, D_order] = ndgrid(1:8, [0, 1]);
-        candidate_models   = [N_order(:), D_order(:)];
-        table_headers      = {'State_Order_n', 'Differencing_d', 'Times_Selected'};
+        [N_order, D_order] = ndgrid( ...
+            1:cfg.forecast.max_state_order, ...
+            cfg.forecast.state_diff_orders);
+        candidate_models = [N_order(:), D_order(:)];
+        table_headers    = {'State_Order_n', 'Differencing_d', 'Times_Selected'};
+
+    otherwise
+        error('CFG:UnknownModel', 'Unsupported MODEL_TYPE: %s', MODEL_TYPE);
 end
 
 num_models = size(candidate_models, 1);
@@ -139,47 +147,69 @@ for i = 1:length(fileList)
             end
         end
         
-        par_landscape = zeros(num_models, size(candidate_models, 2) + 1); 
+        par_landscape = zeros(num_models, size(candidate_models, 2) + 1);
         par_forecasts = cell(num_models, 1);
+        par_lowers    = cell(num_models, 1);
+        par_uppers    = cell(num_models, 1);
+        par_alphas    = cell(num_models, 1);
         
         parfor idx = 1:num_models
             params = candidate_models(idx, :);
             
-            Rt_pred = [];
-            aicc    = [];
+            Rt_pred   = [];
+            aicc      = [];
+            Rt_lower  = [];
+            Rt_upper  = [];
+            wis_alpha = [];
             
             switch MODEL_TYPE
-                case 'ARIMA'
-                    [Rt_pred, aicc] = fit_arima(Rt_past, params(1), params(2), params(3), horizon);
-                    
-                case 'ARIMAX'
-                    nb_vec = repmat(params(4), 1, num_exo);
-                    nk_vec = repmat(params(5), 1, num_exo);
-                    [Rt_pred, aicc] = fit_arimax(Rt_past, U_past, U_future, params(1), params(2), params(3), nb_vec, nk_vec, horizon);
-                    
+                case 'AR'
+                    [Rt_pred, aicc, wis_alpha, Rt_lower, Rt_upper] = ...
+                        fit_arima(Rt_past, params(1), 0, 0, horizon, cfg.forecast.wis_alphas);
+
+                case 'ARX'
+                    nb_vec = repmat(params(2), 1, num_exo);
+                    nk_vec = repmat(params(3), 1, num_exo);
+                    [Rt_pred, aicc, wis_alpha, Rt_lower, Rt_upper] = ...
+                        fit_arimax(Rt_past, U_past, U_future, params(1), 0, 0, ...
+                        nb_vec, nk_vec, horizon, cfg.forecast.wis_alphas);
+
                 case 'N4SID'
-                    [Rt_pred, aicc] = fit_n4sid(Rt_past, U_past, U_future, params(1), params(2), horizon);
-                    
+                    [Rt_pred, aicc, wis_alpha, Rt_lower, Rt_upper] = ...
+                        fit_n4sid(Rt_past, U_past, U_future, params(1), params(2), ...
+                        horizon, cfg.forecast.wis_alphas);
+
                 case 'SSEST'
-                    [Rt_pred, aicc] = fit_ssest(Rt_past, U_past, U_future, params(1), params(2), horizon);
+                    [Rt_pred, aicc, wis_alpha, Rt_lower, Rt_upper] = ...
+                        fit_ssest(Rt_past, U_past, U_future, params(1), params(2), ...
+                        horizon, cfg.forecast.wis_alphas);
             end
             
             par_landscape(idx, :) = [params, aicc];
-            par_forecasts{idx}    = Rt_pred;
+            par_forecasts{idx} = Rt_pred;
+            par_lowers{idx}    = Rt_lower;
+            par_uppers{idx}    = Rt_upper;
+            par_alphas{idx}    = wis_alpha;
         end
         
         [~, sort_idx]    = sort(par_landscape(:, end));
         sorted_landscape = par_landscape(sort_idx, :);
         
-        best_idx     = sort_idx(1);
-        best_Rt_pred = par_forecasts{best_idx};
-        best_params  = sorted_landscape(1, 1:end-1);
+        best_idx       = sort_idx(1);
+        best_Rt_pred   = par_forecasts{best_idx};
+        best_Rt_lower  = par_lowers{best_idx};
+        best_Rt_upper  = par_uppers{best_idx};
+        best_wis_alpha = par_alphas{best_idx};
+        best_params    = sorted_landscape(1, 1:end-1);
         
         results(count).window_day      = T;
         results(count).window_day_idx  = idx_T;
-        results(count).forecast_Rt     = best_Rt_pred;
+        results(count).forecast_median = best_Rt_pred;
+        results(count).forecast_interval_alphas = best_wis_alpha;
+        results(count).forecast_lower  = best_Rt_lower;
+        results(count).forecast_upper  = best_Rt_upper;
         results(count).best_model      = best_params;
-        results(count).aic_landscape   = sorted_landscape; 
+        results(count).aic_landscape   = sorted_landscape;
         results(count).truth_Rt_window = Rt_true(idx_T+1 : idx_end);
         results(count).time_horizon    = tspan(idx_T+1 : idx_end);
         
@@ -213,10 +243,12 @@ fprintf('=== Forecast Pipeline Complete ===\n\n');
 function valid_exo_mode = validate_configuration(model_type, exo_mode)
 %VALIDATE_CONFIGURATION Resolve logical conflicts in configuration.
     valid_exo_mode = exo_mode;
-    if strcmp(model_type, 'ARIMA') && ~strcmp(exo_mode, 'None')
-        warning('CFG:ArimaExo', 'ARIMA is strictly autoregressive. Forcing EXO_MODE to None.');
+    if strcmp(model_type, 'AR') && ~strcmp(exo_mode, 'None')
+        warning('CFG:ArExo', 'AR is strictly autoregressive. Forcing EXO_MODE to None.');
         valid_exo_mode = 'None';
-    elseif strcmp(model_type, 'ARIMAX') && strcmp(exo_mode, 'None')
-        error('CFG:ArimaxExo', 'ARIMAX requires exogenous covariates. Set EXO_MODE to S, I, or Both.');
+    elseif strcmp(model_type, 'ARX') && strcmp(exo_mode, 'None')
+        error('CFG:ArxExo', 'ARX requires exogenous covariates. Set EXO_MODE to S, I, or Both.');
+    elseif ~any(strcmp(model_type, {'AR', 'ARX', 'N4SID', 'SSEST'}))
+        error('CFG:UnknownModel', 'Unsupported MODEL_TYPE: %s', model_type);
     end
 end

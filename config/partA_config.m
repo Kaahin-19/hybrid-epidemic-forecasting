@@ -23,6 +23,7 @@ function cfg = partA_config()
 %            PARTA_02_RUN_FORECASTS, PARTA_03_EVALUATE.
 
 % A. M. Kaahin 2026-02-18
+% Modified: 2026-03-26
 
     cfg = struct();
 
@@ -117,6 +118,14 @@ function cfg = partA_config()
     cfg.forecast.min_window = 49;
     cfg.forecast.step_size  = 7;
     cfg.forecast.horizon    = 14;
+    cfg.forecast.max_ar_order  = 14;
+    cfg.forecast.max_exo_order = 7;
+    cfg.forecast.max_exo_delay = 7;
+    cfg.forecast.max_state_order = 8;
+    cfg.forecast.state_diff_orders = [0, 1];
+    cfg.forecast.wis_alphas    = [0.05, 0.10, 0.20, 0.50];
+    cfg.forecast.plot_alphas   = [0.10, 0.50];
+    cfg.forecast.plot_context  = 7;
 
     %% 7. Output Artifacts
     thisDir  = fileparts(mfilename('fullpath'));

@@ -1,13 +1,13 @@
 function plot_model_performance(score_registry, cfg)
-%PLOT_MODEL_PERFORMANCE Visualize comparative RMSE distributions.
+%PLOT_MODEL_PERFORMANCE Visualize comparative WIS distributions.
 %
 %   Syntax:
 %       plot_model_performance(score_registry, cfg)
 %
 %   Description:
-%       Generates a comparative boxplot of Root Mean Square Error (RMSE)
+%       Generates a comparative boxplot of Weighted Interval Score (WIS)
 %       across different model configurations and scenarios. Automatically
-%       filters non-finite values and applies logarithmic scaling if errors
+%       filters non-finite values and applies logarithmic scaling if scores
 %       span multiple orders of magnitude.
 %
 %   Inputs:
@@ -17,6 +17,7 @@ function plot_model_performance(score_registry, cfg)
 %   See also PARTA_03_EVALUATE_MODELS, PARTA_CONFIG.
 
 % A. M. Kaahin 2026-02-19
+% Modified: 2026-03-26
 
     %% 1. Initialization
     if isfield(cfg, 'output') && isfield(cfg.output, 'fig_dir')
@@ -24,10 +25,10 @@ function plot_model_performance(score_registry, cfg)
     else
         figDir = fullfile(pwd, 'results', 'figures');
     end
-    out_path = fullfile(figDir, 'partA_03_performance_boxplot.png');
+    out_path = fullfile(figDir, 'partA_03_wis_performance_boxplot.png');
 
     %% 2. Visualization
-    fig = figure('Name', 'Forecast Performance Comparison', 'Visible', 'off');
+    fig = figure('Name', 'WIS Performance Comparison', 'Visible', 'off');
     fig.Units = 'centimeters';
     fig.Position(3) = 17.0;
     fig.Position(4) = 8.5;
@@ -41,10 +42,10 @@ function plot_model_performance(score_registry, cfg)
 
     config_id = string(score_registry.Model) + " (" + string(score_registry.ExoMode) + ")";
     
-    valid_idx = isfinite(score_registry.RMSE);
+    valid_idx = isfinite(score_registry.WindowWIS);
     
     if ~any(valid_idx)
-        warning('PLOT:NoData', 'All RMSE values are Inf or NaN. Skipping visualization.');
+        warning('PLOT:NoData', 'All WIS values are Inf or NaN. Skipping visualization.');
         close(fig);
         return;
     end
@@ -52,17 +53,17 @@ function plot_model_performance(score_registry, cfg)
     plot_data = score_registry(valid_idx, :);
     plot_config = config_id(valid_idx);
 
-    boxchart(ax, categorical(plot_config), plot_data.RMSE, ...
+    boxchart(ax, categorical(plot_config), plot_data.WindowWIS, ...
         'GroupByColor', plot_data.Scenario);
 
-    ylabel(ax, 'RMSE (R_t)');
-    title(ax, 'Model Accuracy Distribution by Configuration');
+    ylabel(ax, 'WIS (R_t)');
+    title(ax, 'Model WIS Distribution by Configuration');
     legend(ax, 'Location', 'bestoutside');
     grid(ax, 'on');
 
-    if max(plot_data.RMSE) > 100
+    if max(plot_data.WindowWIS) > 100
         set(ax, 'YScale', 'log');
-        ylabel(ax, 'RMSE (R_t) [Log Scale]');
+        ylabel(ax, 'WIS (R_t) [Log Scale]');
     end
 
     %% 3. Persistence
