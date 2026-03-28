@@ -22,6 +22,7 @@ function Rt = rt_seasonal(t, p)
 %   See also PARTA_CONFIG, RT_MULTI_WAVE, RT_SIGMOID.
 
 % A. M. Kaahin 2026-02-19
+% Modified: 2026-03-28
 
     Rt = p.center + p.amp * sin((2*pi/p.period) * t);
 end

@@ -23,6 +23,7 @@ function Rt = rt_sigmoid(t, p)
 %   See also PARTA_CONFIG, RT_MULTI_WAVE, RT_SEASONAL.
 
 % A. M. Kaahin 2026-02-19
+% Modified: 2026-03-28
 
     Rt = p.high + (p.low - p.high) ./ (1 + exp(-p.k * (t - p.t0)));
 end

@@ -6,8 +6,8 @@ function plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
 %
 %   Description:
 %       Generates a summary figure comparing the expanding-window forecasts
-%       against the synthetic ground truth and displaying final-window
-%       predictive intervals.
+%       against the synthetic ground truth and overlaying predictive
+%       intervals across all forecast windows in a single visualization.
 %
 %   Inputs:
 %       results   - Struct array of forecast results per window.
@@ -19,7 +19,7 @@ function plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
 %   See also PARTA_02_RUN_FORECASTS, PARTA_CONFIG.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-03-26
+% Modified: 2026-03-28
 
     %% 1. Initialization
     if isfield(cfg, 'output') && isfield(cfg.output, 'fig_dir')
@@ -35,93 +35,103 @@ function plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
     fig = figure('Name', ['Forecast Comparison: ', plot_name], 'Visible', 'off');
     fig.Units = 'centimeters';
     fig.Position(3) = 17.0;
-    fig.Position(4) = 9.5;
-    
-    tiledlayout(2, 1, 'Padding', 'compact', 'TileSpacing', 'compact');
-    
-    % --- Panel 1: Trajectories ---
-    ax1 = nexttile();
-    hold(ax1, 'on');
-    
-    axtoolbar(ax1, {'export'});
-    
-    plot(ax1, tspan, Rt_true, 'k-', 'LineWidth', 2.2, 'DisplayName', 'Ground Truth');
-    
-    first_plot = true;
-    for i = 1:numel(results)
-        t_f = results(i).time_horizon;
-        y_f = results(i).forecast_median;
-        
-        if first_plot
-            plot(ax1, t_f, y_f, 'b--', 'LineWidth', 1.4, 'DisplayName', 'Median Forecasts');
-            first_plot = false;
-        else
-            plot(ax1, t_f, y_f, 'b--', 'LineWidth', 1, 'HandleVisibility', 'off');
-        end
-    end
-    
-    title(ax1, sprintf('Forecast vs Truth: %s', strrep(plot_name, '_', ' ')));
-    ylabel(ax1, 'R_t Value');
-    grid(ax1, 'on');
-    legend(ax1, 'show', 'Location', 'northwest');
+    fig.Position(4) = 8.5;
 
-    if isfield(cfg, 'Rt') && isfield(cfg.Rt, 'bounds')
-        ylim(ax1, cfg.Rt.bounds);
-    end
-    
-    xlim(ax1, [tspan(1), tspan(end)]);
-    
-    % --- Panel 2: Final-Window Predictive Intervals ---
-    ax2 = nexttile();
-    hold(ax2, 'on');
-    axtoolbar(ax2, {'export'});
+    ax = axes(fig);
+    hold(ax, 'on');
 
-    final_result = results(end);
-    context_days = cfg.forecast.plot_context;
-    idx_start = max(1, final_result.window_day_idx - context_days + 1);
-    idx_stop  = final_result.window_day_idx + numel(final_result.time_horizon);
+    axtoolbar(ax, {'export'});
 
-    t_local = tspan(idx_start:idx_stop);
-    Rt_local = Rt_true(idx_start:idx_stop);
-    t_fcst = final_result.time_horizon(:);
-    Rt_med = final_result.forecast_median(:);
+    h90 = gobjects(0);
+    h50 = gobjects(0);
+    hMed = gobjects(0);
 
-    if isfield(final_result, 'forecast_interval_alphas')
+    if ~isempty(results) && isfield(results, 'forecast_interval_alphas')
         plot_alphas = cfg.forecast.plot_alphas(:)';
-        stored_alphas = double(final_result.forecast_interval_alphas(:)');
 
-        idx90 = local_alpha_index(stored_alphas, plot_alphas(1));
-        idx50 = local_alpha_index(stored_alphas, plot_alphas(2));
+        for i = 1:numel(results)
+            stored_alphas = double(results(i).forecast_interval_alphas(:)');
+            t_f = results(i).time_horizon(:);
 
-        if ~isempty(idx90)
-            fill_interval(ax2, t_fcst, final_result.forecast_lower(:, idx90), ...
-                final_result.forecast_upper(:, idx90), [0.30, 0.65, 0.95], ...
-                0.18, '90% Predictive Interval');
-        end
+            idx90 = local_alpha_index(stored_alphas, plot_alphas(1));
+            idx50 = local_alpha_index(stored_alphas, plot_alphas(2));
 
-        if ~isempty(idx50)
-            fill_interval(ax2, t_fcst, final_result.forecast_lower(:, idx50), ...
-                final_result.forecast_upper(:, idx50), [0.10, 0.45, 0.85], ...
-                0.30, '50% Predictive Interval');
+            if ~isempty(idx90)
+                display_name = '90% Predictive Interval';
+                if ~isempty(h90)
+                    display_name = '';
+                end
+                h = fill_interval(ax, t_f, results(i).forecast_lower(:, idx90), ...
+                    results(i).forecast_upper(:, idx90), [0.30, 0.65, 0.95], ...
+                    0.08, display_name);
+                if isempty(h90)
+                    h90 = h;
+                end
+            end
+
+            if ~isempty(idx50)
+                display_name = '50% Predictive Interval';
+                if ~isempty(h50)
+                    display_name = '';
+                end
+                h = fill_interval(ax, t_f, results(i).forecast_lower(:, idx50), ...
+                    results(i).forecast_upper(:, idx50), [0.10, 0.45, 0.85], ...
+                    0.16, display_name);
+                if isempty(h50)
+                    h50 = h;
+                end
+            end
         end
     end
 
-    plot(ax2, t_local, Rt_local, 'k-', 'LineWidth', 2.0, 'DisplayName', 'Ground Truth');
-    xline(ax2, tspan(final_result.window_day_idx), 'k:', 'LineWidth', 1.0, ...
-        'HandleVisibility', 'off');
-    plot(ax2, t_fcst, Rt_med, 'b-', 'LineWidth', 1.6, 'DisplayName', 'Forecast Median');
+    for i = 1:numel(results)
+        t_f = results(i).time_horizon(:);
+        y_f = results(i).forecast_median(:);
 
-    title(ax2, 'Final-Window Predictive Intervals');
-    xlabel(ax2, 'Time (days)');
-    ylabel(ax2, 'R_t Value');
-    grid(ax2, 'on');
-    xlim(ax2, [t_local(1), t_local(end)]);
+        if isempty(hMed)
+            hMed = plot(ax, t_f, y_f, 'b--', 'LineWidth', 1.3, ...
+                'DisplayName', 'Median Forecasts');
+        else
+            plot(ax, t_f, y_f, 'b--', 'LineWidth', 1.0, 'HandleVisibility', 'off');
+        end
+    end
+
+    hTruth = plot(ax, tspan, Rt_true, 'k-', 'LineWidth', 2.2, ...
+        'DisplayName', 'Ground Truth');
+
+    title(ax, sprintf('Forecast vs Truth: %s', strrep(plot_name, '_', ' ')));
+    xlabel(ax, 'Time (days)');
+    ylabel(ax, 'R_t Value');
+    grid(ax, 'on');
 
     if isfield(cfg, 'Rt') && isfield(cfg.Rt, 'bounds')
-        ylim(ax2, cfg.Rt.bounds);
+        ylim(ax, cfg.Rt.bounds);
     end
 
-    legend(ax2, 'show', 'Location', 'northwest');
+    xlim(ax, [tspan(1), tspan(end)]);
+
+    legend_handles = gobjects(0);
+    legend_labels = {};
+
+    legend_handles(end+1) = hTruth;
+    legend_labels{end+1} = 'Ground Truth';
+
+    if ~isempty(hMed)
+        legend_handles(end+1) = hMed;
+        legend_labels{end+1} = 'Median Forecasts';
+    end
+
+    if ~isempty(h50)
+        legend_handles(end+1) = h50;
+        legend_labels{end+1} = '50% Predictive Interval';
+    end
+
+    if ~isempty(h90)
+        legend_handles(end+1) = h90;
+        legend_labels{end+1} = '90% Predictive Interval';
+    end
+
+    legend(ax, legend_handles, legend_labels, 'Location', 'northwest');
     
     %% 3. Persistence
     exportgraphics(fig, outPath, 'Resolution', 300);
@@ -134,12 +144,18 @@ function idx = local_alpha_index(stored_alphas, target_alpha)
     end
 end
 
-function fill_interval(ax, t_fcst, lower_bound, upper_bound, face_color, face_alpha, display_name)
+function h = fill_interval(ax, t_fcst, lower_bound, upper_bound, face_color, face_alpha, display_name)
     lower_bound = lower_bound(:);
     upper_bound = upper_bound(:);
     t_fcst = t_fcst(:);
 
-    fill(ax, [t_fcst; flipud(t_fcst)], [upper_bound; flipud(lower_bound)], ...
-        face_color, 'FaceAlpha', face_alpha, 'EdgeColor', 'none', ...
-        'DisplayName', display_name);
+    if isempty(display_name)
+        h = fill(ax, [t_fcst; flipud(t_fcst)], [upper_bound; flipud(lower_bound)], ...
+            face_color, 'FaceAlpha', face_alpha, 'EdgeColor', 'none', ...
+            'HandleVisibility', 'off');
+    else
+        h = fill(ax, [t_fcst; flipud(t_fcst)], [upper_bound; flipud(lower_bound)], ...
+            face_color, 'FaceAlpha', face_alpha, 'EdgeColor', 'none', ...
+            'DisplayName', display_name);
+    end
 end

@@ -37,7 +37,7 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
 %   See also FIT_ARIMA, FIT_N4SID, FIT_SSEST, PARTA_02_RUN_FORECASTS.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-03-26
+% Modified: 2026-03-28
 
     %% 1. Preprocessing
     if nargin < 10 || isempty(interval_alphas)
@@ -50,14 +50,12 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
         error('FIT:InvalidAlpha', 'Interval alphas must satisfy 0 < alpha < 1.');
     end
 
-    % Apply threshold clipping prior to log-transformation
     y = log(max(Rt_hist(:), eps));
     
     if d == 1
         fit_y = diff(y);
         fit_u = diff(U_hist, 1, 1); 
         
-        % Difference future exogenous inputs relative to final historical value
         combined_fut = [U_hist(end, :); U_future];
         fit_u_fut    = diff(combined_fut, 1, 1);
     else
@@ -67,7 +65,6 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
     end
 
     %% 2. Signal Integrity Check
-    % Return persistence forecast if signal variance is negligible
     if std(fit_y) < 1e-8
         [Rt_curve, lower_bounds, upper_bounds] = local_persistence_forecast(Rt_hist(end), horizon, interval_alphas);
         aicc = inf;
@@ -75,7 +72,6 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
     end
     
     %% 3. Model Order Validation
-    % Validate model order constraints including exogenous memory
     n = length(fit_y);
     k = p + q + sum(nb_vec); 
     
@@ -95,7 +91,6 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
             sys = armax(data, [p, nb_vec, q, nk_vec], 'Display', 'off');
         end
         
-        % Extract AICc score
         aicc = sys.Report.Fit.AICc;
         
         %% 5. Forecasting
@@ -117,7 +112,6 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
 
         pred_sd = max(pred_sd(:), 0);
 
-        % Reverse transformation and compute predictive intervals
         Rt_curve = exp(pred_y);
         [lower_bounds, upper_bounds] = local_interval_bounds(pred_y, pred_sd, interval_alphas);
 
@@ -126,12 +120,12 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
         end
         
     catch
-        % Fallback to persistence forecast on estimation failure
         [Rt_curve, lower_bounds, upper_bounds] = local_persistence_forecast(Rt_hist(end), horizon, interval_alphas);
         aicc = inf;
     end
 end
 
+%% 7. Local Helpers
 function values = local_extract_output(data)
     if isa(data, 'iddata')
         values = double(data.OutputData(:));

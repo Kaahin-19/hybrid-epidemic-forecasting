@@ -15,6 +15,7 @@ function plot_rt_scenarios(scenarios, cfg)
 %   See also PARTA_00_MAKE_SCENARIOS, PARTA_CONFIG.
 
 % A. M. Kaahin 2026-02-18
+% Modified: 2026-03-28
 
     %% 1. Initialization
     if isfield(cfg, 'output') && isfield(cfg.output, 'fig_dir')

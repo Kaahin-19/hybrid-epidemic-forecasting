@@ -23,7 +23,7 @@ function cfg = partA_config()
 %            PARTA_02_RUN_FORECASTS, PARTA_03_EVALUATE.
 
 % A. M. Kaahin 2026-02-18
-% Modified: 2026-03-26
+% Modified: 2026-03-28
 
     cfg = struct();
 
@@ -135,5 +135,6 @@ function cfg = partA_config()
     cfg.output.fig_dir      = fullfile(repoRoot, "results", "figures");
     cfg.output.forecast_dir = fullfile(repoRoot, "results", "forecasts");
     cfg.output.score_dir    = fullfile(repoRoot, "results", "scores");
+    cfg.output.tuning_dir   = fullfile(repoRoot, "results", "tuning");
 
 end

@@ -30,7 +30,7 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
 %   See also FIT_ARIMAX, FIT_N4SID, FIT_SSEST, PARTA_02_RUN_FORECASTS.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-03-26
+% Modified: 2026-03-28
 
     %% 1. Preprocessing
     if nargin < 6 || isempty(interval_alphas)
@@ -43,7 +43,6 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
         error('FIT:InvalidAlpha', 'Interval alphas must satisfy 0 < alpha < 1.');
     end
 
-    % Apply threshold clipping prior to log-transformation
     y = log(max(Rt_hist(:), eps));
     
     if d == 1
@@ -53,7 +52,6 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
     end
 
     %% 2. Signal Integrity Check
-    % Return persistence forecast if signal variance is negligible
     if std(fit_data) < 1e-8
         [Rt_curve, lower_bounds, upper_bounds] = local_persistence_forecast(Rt_hist(end), horizon, interval_alphas);
         aicc = inf;
@@ -80,7 +78,6 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
             sys = armax(data, [p, q], 'Display', 'off');
         end
         
-        % Extract AICc score
         aicc = sys.Report.Fit.AICc;
         
         %% 5. Forecasting
@@ -102,7 +99,6 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
 
         pred_sd = max(pred_sd(:), 0);
 
-        % Reverse transformation and compute predictive intervals
         Rt_curve = exp(pred_y);
         [lower_bounds, upper_bounds] = local_interval_bounds(pred_y, pred_sd, interval_alphas);
 
@@ -111,12 +107,12 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
         end
         
     catch
-        % Fallback to persistence forecast on estimation failure
         [Rt_curve, lower_bounds, upper_bounds] = local_persistence_forecast(Rt_hist(end), horizon, interval_alphas);
         aicc = inf;
     end
 end
 
+%% 7. Local Helpers
 function values = local_extract_output(data)
     if isa(data, 'iddata')
         values = double(data.OutputData(:));

@@ -27,8 +27,9 @@ function umod = genData_SIRS(tspan, params, seed)
 %   See also GENDATA, PARTA_01_GENERATE_TRUTH, PARTA_02_RUN_FORECASTS.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-03-26
+% Modified: 2026-03-28
 
+    %% 1. Initialization
     if nargin < 3 || isempty(seed)
         seed = 220506; 
     end
@@ -36,34 +37,31 @@ function umod = genData_SIRS(tspan, params, seed)
     
     name = 'SIRS';
     
-    % Extract model parameters
+    %% 2. Model Definition
     beta_curve = params.beta;
     gammaI     = params.gamma;
     deltaR     = params.xi;
     pop_size   = params.pop_size;
     
-    % Define species and transitions
     species = {'S', 'I', 'R'};
     r = {'S > beta*S*I/vol > I', ...
          'I > gammaI*I > R', ...
          'R > deltaR*R > S'};
          
-    % Map rates to URDME data types
     rates.beta = 'ldata_time';
     rates.gammaI = 'gdata';
     rates.deltaR = 'gdata';
     
-    % Parse model
     umod = rparse([], r, species, rates, name);
     
-    % Initialize physical domain and time
+    %% 3. Domain Setup
     umod.vol = pop_size;
     Nspecies = size(umod.N, 1);
     umod.D = sparse(Nspecies, Nspecies);
     umod.sd = 1;
     umod.tspan = tspan; 
     
-    % Set initial states
+    %% 4. Initial Conditions
     if isfield(params, 'I0')
         I0 = params.I0;
     else
@@ -79,21 +77,20 @@ function umod = genData_SIRS(tspan, params, seed)
     umod.u0 = zeros(Nspecies, 1);
     umod.u0(1:3) = [umod.vol - I0 - R0_init; I0; R0_init];
     
-    % Map rates for compilation
+    %% 5. Rate Packaging
     Rates.gammaI = gammaI;
     Rates.deltaR = deltaR;
     
     GDATA = struct2cell(Rates);
     GDATA = cat(1, GDATA{:});
     
-    % Determine solver type
+    %% 6. Solver Preparation
     if isfield(params, 'solver')
         sim_solver = params.solver;
     else
         sim_solver = 'ssa';
     end
     
-    % Compile the URDME model
     umod = urdme(umod, 'solve', 0, 'compile', 1, 'solver', sim_solver, ...
                  'modelname', name, ...
                  'gdata', GDATA, ...
@@ -104,7 +101,7 @@ function umod = genData_SIRS(tspan, params, seed)
     umod.parse = 1;
     umod.compile = 0;
     
-    % Append private tracking fields
+    %% 7. Metadata
     umod.private.epiid.R0 = beta_curve / gammaI;
     umod.private.epiid.rates = Rates;
     umod.private.epiid.dynrates = params; 
@@ -116,7 +113,7 @@ function umod = genData_SIRS(tspan, params, seed)
     end
     umod.private.epiid.Propensities = prop;
     
-    % Execute simulation
+    %% 8. Simulation
     umod.seed = randi(intmax);
     umod = urdme(umod);
 end

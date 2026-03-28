@@ -23,6 +23,7 @@ function Rt = rt_multi_wave(t, p)
 %   See also PARTA_CONFIG, RT_SEASONAL, RT_SIGMOID.
 
 % A. M. Kaahin 2026-02-19
+% Modified: 2026-03-28
 
     peak1 = p.A1 * exp(-((t - p.mu1).^2) / p.denom);
     peak2 = p.A2 * exp(-((t - p.mu2).^2) / p.denom);

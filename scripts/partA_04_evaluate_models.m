@@ -1,4 +1,4 @@
-%PARTA_03_EVALUATE_MODELS Comparative Evaluation of Epidemic Forecasts
+%PARTA_04_EVALUATE_MODELS Comparative Evaluation of Epidemic Forecasts
 %
 %   Description:
 %       Aggregates and scores the performance of all forecasting models
@@ -16,7 +16,7 @@
 %   See also PARTA_CONFIG, PLOT_MODEL_PERFORMANCE.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-03-26
+% Modified: 2026-03-28
 
 %% 1. Initialization
 clear; close all; clc;
@@ -37,7 +37,7 @@ filePattern = fullfile(forecastDir, 'partA_02_forecast_*.mat');
 files       = dir(filePattern);
 
 if isempty(files)
-    error('EVAL:NoData', 'No forecast results found. Run partA_02_run_forecasts.m first.');
+    error('EVAL:NoData', 'No forecast results found. Run partA_03_run_forecasts.m first.');
 end
 
 %% 2. Score Aggregation
@@ -148,7 +148,7 @@ end
 
 if isempty(score_registry)
     error('EVAL:NoProbabilisticData', ...
-        'No probabilistic forecast results found. Run partA_02_run_forecasts.m first.');
+        'No probabilistic forecast results found. Run partA_03_run_forecasts.m first.');
 end
 
 score_registry.Properties.VariableNames = {'Scenario', 'Model', 'ExoMode', 'WindowDay', 'WindowWIS'};
