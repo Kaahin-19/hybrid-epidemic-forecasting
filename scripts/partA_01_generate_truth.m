@@ -11,7 +11,7 @@
 %       2. Simulation Loop (Rt generation and stochastic modeling)
 %       3. Data Persistence
 %
-%   See also PARTA_CONFIG, PARTA_00_MAKE_SCENARIOS.
+%   See also PARTA_CONFIG, GENDATA_SIRS.
 
 % A. M. Kaahin 2026-02-18
 % Modified: 2026-03-28

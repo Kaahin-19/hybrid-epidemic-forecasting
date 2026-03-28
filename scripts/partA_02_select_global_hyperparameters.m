@@ -1,20 +1,21 @@
-%PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS Select globally shared hyperparameters.
+%PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS Select a global hyperparameter configuration.
 %
 %   Description:
-%       Executes a Level 1 tuning workflow for Part A by selecting one
-%       global hyperparameter configuration for the active model family and
-%       exogenous-input setting. Candidate configurations are scored using
-%       scenario-balanced Weighted Interval Score (WIS) across all
-%       expanding-window forecasts.
+%       Evaluates candidate hyperparameter configurations for the active
+%       model family and exogenous-input setting using the synthetic
+%       ground truth data. Each candidate is scored across all scenarios
+%       and expanding forecast windows using the Weighted Interval Score
+%       (WIS), and the configuration with the lowest aggregated score is
+%       saved for use by the forecast execution stage.
 %
 %   Workflow:
-%       1. Initialize the active model and exogenous-input configuration.
+%       1. Load the active run configuration and synthetic truth datasets.
 %       2. Construct the candidate hyperparameter grid.
 %       3. Score every candidate across all scenarios and forecast windows.
 %       4. Select the candidate with the minimum global mean WIS.
 %       5. Persist machine-readable tuning artifacts for downstream use.
 %
-%   See also PARTA_CONFIG, PARTA_01_GENERATE_TRUTH, PARTA_02_RUN_FORECASTS.
+%   See also PARTA_CONFIG, GENDATA_SIRS, PARTA_01_GENERATE_TRUTH.
 
 % A. M. Kaahin 2026-03-28
 % Modified: 2026-03-28
@@ -24,14 +25,14 @@ clear; close all; clc;
 
 fprintf('=== Global Hyperparameter Selection ===\n');
 
-MODEL_TYPE = 'SSEST';
-EXO_MODE   = 'I';
+cfg = partA_config();
+MODEL_TYPE = char(cfg.run.model_type);
+EXO_MODE   = char(cfg.run.exo_mode);
 
 EXO_MODE = validate_configuration(MODEL_TYPE, EXO_MODE);
 fprintf('Configuration: Model = %s | Exogenous Mode = %s\n', MODEL_TYPE, EXO_MODE);
 
 %% 2. Configuration and Grid Setup
-cfg       = partA_config();
 dataDir   = cfg.output.data_dir;
 tuningDir = cfg.output.tuning_dir;
 fileList  = dir(fullfile(dataDir, '*.mat'));
@@ -65,16 +66,14 @@ for i = 1:length(fileList)
     loaded = load(fullPath);
 
     scenario_id = string(strrep(name_core, 'partA_01_truth_', ''));
-    max_S = max(loaded.S_true(:));
-    max_I = max(loaded.I_true(:));
-    norm_S = loaded.S_true(:) / max_S;
-    norm_I = loaded.I_true(:) / max_I;
+    scaled_S = loaded.S_true(:) / cfg.sirs.pop_size;
+    scaled_I = loaded.I_true(:) / cfg.sirs.pop_size;
 
     switch EXO_MODE
         case 'None', U_true = [];
-        case 'S',    U_true = norm_S;
-        case 'I',    U_true = norm_I;
-        case 'Both', U_true = [norm_S, norm_I];
+        case 'S',    U_true = scaled_S;
+        case 'I',    U_true = scaled_I;
+        case 'Both', U_true = [scaled_S, scaled_I];
     end
 
     T_end   = length(loaded.Rt_true);
@@ -86,9 +85,7 @@ for i = 1:length(fileList)
         'tspan', loaded.tspan(:), ...
         'S_true', loaded.S_true(:), ...
         'I_true', loaded.I_true(:), ...
-        'U_true', U_true, ...
-        'max_S', max_S, ...
-        'max_I', max_I);
+        'U_true', U_true);
 
     window_data = repmat(struct( ...
         'Rt_past', [], ...
@@ -289,13 +286,13 @@ function [U_past, U_future] = prepare_exogenous_inputs(data, idx_T, horizon, exo
     S_future_raw = uds_mod.U(1, 2:end)';
     I_future_raw = uds_mod.U(2, 2:end)';
 
-    norm_S_fut = S_future_raw / data.max_S;
-    norm_I_fut = I_future_raw / data.max_I;
+    scaled_S_fut = S_future_raw / sirs_cfg.pop_size;
+    scaled_I_fut = I_future_raw / sirs_cfg.pop_size;
 
     switch exo_mode
-        case 'S',    U_future = norm_S_fut;
-        case 'I',    U_future = norm_I_fut;
-        case 'Both', U_future = [norm_S_fut, norm_I_fut];
+        case 'S',    U_future = scaled_S_fut;
+        case 'I',    U_future = scaled_I_fut;
+        case 'Both', U_future = [scaled_S_fut, scaled_I_fut];
         otherwise,   U_future = [];
     end
 end

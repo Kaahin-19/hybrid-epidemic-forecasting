@@ -19,20 +19,27 @@ function umod = genData_SIRS(tspan, params, seed)
 %                .I0       - (Optional) Initial number of infected individuals.
 %                .R0_init  - (Optional) Initial number of recovered individuals.
 %                .solver   - (Optional) String specifying the URDME solver.
+%                .compile  - (Optional) Logical flag controlling URDME
+%                            compilation. Existing generated executables
+%                            are reused when compilation is disabled.
 %       seed   - (Optional) Integer seed for random number generation.
+%                If omitted, a random seed is generated and used.
 %
 %   Outputs:
-%       umod   - URDME model object containing simulation results.
+%       umod   - URDME model object containing simulation results and
+%                the effective simulation seed in .seed.
 %
-%   See also GENDATA, PARTA_01_GENERATE_TRUTH, PARTA_02_RUN_FORECASTS.
+%   See also GENDATA, PARTA_01_GENERATE_TRUTH, PARTA_03_RUN_FORECASTS.
 
 % A. M. Kaahin 2026-02-19
 % Modified: 2026-03-28
 
     %% 1. Initialization
     if nargin < 3 || isempty(seed)
-        seed = 220506; 
+        rng('shuffle');
+        seed = randi(intmax('uint32'));
     end
+    seed = double(seed);
     rng(seed);
     
     name = 'SIRS';
@@ -90,12 +97,39 @@ function umod = genData_SIRS(tspan, params, seed)
     else
         sim_solver = 'ssa';
     end
+
+    if isfield(params, 'compile')
+        compile_flag = params.compile;
+    else
+        compile_flag = 1;
+    end
+
+    if ~compile_flag
+        expected_mexname = sprintf('mex%s_%s_%s', sim_solver, name, name);
+        solver_ready = exist('mexuds', 'file') == 2 || exist('mexuds', 'file') == 3;
+        rhs_ready = exist([expected_mexname '_mexrhs'], 'file') == 3;
+        jac_ready = exist([expected_mexname '_mexjac'], 'file') == 3;
+
+        if ~strcmp(sim_solver, 'uds')
+            solver_ready = exist(expected_mexname, 'file') == 2 || exist(expected_mexname, 'file') == 3;
+            rhs_ready = true;
+            jac_ready = true;
+        end
+
+        compile_flag = ~(solver_ready && rhs_ready && jac_ready);
+    end
     
-    umod = urdme(umod, 'solve', 0, 'compile', 1, 'solver', sim_solver, ...
+    umod = urdme(umod, 'solve', 0, 'compile', compile_flag, 'solver', sim_solver, ...
                  'modelname', name, ...
                  'gdata', GDATA, ...
                  'ldata_time', reshape(beta_curve, [1, numel(umod.vol), numel(umod.tspan)]), ...
                  'data_time', umod.tspan);
+
+    if strcmp(sim_solver, 'uds')
+        umod.mexexec = str2func('mexuds');
+    else
+        umod.mexexec = str2func(umod.mexname);
+    end
                  
     umod.solve = 1;
     umod.parse = 1;
@@ -114,6 +148,6 @@ function umod = genData_SIRS(tspan, params, seed)
     umod.private.epiid.Propensities = prop;
     
     %% 8. Simulation
-    umod.seed = randi(intmax);
+    umod.seed = seed;
     umod = urdme(umod);
 end

@@ -17,7 +17,9 @@
 %       4. Perform expanding-window forecast estimation.
 %       5. Aggregate results and generate performance visualizations.
 %
-%   See also PARTA_CONFIG, GENDATA_SIRS, PLOT_RT_FORECAST_COMPARISON.
+%   See also PARTA_CONFIG, GENDATA_SIRS, PLOT_RT_FORECAST_COMPARISON, ... 
+%            PARTA_01_GENERATE_TRUTH, ... 
+%            PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS.
 
 % A. M. Kaahin 2026-02-19
 % Modified: 2026-03-28
@@ -27,14 +29,14 @@ clear; close all; clc;
 
 fprintf('=== Forecast Pipeline Execution ===\n');
 
-MODEL_TYPE = 'AR';
-EXO_MODE   = 'I';
+cfg = partA_config();
+MODEL_TYPE = char(cfg.run.model_type);
+EXO_MODE   = char(cfg.run.exo_mode);
 
 EXO_MODE = validate_configuration(MODEL_TYPE, EXO_MODE);
 fprintf('Configuration: Model = %s | Exogenous Mode = %s\n', MODEL_TYPE, EXO_MODE);
 
 %% 2. Configuration and Grid Setup
-cfg      = partA_config(); 
 dataDir  = cfg.output.data_dir;     
 saveDir  = cfg.output.forecast_dir; 
 tuningDir = cfg.output.tuning_dir;
@@ -66,16 +68,14 @@ for i = 1:length(fileList)
     Rt_true = loaded.Rt_true;
     tspan   = loaded.tspan;
     
-    max_S = max(loaded.S_true(:));
-    max_I = max(loaded.I_true(:));
-    norm_S = loaded.S_true(:) / max_S;
-    norm_I = loaded.I_true(:) / max_I;
+    scaled_S = loaded.S_true(:) / cfg.sirs.pop_size;
+    scaled_I = loaded.I_true(:) / cfg.sirs.pop_size;
     
     switch EXO_MODE
         case 'None', U_true = [];
-        case 'S',    U_true = norm_S;
-        case 'I',    U_true = norm_I;
-        case 'Both', U_true = [norm_S, norm_I];
+        case 'S',    U_true = scaled_S;
+        case 'I',    U_true = scaled_I;
+        case 'Both', U_true = [scaled_S, scaled_I];
     end
     
     num_exo = size(U_true, 2);
@@ -134,13 +134,13 @@ for i = 1:length(fileList)
             S_future_raw = uds_mod.U(1, 2:end)';
             I_future_raw = uds_mod.U(2, 2:end)';
             
-            norm_S_fut = S_future_raw / max_S;
-            norm_I_fut = I_future_raw / max_I;
+            scaled_S_fut = S_future_raw / cfg.sirs.pop_size;
+            scaled_I_fut = I_future_raw / cfg.sirs.pop_size;
             
             switch EXO_MODE
-                case 'S',    U_future = norm_S_fut;
-                case 'I',    U_future = norm_I_fut;
-                case 'Both', U_future = [norm_S_fut, norm_I_fut];
+                case 'S',    U_future = scaled_S_fut;
+                case 'I',    U_future = scaled_I_fut;
+                case 'Both', U_future = [scaled_S_fut, scaled_I_fut];
             end
         end
         
@@ -170,7 +170,7 @@ for i = 1:length(fileList)
     summary_table = array2table([selected_model, size(selected_models_log, 1)], ...
         'VariableNames', table_headers);
     
-    file_prefix = sprintf('partA_02_forecast_%s_%s_%s', scenario_id, MODEL_TYPE, EXO_MODE);
+    file_prefix = sprintf('partA_03_forecast_%s_%s_%s', scenario_id, MODEL_TYPE, EXO_MODE);
     
     csvName = fullfile(saveDir, [file_prefix, '_summary.csv']);
     writetable(summary_table, csvName);

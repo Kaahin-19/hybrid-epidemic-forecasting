@@ -13,7 +13,7 @@
 %       4. Aggregate statistics to identify the optimal model configuration.
 %       5. Generate comparative boxplots via a dedicated plotting function.
 %
-%   See also PARTA_CONFIG, PLOT_MODEL_PERFORMANCE.
+%   See also PARTA_CONFIG, PLOT_MODEL_PERFORMANCE, PARTA_03_RUN_FORECASTS.
 
 % A. M. Kaahin 2026-02-19
 % Modified: 2026-03-28
@@ -33,7 +33,7 @@ if ~exist(figDir, 'dir'),   mkdir(figDir); end
 
 fprintf('Scanning forecast directory: %s\n', forecastDir);
 
-filePattern = fullfile(forecastDir, 'partA_02_forecast_*.mat');
+filePattern = fullfile(forecastDir, 'partA_03_forecast_*.mat');
 files       = dir(filePattern);
 
 if isempty(files)
@@ -171,23 +171,23 @@ summary_stats.Properties.VariableNames = regexprep(summary_stats.Properties.Vari
 fprintf('\n  [ Performance Summary (WIS) ]\n');
 disp(summary_stats(:, {'Scenario', 'Model', 'ExoMode', 'Mean_WindowWIS', 'Std_WindowWIS'}));
 
-summaryFile = fullfile(scoreDir, 'partA_03_wis_performance_summary.csv');
+summaryFile = fullfile(scoreDir, 'partA_04_wis_performance_summary.csv');
 writetable(summary_stats, summaryFile);
 fprintf('Summary statistics saved to: %s\n', summaryFile);
 
-detailFile = fullfile(scoreDir, 'partA_03_wis_pointwise_details.csv');
+detailFile = fullfile(scoreDir, 'partA_04_wis_pointwise_details.csv');
 writetable(pointwise_details, detailFile);
 fprintf('Pointwise WIS details saved to: %s\n', detailFile);
 
 alpha_labels = string(strjoin(compose('%.2f', double(cfg.forecast.wis_alphas)), ', '));
-settingsFile = fullfile(scoreDir, 'partA_03_wis_settings.csv');
+settingsFile = fullfile(scoreDir, 'partA_04_wis_settings.csv');
 writetable(table(alpha_labels, 'VariableNames', {'WIS_Alphas'}), settingsFile);
 fprintf('WIS settings saved to: %s\n', settingsFile);
 
 %% 4. Visualization
 plot_model_performance(score_registry, cfg);
 
-out_path = fullfile(cfg.output.fig_dir, 'partA_03_wis_performance_boxplot.png');
+out_path = fullfile(cfg.output.fig_dir, 'partA_04_wis_performance_boxplot.png');
 fprintf('Performance visualization saved to: %s\n', out_path);
 fprintf('=== Evaluation Complete ===\n\n');
 

@@ -16,11 +16,13 @@ function cfg = partA_config()
 %           .scenarios  : Array of structs defining the signal slots.
 %           .sirs       : Biological parameters (gamma, xi, pop_size).
 %           .sim        : Reproducibility settings.
+%           .run        : Active execution settings for Part A scripts.
 %           .forecast   : Hyperparameters for the hybrid model.
 %           .output     : Absolute paths for data and figure storage.
 %
-%   See also PARTA_00_MAKE_SCENARIOS, PARTA_01_GENERATE_TRUTH, 
-%            PARTA_02_RUN_FORECASTS, PARTA_03_EVALUATE.
+%   See also PARTA_00_MAKE_SCENARIOS, PARTA_01_GENERATE_TRUTH, ...
+%            PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, ...
+%            PARTA_03_RUN_FORECASTS, PARTA_04_EVALUATE_MODELS.
 
 % A. M. Kaahin 2026-02-18
 % Modified: 2026-03-28
@@ -114,7 +116,11 @@ function cfg = partA_config()
     %% 5. Reproducibility
     cfg.sim.seed = 1234;
 
-    %% 6. Forecasting Hyperparameters
+    %% 6. Active Run Configuration
+    cfg.run.model_type = "SSEST";
+    cfg.run.exo_mode   = "I";
+
+    %% 7. Forecasting Hyperparameters
     cfg.forecast.min_window = 49;
     cfg.forecast.step_size  = 7;
     cfg.forecast.horizon    = 14;
@@ -127,7 +133,7 @@ function cfg = partA_config()
     cfg.forecast.plot_alphas   = [0.10, 0.50];
     cfg.forecast.plot_context  = 7;
 
-    %% 7. Output Artifacts
+    %% 8. Output Artifacts
     thisDir  = fileparts(mfilename('fullpath'));
     repoRoot = fileparts(thisDir);
 

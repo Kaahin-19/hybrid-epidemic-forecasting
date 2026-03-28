@@ -16,7 +16,7 @@ function plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
 %       plot_name - String identifier for the plot title (scenario name).
 %       cfg       - Configuration struct containing output directories.
 %
-%   See also PARTA_02_RUN_FORECASTS, PARTA_CONFIG.
+%   See also PARTA_03_RUN_FORECASTS, PARTA_CONFIG.
 
 % A. M. Kaahin 2026-02-19
 % Modified: 2026-03-28
@@ -28,7 +28,7 @@ function plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
         figDir = fullfile(pwd, 'results', 'figures');
     end
     
-    filename = sprintf('partA_02_forecast_plot_%s.png', plot_name);
+    filename = sprintf('partA_03_forecast_plot_%s.png', plot_name);
     outPath  = fullfile(figDir, filename);
 
     %% 2. Visualization

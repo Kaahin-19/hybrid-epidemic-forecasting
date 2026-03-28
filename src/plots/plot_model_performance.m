@@ -14,10 +14,10 @@ function plot_model_performance(score_registry, cfg)
 %       score_registry - Table containing merged evaluation scores.
 %       cfg            - Configuration struct containing output paths.
 %
-%   See also PARTA_03_EVALUATE_MODELS, PARTA_CONFIG.
+%   See also PARTA_04_EVALUATE_MODELS, PARTA_CONFIG.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-03-26
+% Modified: 2026-03-28
 
     %% 1. Initialization
     if isfield(cfg, 'output') && isfield(cfg.output, 'fig_dir')
@@ -25,7 +25,7 @@ function plot_model_performance(score_registry, cfg)
     else
         figDir = fullfile(pwd, 'results', 'figures');
     end
-    out_path = fullfile(figDir, 'partA_03_wis_performance_boxplot.png');
+    out_path = fullfile(figDir, 'partA_04_wis_performance_boxplot.png');
 
     %% 2. Visualization
     fig = figure('Name', 'WIS Performance Comparison', 'Visible', 'off');

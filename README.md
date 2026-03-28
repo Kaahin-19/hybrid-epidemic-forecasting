@@ -24,13 +24,13 @@ The implementation is divided into three major phases as outlined in the project
 
 ### Root & Configuration
 * ``startup.m``: Initializes the project environment by dynamically adding internal subdirectories to the active MATLAB path.
-* ``config/partA_config.m``: Serves as the central configuration hub, defining the simulation environment, ground truth constraints, and forecasting hyperparameters for the synthetic validation phase.
+* ``config/partA_config.m``: Serves as the central configuration hub, defining the simulation environment, active run settings, ground truth constraints, and forecasting hyperparameters for the synthetic validation phase.
 
 ### Execution Scripts
 * ``scripts/partA_00_make_scenarios.m``: Generates and visualizes the distinct transmission scenarios (seasonality, interventions, resurgences) to be used as ground truth.
 * ``scripts/partA_01_generate_truth.m``: Simulates the SIRS epidemic model to generate and save the synthetic ground-truth datasets for each scenario.
-* ``scripts/partA_02_select_global_hyperparameters.m``: Selects one global hyperparameter configuration per model family and exogenous-input setting using cross-scenario WIS.
-* ``scripts/partA_03_run_forecasts.m``: Acts as a unified switchboard to execute expanding-window probabilistic forecasts using the selected global hyperparameter configuration.
+* ``scripts/partA_02_select_global_hyperparameters.m``: Selects one global hyperparameter configuration per model family and exogenous-input setting using cross-scenario WIS and the active ``cfg.run`` configuration.
+* ``scripts/partA_03_run_forecasts.m``: Acts as a unified switchboard to execute expanding-window probabilistic forecasts using the selected global hyperparameter configuration and the active ``cfg.run`` configuration.
 * ``scripts/partA_04_evaluate_models.m``: Aggregates the forecast results, calculates WIS metrics, and produces final statistical summaries.
 
 ### Source Code (``src/``)
@@ -39,7 +39,7 @@ The implementation is divided into three major phases as outlined in the project
 * ``src/models/fit_n4sid.m``: Fits a discrete-time state-space model utilizing the Subspace State-Space System Identification (N4SID) algorithm.
 * ``src/models/fit_ssest.m``: Fits an optimized discrete-time state-space model using iterative Prediction Error Minimization (PEM).
 * ``src/models/genData.m``: A general utility for generating synthetic data from compartmental epidemic models using URDME.
-* ``src/models/genData_SIRS.m``: A specialized wrapper for simulating stochastic or deterministic trajectories of the SIRS model.
+* ``src/models/genData_SIRS.m``: A specialized wrapper for simulating stochastic or deterministic trajectories of the SIRS model with parameter-driven compilation and explicit seed handling.
 * ``src/plots/plot_model_performance.m``: Visualizes the comparative WIS distributions across various model configurations and scenarios.
 * ``src/plots/plot_rt_forecast_comparison.m``: Generates a unified visualization comparing the expanding-window forecast medians and predictive intervals against the ground truth.
 * ``src/plots/plot_rt_scenarios.m``: Generates a tiled summary figure displaying the predefined synthetic reproduction number profiles.
