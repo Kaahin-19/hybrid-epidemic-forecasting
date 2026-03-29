@@ -8,8 +8,10 @@ function umod = genData_SIRS(tspan, params, seed)
 %       Simulates an SIRS epidemic trajectory based on a time-varying 
 %       transmission rate (beta) and fixed biological parameters. Supports 
 %       both stochastic ('ssa') and deterministic ('uds') simulation solvers.
-%       The effective simulation seed is recorded in the returned model
-%       object while the caller RNG state is restored on return.
+%       URDME-generated source and mex artifacts are written to a stable
+%       build directory inside the repository. The effective simulation
+%       seed is recorded in the returned model object while the caller RNG
+%       state and working directory are restored on return.
 %
 %   Inputs:
 %       tspan  - Numeric vector specifying the simulation time span.
@@ -39,6 +41,22 @@ function umod = genData_SIRS(tspan, params, seed)
     %% 1. Initialization
     caller_rng_state = rng;
     rng_cleanup = onCleanup(@() rng(caller_rng_state));
+    original_workdir = pwd;
+    workdir_cleanup = onCleanup(@() cd(original_workdir));
+
+    source_file = mfilename('fullpath');
+    repo_root = fileparts(fileparts(fileparts(source_file)));
+    urdme_build_dir = fullfile(repo_root, 'build', 'urdme');
+
+    if exist(urdme_build_dir, 'dir') ~= 7
+        mkdir(urdme_build_dir);
+    end
+
+    if ~any(strcmp(strsplit(path, pathsep), urdme_build_dir))
+        addpath(urdme_build_dir);
+    end
+
+    cd(urdme_build_dir);
 
     if nargin < 3 || isempty(seed)
         rng('shuffle');
@@ -155,5 +173,5 @@ function umod = genData_SIRS(tspan, params, seed)
     %% 8. Simulation
     umod.seed = seed;
     umod = urdme(umod);
-    clear rng_cleanup
+    clear workdir_cleanup rng_cleanup
 end
