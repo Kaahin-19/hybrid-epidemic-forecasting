@@ -54,6 +54,8 @@ sim_seed   = cfg.sim.seed;
 
 fprintf('Stage: Preparing scenario-window inputs for %d scenarios\n', length(fileList));
 
+pool_cleanup = onCleanup(@local_shutdown_parallel_pool);
+
 scenario_data = repmat(struct( ...
     'scenario_id', "", ...
     'num_exo', 0, ...
@@ -418,5 +420,13 @@ function local_report_candidate_progress(~, total_models, report_interval, reset
         fprintf('Progress: candidates %d/%d completed (%.1f%%, %.1fs elapsed)\n', ...
             completed_count, total_models, ...
             100 * completed_count / total_models, elapsed);
+    end
+end
+
+function local_shutdown_parallel_pool()
+%LOCAL_SHUTDOWN_PARALLEL_POOL Close the local parallel pool before MATLAB exits.
+    pool = gcp('nocreate');
+    if ~isempty(pool)
+        delete(pool);
     end
 end
