@@ -171,12 +171,15 @@ for i = 1:length(fileList)
     
     csvName = fullfile(saveDir, [file_prefix, '_summary.csv']);
     writetable(summary_table, csvName);
+    fprintf('Forecast summary saved to: %s\n', csvName);
     
     outName = fullfile(saveDir, [file_prefix, '.mat']);
     save(outName, 'results', 'cfg');
+    fprintf('Forecast artifact saved to: %s\n', outName);
     
     plot_name = sprintf('%s_%s_%s', scenario_id, MODEL_TYPE, EXO_MODE);
-    plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg);
+    plotPath = plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg);
+    fprintf('Forecast visualization saved to: %s\n', plotPath);
 end
 
 fprintf('=== Forecast Pipeline Complete ===\n\n');

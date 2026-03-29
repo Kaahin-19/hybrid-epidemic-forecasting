@@ -1,8 +1,8 @@
-function plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
+function outPath = plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
 %PLOT_RT_FORECAST_COMPARISON Visualize forecast performance against ground truth.
 %
 %   Syntax:
-%       plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
+%       outPath = plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
 %
 %   Description:
 %       Generates a summary figure comparing the expanding-window forecasts
@@ -15,6 +15,9 @@ function plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
 %       tspan     - Numeric vector of time points.
 %       plot_name - String identifier for the plot title (scenario name).
 %       cfg       - Configuration struct containing output directories.
+%
+%   Outputs:
+%       outPath   - Absolute path to the saved forecast-comparison figure.
 %
 %   See also PARTA_03_RUN_FORECASTS, PARTA_CONFIG.
 
