@@ -15,6 +15,7 @@ mexuds_SIRS_SIRS_mexrhs.mexa64
 
 # Output 
 results
+data/synthetic/
 
 # Virtual environment
 .venv
