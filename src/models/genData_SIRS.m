@@ -8,6 +8,8 @@ function umod = genData_SIRS(tspan, params, seed)
 %       Simulates an SIRS epidemic trajectory based on a time-varying 
 %       transmission rate (beta) and fixed biological parameters. Supports 
 %       both stochastic ('ssa') and deterministic ('uds') simulation solvers.
+%       The effective simulation seed is recorded in the returned model
+%       object while the caller RNG state is restored on return.
 %
 %   Inputs:
 %       tspan  - Numeric vector specifying the simulation time span.
@@ -32,9 +34,12 @@ function umod = genData_SIRS(tspan, params, seed)
 %   See also GENDATA, PARTA_01_GENERATE_TRUTH, PARTA_03_RUN_FORECASTS.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-03-28
+% Modified: 2026-03-29
 
     %% 1. Initialization
+    caller_rng_state = rng;
+    rng_cleanup = onCleanup(@() rng(caller_rng_state));
+
     if nargin < 3 || isempty(seed)
         rng('shuffle');
         seed = randi(intmax('uint32'));
@@ -150,4 +155,5 @@ function umod = genData_SIRS(tspan, params, seed)
     %% 8. Simulation
     umod.seed = seed;
     umod = urdme(umod);
+    clear rng_cleanup
 end

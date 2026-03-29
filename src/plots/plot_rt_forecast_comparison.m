@@ -19,7 +19,7 @@ function plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
 %   See also PARTA_03_RUN_FORECASTS, PARTA_CONFIG.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-03-28
+% Modified: 2026-03-29
 
     %% 1. Initialization
     if isfield(cfg, 'output') && isfield(cfg.output, 'fig_dir')
@@ -42,43 +42,32 @@ function plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
 
     axtoolbar(ax, {'export'});
 
-    h90 = gobjects(0);
-    h50 = gobjects(0);
+    plot_alphas = sort(double(cfg.forecast.plot_alphas(:)'), 'ascend');
+    num_intervals = min(numel(plot_alphas), 2);
+    interval_colors = [0.30, 0.65, 0.95; 0.10, 0.45, 0.85];
+    interval_face_alpha = [0.08, 0.16];
+    interval_handles = gobjects(1, num_intervals);
+    interval_labels = cellstr(compose('%d%% Predictive Interval', round((1 - plot_alphas(1:num_intervals)) * 100)));
     hMed = gobjects(0);
 
     if ~isempty(results) && isfield(results, 'forecast_interval_alphas')
-        plot_alphas = cfg.forecast.plot_alphas(:)';
-
         for i = 1:numel(results)
             stored_alphas = double(results(i).forecast_interval_alphas(:)');
             t_f = results(i).time_horizon(:);
 
-            idx90 = local_alpha_index(stored_alphas, plot_alphas(1));
-            idx50 = local_alpha_index(stored_alphas, plot_alphas(2));
-
-            if ~isempty(idx90)
-                display_name = '90% Predictive Interval';
-                if ~isempty(h90)
+            for j = 1:num_intervals
+                idx_alpha = local_alpha_index(stored_alphas, plot_alphas(j));
+                if ~isempty(idx_alpha)
                     display_name = '';
-                end
-                h = fill_interval(ax, t_f, results(i).forecast_lower(:, idx90), ...
-                    results(i).forecast_upper(:, idx90), [0.30, 0.65, 0.95], ...
-                    0.08, display_name);
-                if isempty(h90)
-                    h90 = h;
-                end
-            end
-
-            if ~isempty(idx50)
-                display_name = '50% Predictive Interval';
-                if ~isempty(h50)
-                    display_name = '';
-                end
-                h = fill_interval(ax, t_f, results(i).forecast_lower(:, idx50), ...
-                    results(i).forecast_upper(:, idx50), [0.10, 0.45, 0.85], ...
-                    0.16, display_name);
-                if isempty(h50)
-                    h50 = h;
+                    if ~isgraphics(interval_handles(j))
+                        display_name = interval_labels{j};
+                    end
+                    h = fill_interval(ax, t_f, results(i).forecast_lower(:, idx_alpha), ...
+                        results(i).forecast_upper(:, idx_alpha), interval_colors(j, :), ...
+                        interval_face_alpha(j), display_name);
+                    if ~isgraphics(interval_handles(j))
+                        interval_handles(j) = h;
+                    end
                 end
             end
         end
@@ -121,14 +110,11 @@ function plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
         legend_labels{end+1} = 'Median Forecasts';
     end
 
-    if ~isempty(h50)
-        legend_handles(end+1) = h50;
-        legend_labels{end+1} = '50% Predictive Interval';
-    end
-
-    if ~isempty(h90)
-        legend_handles(end+1) = h90;
-        legend_labels{end+1} = '90% Predictive Interval';
+    for j = 1:num_intervals
+        if isgraphics(interval_handles(j))
+            legend_handles(end+1) = interval_handles(j);
+            legend_labels{end+1} = interval_labels{j};
+        end
     end
 
     legend(ax, legend_handles, legend_labels, 'Location', 'northwest');

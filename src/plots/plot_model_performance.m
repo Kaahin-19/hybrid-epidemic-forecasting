@@ -1,8 +1,8 @@
-function plot_model_performance(score_registry, cfg)
+function was_saved = plot_model_performance(score_registry, cfg)
 %PLOT_MODEL_PERFORMANCE Visualize comparative WIS distributions.
 %
 %   Syntax:
-%       plot_model_performance(score_registry, cfg)
+%       was_saved = plot_model_performance(score_registry, cfg)
 %
 %   Description:
 %       Generates a comparative boxplot of Weighted Interval Score (WIS)
@@ -14,12 +14,18 @@ function plot_model_performance(score_registry, cfg)
 %       score_registry - Table containing merged evaluation scores.
 %       cfg            - Configuration struct containing output paths.
 %
+%   Outputs:
+%       was_saved      - Logical flag indicating whether the figure was
+%                        written to disk.
+%
 %   See also PARTA_04_EVALUATE_MODELS, PARTA_CONFIG.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-03-28
+% Modified: 2026-03-29
 
     %% 1. Initialization
+    was_saved = false;
+
     if isfield(cfg, 'output') && isfield(cfg.output, 'fig_dir')
         figDir = cfg.output.fig_dir;
     else
@@ -68,4 +74,5 @@ function plot_model_performance(score_registry, cfg)
 
     %% 3. Persistence
     exportgraphics(fig, out_path, 'Resolution', 300);
+    was_saved = true;
 end

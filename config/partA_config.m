@@ -7,7 +7,9 @@ function cfg = partA_config()
 %   Description:
 %       Serves as the central configuration for Part A experiments. It
 %       defines the simulation environment, ground truth parameters, and
-%       forecasting hyperparameters.
+%       forecasting hyperparameters. The active model family and
+%       exogenous-input setting can be overridden externally through
+%       environment variables.
 %
 %   Outputs:
 %       cfg - Structure containing:
@@ -25,7 +27,7 @@ function cfg = partA_config()
 %            PARTA_03_RUN_FORECASTS, PARTA_04_EVALUATE_MODELS.
 
 % A. M. Kaahin 2026-02-18
-% Modified: 2026-03-28
+% Modified: 2026-03-29
 
     cfg = struct();
 
@@ -117,8 +119,9 @@ function cfg = partA_config()
     cfg.sim.seed = 1234;
 
     %% 6. Active Run Configuration
-    cfg.run.model_type = "SSEST";
-    cfg.run.exo_mode   = "I";
+    cfg.run.model_type = string(local_env_or_default('PARTA_MODEL_TYPE', 'N4SID'));
+    cfg.run.exo_mode   = string(local_env_or_default('PARTA_EXO_MODE', 'I'));
+    local_validate_run_configuration(cfg.run.model_type, cfg.run.exo_mode);
 
     %% 7. Forecasting Hyperparameters
     cfg.forecast.min_window = 49;
@@ -131,7 +134,6 @@ function cfg = partA_config()
     cfg.forecast.state_diff_orders = 0;
     cfg.forecast.wis_alphas    = [0.05, 0.10, 0.20, 0.50];
     cfg.forecast.plot_alphas   = [0.10, 0.50];
-    cfg.forecast.plot_context  = 7;
 
     %% 8. Output Artifacts
     thisDir  = fileparts(mfilename('fullpath'));
@@ -143,4 +145,26 @@ function cfg = partA_config()
     cfg.output.score_dir    = fullfile(repoRoot, "results", "scores");
     cfg.output.tuning_dir   = fullfile(repoRoot, "results", "tuning");
 
+end
+
+function value = local_env_or_default(env_name, default_value)
+    value = getenv(env_name);
+    if isempty(value)
+        value = default_value;
+    end
+end
+
+function local_validate_run_configuration(model_type, exo_mode)
+    valid_models = ["AR", "ARX", "N4SID", "SSEST"];
+    valid_exo_modes = ["None", "S", "I", "Both"];
+
+    if ~any(strcmp(model_type, valid_models))
+        error('CFG:InvalidRunModel', ...
+            'Unsupported PARTA_MODEL_TYPE value: %s.', string(model_type));
+    end
+
+    if ~any(strcmp(exo_mode, valid_exo_modes))
+        error('CFG:InvalidRunExo', ...
+            'Unsupported PARTA_EXO_MODE value: %s.', string(exo_mode));
+    end
 end

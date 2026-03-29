@@ -24,7 +24,8 @@ The implementation is divided into three major phases as outlined in the project
 
 ### Root & Configuration
 * ``startup.m``: Initializes the project environment by dynamically adding internal subdirectories to the active MATLAB path.
-* ``config/partA_config.m``: Serves as the central configuration hub, defining the simulation environment, active run settings, ground truth constraints, and forecasting hyperparameters for the synthetic validation phase.
+* ``run_partA_pipeline.sh``: Convenience entry point that runs the Part A pipeline in the correct order, supports numeric Model/Exogenous selections, and can clear previous result artifacts with ``--fresh``.
+* ``config/partA_config.m``: Serves as the central configuration hub, defining the simulation environment, active run settings, ground truth constraints, and forecasting hyperparameters for the synthetic validation phase. The active Model Type and Exogenous Mode can also be overridden externally via environment variables.
 
 ### Execution Scripts
 * ``scripts/partA_00_make_scenarios.m``: Generates and visualizes the distinct transmission scenarios (seasonality, interventions, resurgences) to be used as ground truth.
