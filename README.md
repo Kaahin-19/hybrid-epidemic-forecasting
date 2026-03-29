@@ -16,7 +16,7 @@ The implementation is divided into three major phases as outlined in the project
 
 * ``config/``: Stores the central configuration scripts that define simulation parameters and hyperparameter grids.
 * ``data/``: Contains both the static empirical datasets (``R0a.mat``, ``F.mat``, etc.) and the generated ``synthetic/`` ground-truth trajectories.
-* ``results/``: The primary output destination for the pipeline, categorized into ``forecasts/`` (raw prediction artifacts), ``scores/`` (aggregated CSV summaries), ``figures/`` (visualizations), and ``tuning/`` (global hyperparameter selection artifacts).
+* ``results/``: The primary output destination for the pipeline, categorized into ``forecasts/`` (raw prediction artifacts), ``scores/`` (aggregated CSV summaries), ``figures/`` (visualizations), ``tuning/`` (global hyperparameter selection artifacts), and ``logs/`` (per-run execution logs and manifests).
 * ``scripts/``: High-level execution pipelines that run the scenario generation, truth simulation, global hyperparameter selection, model forecasting, and evaluation processes.
 * ``src/``: Core functional modules, separated into ``models/`` (standardized fitting algorithms), ``plots/`` (visualization helpers), and ``signals/`` (data generators).
 
@@ -24,7 +24,7 @@ The implementation is divided into three major phases as outlined in the project
 
 ### Root & Configuration
 * ``startup.m``: Initializes the project environment by dynamically adding internal subdirectories to the active MATLAB path.
-* ``run_partA_pipeline.sh``: Convenience entry point that runs the Part A pipeline in the correct order, supports numeric Model/Exogenous selections, and can clear previous result artifacts with ``--fresh``.
+* ``run_partA_pipeline.sh``: Convenience entry point that runs the Part A pipeline in the correct order, supports numeric Model/Exogenous selections, can clear previous result artifacts with ``--fresh``, and stores each invocation under a timestamped ``results/logs/<run_id>/`` directory containing per-stage logs and a run manifest.
 * ``config/partA_config.m``: Serves as the central configuration hub, defining the simulation environment, active run settings, ground truth constraints, and forecasting hyperparameters for the synthetic validation phase. The active Model Type and Exogenous Mode can also be overridden externally via environment variables.
 
 ### Execution Scripts

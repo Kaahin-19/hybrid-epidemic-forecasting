@@ -52,6 +52,8 @@ wis_alphas = cfg.forecast.wis_alphas;
 sirs_cfg   = cfg.sirs;
 sim_seed   = cfg.sim.seed;
 
+fprintf('Stage: Preparing scenario-window inputs for %d scenarios\n', length(fileList));
+
 scenario_data = repmat(struct( ...
     'scenario_id', "", ...
     'num_exo', 0, ...
@@ -112,6 +114,9 @@ for i = 1:length(fileList)
     scenario_data(i).num_exo = size(U_true, 2);
     scenario_data(i).windows = windows;
     scenario_data(i).window_data = window_data;
+
+    fprintf('Progress: prepared scenario %d/%d (%s)\n', ...
+        i, length(fileList), char(scenario_id));
 end
 
 scenario_ids  = reshape(string({scenario_data.scenario_id}), 1, []);
@@ -125,6 +130,14 @@ if isempty(gcp('nocreate'))
 end
 
 %% 3. Candidate Evaluation
+fprintf('Stage: Evaluating %d candidate configurations across %d scenarios\n', ...
+    num_models, length(scenario_data));
+
+report_interval = max(1, ceil(num_models / 20));
+progress_queue = parallel.pool.DataQueue;
+local_report_candidate_progress([], num_models, report_interval, true);
+afterEach(progress_queue, @(~) local_report_candidate_progress([], num_models, report_interval));
+
 scenario_mean_wis = inf(num_models, length(scenario_data));
 global_mean_wis   = inf(num_models, 1);
 
@@ -167,7 +180,10 @@ parfor idx = 1:num_models
 
     scenario_mean_wis(idx, :) = scenario_scores;
     global_mean_wis(idx) = mean(scenario_scores);
+    send(progress_queue, idx);
 end
+
+fprintf('Stage: Candidate evaluation complete\n');
 
 [best_global_wis, best_idx] = min(global_mean_wis);
 if ~isfinite(best_global_wis)
@@ -375,4 +391,32 @@ function wis = compute_wis(truth_Rt, median_Rt, lower_Rt, upper_Rt, alphas)
     end
 
     wis = wis / (num_intervals + 0.5);
+end
+
+function local_report_candidate_progress(~, total_models, report_interval, reset_flag)
+%LOCAL_REPORT_CANDIDATE_PROGRESS Emit coarse candidate-evaluation progress updates.
+    persistent completed_count progress_tic
+
+    if nargin >= 4 && reset_flag
+        completed_count = 0;
+        progress_tic = tic;
+        fprintf('Progress: candidates 0/%d completed (0.0%%)\n', total_models);
+        return;
+    end
+
+    if isempty(completed_count)
+        completed_count = 0;
+        progress_tic = tic;
+    end
+
+    completed_count = completed_count + 1;
+
+    if completed_count == 1 || ...
+            mod(completed_count, report_interval) == 0 || ...
+            completed_count == total_models
+        elapsed = toc(progress_tic);
+        fprintf('Progress: candidates %d/%d completed (%.1f%%, %.1fs elapsed)\n', ...
+            completed_count, total_models, ...
+            100 * completed_count / total_models, elapsed);
+    end
 end
