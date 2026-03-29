@@ -22,3 +22,9 @@ results/logs
 
 # Pipeline script
 run_partA_pipeline.sh
+
+# Markdown files
+CLAUDE.md
+
+# Documentationn files
+report/report.docx
