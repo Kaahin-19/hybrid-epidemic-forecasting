@@ -1,33 +1,22 @@
-# Windows compatibility
-win_compat.c
-win_compat.h
-win_compat_uds.c
-win_compat_uds.h
-
-# Generated artifacts
+# Build artifacts
 SIRS.c
-mexssa_SIRS_SIRS.mexw64
-mexuds_SIRS_SIRS_mexjac.mexw64
-mexuds_SIRS_SIRS_mexrhs.mexw64
-mexssa_SIRS_SIRS.mexa64
-mexuds_SIRS_SIRS_mexjac.mexa64
-mexuds_SIRS_SIRS_mexrhs.mexa64
+*.mexa64
 
-# Output 
-results/logs
-# data/synthetic/
+# Runtime outputs
+results/logs/
+data/synthetic/
 
-# Virtual environment
-.venv
+# Environment
+.venv/
 
-# Pipeline script
+# Pipeline runner
 run_partA_pipeline.sh
 
-# Markdown files
+# Working documents
 CLAUDE.md
-session_notes_orientation_prompt.md
 report/report_updated.md
 report/inconsistency_report.md
+report/report_final.md
 
-# Documentationn files
+# Exported document
 report/report.docx
