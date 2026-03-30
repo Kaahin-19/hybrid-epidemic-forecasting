@@ -11,12 +11,3 @@ data/synthetic/
 
 # Pipeline runner
 run_partA_pipeline.sh
-
-# Working documents
-CLAUDE.md
-report/report_updated.md
-report/inconsistency_report.md
-report/report_final.md
-
-# Exported document
-report/report.docx
