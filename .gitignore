@@ -26,6 +26,8 @@ run_partA_pipeline.sh
 # Markdown files
 CLAUDE.md
 session_notes_orientation_prompt.md
+report/report_updated.md
+report/inconsistency_report.md
 
 # Documentationn files
 report/report.docx
