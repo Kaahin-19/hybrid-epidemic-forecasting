@@ -75,7 +75,7 @@ The following transmission patterns were constructed:
 
 The four trajectories are shown in Figure 1.
 
-![Figure 1: Four synthetic Rt trajectories](../results/figures/partA_00_rt_scenarios.png)
+![Figure 1: Four synthetic Rt trajectories](../../results/figures/partA_00_rt_scenarios.png)
 
 **Figure 1.** The four synthetic ground-truth Rt trajectories used as transmission signals
 throughout this phase. Each panel spans 365 days. A1 (top left) follows a smooth sinusoidal
@@ -231,7 +231,7 @@ the 90% predictive intervals remaining narrow and well-calibrated. The 50% inter
 invisible at this scale, indicating a high degree of forecast precision under smooth periodic
 dynamics.
 
-![Figure 2: ARX/Both forecast on A1](../results/figures/partA_03_forecast_plot_A1_ARX_Both.png)
+![Figure 2: ARX/Both forecast on A1](../../results/figures/partA_03_forecast_plot_A1_ARX_Both.png)
 
 **Figure 2.** Expanding-window forecasts for ARX/Both on Scenario A1 (Seasonal Forcing). The
 solid black line is the ground-truth Rt trajectory. Dashed blue lines are the 14-day median
@@ -250,7 +250,7 @@ enters the training window, at which point they rapidly converge toward the post
 level. The predictive intervals widen noticeably in windows that straddle the transition,
 reflecting the model's increased uncertainty during regime change.
 
-![Figure 3: AR/None forecast on A2](../results/figures/partA_03_forecast_plot_A2_AR_None.png)
+![Figure 3: AR/None forecast on A2](../../results/figures/partA_03_forecast_plot_A2_AR_None.png)
 
 **Figure 3.** Expanding-window forecasts for AR/None on Scenario A2 (Policy Intervention).
 Notation as in Figure 2. The forecasts show a clear lag at the sigmoid transition around day
@@ -273,7 +273,7 @@ combined with multiple exogenous inputs. The mean WIS for this configuration on 
 approximately 5.1 × 10⁶⁵ — a catastrophic numerical failure driven by a small number of
 windows in which the identified system becomes unstable.
 
-![Figure 4: N4SID/Both forecast on A2](../results/figures/partA_03_forecast_plot_A2_N4SID_Both.png)
+![Figure 4: N4SID/Both forecast on A2](../../results/figures/partA_03_forecast_plot_A2_N4SID_Both.png)
 
 **Figure 4.** Expanding-window forecasts for N4SID/Both on Scenario A2 (Policy Intervention).
 Notation as in Figure 2. Around the sigmoid transition, the predictive intervals expand
@@ -292,14 +292,14 @@ included (Figure 5b), the forecast medians follow the multi-wave structure more 
 narrower predictive intervals and better-calibrated coverage throughout the mid-wave and
 inter-wave phases.
 
-![Figure 5a: N4SID/None forecast on A3](../results/figures/partA_03_forecast_plot_A3_N4SID_None.png)
+![Figure 5a: N4SID/None forecast on A3](../../results/figures/partA_03_forecast_plot_A3_N4SID_None.png)
 
 **Figure 5a.** Expanding-window forecasts for N4SID/None on Scenario A3 (Damping Resurgence).
 Notation as in Figure 2. Without exogenous inputs, the order-1 state-space model produces wide
 predictive intervals and struggles to track the declining amplitudes of successive peaks,
 consistently overestimating Rt between waves. Mean WIS on A3: 0.102.
 
-![Figure 5b: N4SID/I forecast on A3](../results/figures/partA_03_forecast_plot_A3_N4SID_I.png)
+![Figure 5b: N4SID/I forecast on A3](../../results/figures/partA_03_forecast_plot_A3_N4SID_I.png)
 
 **Figure 5b.** Expanding-window forecasts for N4SID/I on Scenario A3 (Damping Resurgence).
 Notation as in Figure 2. Including the Infected compartment as an exogenous input substantially
@@ -317,7 +317,7 @@ state-space configurations exhibit both higher central WIS values and wider disp
 N4SID/Both configuration on A2 produces a single extreme outlier that sits far above all other
 observations, visible as an isolated circle at the top of the N4SID/Both column.
 
-![Figure 6: WIS performance boxplot](../results/figures/partA_04_wis_performance_boxplot.png)
+![Figure 6: WIS performance boxplot](../../results/figures/partA_04_wis_performance_boxplot.png)
 
 **Figure 6.** Distribution of per-window mean WIS values for all twelve model-exogenous
 configurations, shown on a logarithmic scale. Each point represents one expanding window; colour
