@@ -19,7 +19,7 @@ in the prose and serve a specific analytical purpose.
 
 # Inconsistency Report — report.docx vs Current Codebase
 **Prepared:** 2026-03-30
-**Report version analysed:** report/report.docx (last modified 2026-03-30 00:20)
+**Report version analysed:** report/archive/part_a/original/report.docx (last modified 2026-03-30 00:20)
 **Codebase state:** Pipeline fully executed; all 12 model-exo combinations have complete
 tuning, forecast, and score artifacts on disk.
 

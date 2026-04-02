@@ -5,9 +5,3 @@ SIRS.c
 # Runtime outputs
 results/logs/
 data/synthetic/
-
-# Environment
-.venv/
-
-# Pipeline runner
-run_partA_pipeline.sh

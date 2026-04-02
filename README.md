@@ -24,7 +24,6 @@ The implementation is divided into three major phases as outlined in the project
 
 ### Root & Configuration
 * ``startup.m``: Initializes the project environment by dynamically adding internal subdirectories to the active MATLAB path.
-* ``run_partA_pipeline.sh``: Convenience entry point that runs the Part A pipeline in the correct order, supports numeric Model/Exogenous selections, can clear previous result artifacts with ``--fresh``, and stores each invocation under a timestamped ``results/logs/<run_id>/`` directory containing per-stage logs and a run manifest. The terminal shows stage progress and saved artifact paths, while detailed warnings are preserved in the raw per-stage logs.
 * ``config/partA_config.m``: Serves as the central configuration hub, defining the simulation environment, active run settings, ground truth constraints, and forecasting hyperparameters for the synthetic validation phase. The active Model Type and Exogenous Mode can also be overridden externally via environment variables.
 
 ### Execution Scripts
