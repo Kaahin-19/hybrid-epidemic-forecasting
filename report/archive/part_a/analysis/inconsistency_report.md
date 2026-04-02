@@ -430,4 +430,61 @@ If scenario parameters are tabulated in the report, this should be corrected.
 
 ---
 
+---
+
+## 9. Session 9 Consistency Check Findings (2026-04-02)
+
+The following issues were found during a full consistency sweep of all chapter .tex files
+and were resolved in the same session.
+
+### 9.1 Hyperparameter value errors in background-and-theory.tex
+
+The selected HP sentences cited values that contradicted the tuning CSVs.
+All errors were in the lines inserted by earlier sessions; Sessions 1–8 corrected the
+results chapter but left the background chapter stale.
+
+| Location | Wrong value | Correct value (CSV source) |
+|----------|-------------|---------------------------|
+| bg:135 ARX/S nk | nk=1 | nk=7 (partA_02_global_hyperparameters_ARX_S_summary.csv, Rank==1) |
+| bg:153 ARX/I nb | nb=1 | nb=7 (partA_02_global_hyperparameters_ARX_I_summary.csv, Rank==1) |
+| bg:153 ARX/I nk | nk=1 | nk=7 (partA_02_global_hyperparameters_ARX_I_summary.csv, Rank==1) |
+| bg:184 N4SID/S n | n=2 | n=1 (partA_02_global_hyperparameters_N4SID_S_summary.csv, Rank==1) |
+| bg:184 N4SID/Both n | n=2 | n=1 (partA_02_global_hyperparameters_N4SID_Both_summary.csv, Rank==1) |
+| bg:195 SSEST/S n | n=3 | n=1 (partA_02_global_hyperparameters_SSEST_S_summary.csv, Rank==1) |
+| bg:195 SSEST/I n | n=3 | n=1 (partA_02_global_hyperparameters_SSEST_I_summary.csv, Rank==1) |
+| bg:195 SSEST/Both n | n=2 | n=1 (partA_02_global_hyperparameters_SSEST_Both_summary.csv, Rank==1) |
+
+**Note:** The inconsistency_report.md table in Section 6 (Selected HP column) also contains
+some of these wrong values; that table is a historical snapshot and should not be used as a
+source of truth. The authoritative source is always the tuning CSV files.
+
+### 9.2 Missing SOURCE annotations in background-and-theory.tex
+
+All four selected-HP sentences (AR/None, ARX modes, N4SID modes, SSEST modes) lacked
+`% SOURCE:` annotations. SOURCE annotations were added immediately before each sentence,
+pointing to the corresponding `partA_02_global_hyperparameters_*_summary.csv` file,
+`State_Order_n` or `p` or `na/nb/nk` column, `Rank==1` condition.
+
+### 9.3 Resolution status
+
+| Issue | Status |
+|-------|--------|
+| ARX/S nk value corrected | Resolved (2026-04-02) |
+| ARX/I nb, nk values corrected | Resolved (2026-04-02) |
+| N4SID/S n value corrected | Resolved (2026-04-02) |
+| N4SID/Both n value corrected | Resolved (2026-04-02) |
+| SSEST/S n value corrected | Resolved (2026-04-02) |
+| SSEST/I n value corrected | Resolved (2026-04-02) |
+| SSEST/Both n value corrected | Resolved (2026-04-02) |
+| SOURCE annotations added (AR/None) | Resolved (2026-04-02) |
+| SOURCE annotations added (ARX modes ×3) | Resolved (2026-04-02) |
+| SOURCE annotations added (N4SID modes ×4) | Resolved (2026-04-02) |
+| SOURCE annotations added (SSEST modes ×4) | Resolved (2026-04-02) |
+
+Compile status after fixes: **PASS with warnings** (BibTeX exit 2 — pre-existing
+no-citation condition; one natbib empty-bibliography warning; zero hard errors,
+zero undefined references, zero overfull/underfull boxes).
+
+---
+
 *End of inconsistency report.*
