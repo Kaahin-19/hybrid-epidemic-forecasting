@@ -1,7 +1,22 @@
-# Build artifacts
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+*.swp
+
+# MATLAB / build artifacts
 SIRS.c
 *.mexa64
+*.mexw64
+*.mexmaci64
 
 # Runtime outputs
 results/logs/
+
+# Generated synthetic data
 data/synthetic/
+
+# Report scratch and archived exports
+report/archive/
+report/stages/
+
