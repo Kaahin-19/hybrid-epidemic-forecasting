@@ -1,18 +1,18 @@
-%PARTA_01_GENERATE_TRUTH Generate and persist stochastic ground truth data.
+%PARTA_01_GENERATE_TRUTH Generate and persist deterministic ground truth data.
 %
 %   Description:
-%       Executes the stochastic SIRS simulation for all scenarios defined
+%       Executes the deterministic SIRS simulation for all scenarios defined
 %       in the configuration. It dynamically calculates the transmission
 %       rate from the synthetic Rt signals and saves the resulting
 %       epidemic trajectories to disk.
 %
 %   Workflow:
 %       1. Initialization
-%       2. Simulation Loop (Rt generation and stochastic modeling)
+%       2. Simulation Loop (Rt generation and deterministic modeling)
 %       3. Data Persistence
 %
 %   See also PARTA_CONFIG, GENDATA_SIRS.
-
+%
 % A. M. Kaahin 2026-02-18
 % Modified: 2026-03-28
 
