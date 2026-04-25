@@ -11,7 +11,7 @@ function outPath = plot_rt_forecast_comparison(results, Rt_true, tspan, plot_nam
 %
 %   Inputs:
 %       results   - Struct array of forecast results per window.
-%       Rt_true   - Numeric vector of the ground truth Rt curve.
+%       Rt_true   - Numeric vector of the ground-truth transmission-potential curve.
 %       tspan     - Numeric vector of time points.
 %       plot_name - String identifier for the plot title (scenario name).
 %       cfg       - Configuration struct containing output directories.
@@ -93,7 +93,7 @@ function outPath = plot_rt_forecast_comparison(results, Rt_true, tspan, plot_nam
 
     title(ax, sprintf('Forecast vs Truth: %s', strrep(plot_name, '_', ' ')));
     xlabel(ax, 'Time (days)');
-    ylabel(ax, 'R_t Value');
+    ylabel(ax, '$\mathcal{R}_t$ Value', 'Interpreter', 'latex');
     grid(ax, 'on');
 
     if isfield(cfg, 'Rt') && isfield(cfg.Rt, 'bounds')

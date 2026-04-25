@@ -62,14 +62,14 @@ function was_saved = plot_model_performance(score_registry, cfg)
     boxchart(ax, categorical(plot_config), plot_data.WindowWIS, ...
         'GroupByColor', plot_data.Scenario);
 
-    ylabel(ax, 'WIS (R_t)');
+    ylabel(ax, 'WIS ($\mathcal{R}_t$)', 'Interpreter', 'latex');
     title(ax, 'Model WIS Distribution by Configuration');
     legend(ax, 'Location', 'bestoutside');
     grid(ax, 'on');
 
     if max(plot_data.WindowWIS) > 100
         set(ax, 'YScale', 'log');
-        ylabel(ax, 'WIS (R_t) [Log Scale]');
+        ylabel(ax, 'WIS ($\mathcal{R}_t$) [Log Scale]', 'Interpreter', 'latex');
     end
 
     %% 3. Persistence

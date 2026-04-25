@@ -113,6 +113,7 @@ for i = 1:length(fileList)
         else
             U_past = U_true(1:idx_T, :);
             
+            % Rt_true stores the prescribed transmission potential beta/gamma.
             current_Rt = Rt_true(idx_T);
             current_I  = loaded.I_true(idx_T);
             current_S  = loaded.S_true(idx_T);

@@ -159,6 +159,7 @@ function umod = genData_SIRS(tspan, params, seed)
     umod.compile = 0;
     
     %% 7. Metadata
+    % Stored for compatibility: this is beta/gamma, not the susceptible-depleted R_eff.
     umod.private.epiid.R0 = beta_curve / gammaI;
     umod.private.epiid.rates = Rates;
     umod.private.epiid.dynrates = params; 

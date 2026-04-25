@@ -3,12 +3,12 @@
 %   Description:
 %       Executes the deterministic SIRS simulation for all scenarios defined
 %       in the configuration. It dynamically calculates the transmission
-%       rate from the synthetic Rt signals and saves the resulting
+%       rate from the synthetic transmission-potential signals and saves the resulting
 %       epidemic trajectories to disk.
 %
 %   Workflow:
 %       1. Initialization
-%       2. Simulation Loop (Rt generation and deterministic modeling)
+%       2. Simulation Loop (transmission-potential generation and deterministic modeling)
 %       3. Data Persistence
 %
 %   See also PARTA_CONFIG, GENDATA_SIRS.

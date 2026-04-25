@@ -288,6 +288,7 @@ function [U_past, U_future] = prepare_exogenous_inputs(data, idx_T, horizon, exo
 
     U_past = data.U_true(1:idx_T, :);
 
+    % Rt_true stores the prescribed transmission potential beta/gamma.
     current_Rt = data.Rt_true(idx_T);
     current_I  = data.I_true(idx_T);
     current_S  = data.S_true(idx_T);

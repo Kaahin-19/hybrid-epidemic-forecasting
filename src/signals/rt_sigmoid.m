@@ -1,5 +1,5 @@
 function Rt = rt_sigmoid(t, p)
-%RT_SIGMOID Generate a sigmoid step reproduction number signal.
+%RT_SIGMOID Generate a sigmoid step transmission-potential signal.
 %
 %   Syntax:
 %       Rt = rt_sigmoid(t, p)
@@ -12,13 +12,13 @@ function Rt = rt_sigmoid(t, p)
 %   Inputs:
 %       t - Time vector [days].
 %       p - Parameter structure containing:
-%           .high - Initial Rt level.
-%           .low  - Final Rt level.
+%           .high - Initial transmission-potential level.
+%           .low  - Final transmission-potential level.
 %           .t0   - Inflection point of the curve [days].
 %           .k    - Steepness of the transition.
 %
 %   Outputs:
-%       Rt - Vector of Rt values evaluated at t.
+%       Rt - Vector of transmission-potential values evaluated at t.
 %
 %   See also PARTA_CONFIG, RT_MULTI_WAVE, RT_SEASONAL.
 

@@ -14,7 +14,7 @@ function cfg = partA_config()
 %   Outputs:
 %       cfg - Structure containing:
 %           .time       : Simulation duration and step size.
-%           .Rt         : Constraints for validity checks.
+%           .Rt         : Transmission-potential constraints for validity checks.
 %           .scenarios  : Array of structs defining the signal slots.
 %           .sirs       : Biological parameters (gamma, xi, pop_size).
 %           .sim        : Reproducibility settings.
@@ -36,7 +36,8 @@ function cfg = partA_config()
     cfg.time.dt    = 1;
     cfg.time.tspan = 0:cfg.time.dt:cfg.time.T_end;
 
-    %% 2. Rt Admissibility Constraints
+    %% 2. Transmission-Potential Admissibility Constraints
+    % The field name Rt is retained for compatibility with existing artifacts.
     cfg.Rt.bounds = [0.5, 2.0];
 
     %% 3. Scenario Slots
