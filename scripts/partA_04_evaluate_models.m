@@ -133,8 +133,12 @@ summary_stats.Properties.VariableNames = regexprep(summary_stats.Properties.Vari
     {'mean_', 'median_', 'std_', 'min_', 'max_'}, ...
     {'Mean_', 'Median_', 'Std_', 'Min_', 'Max_'});
 
+summary_stats = classify_wis_summary(summary_stats);
+score_registry = attach_comparison_flags(score_registry, summary_stats);
+
 fprintf('\n  [ Performance Summary (WIS) ]\n');
-disp(summary_stats(:, {'Scenario', 'Model', 'ExoMode', 'Mean_WindowWIS', 'Std_WindowWIS'}));
+disp(summary_stats(:, {'Scenario', 'Model', 'ExoMode', 'Mean_WindowWIS', ...
+    'Std_WindowWIS', 'IsAcceptable', 'FailureReason', 'IncludeInMainComparison'}));
 
 summaryFile = fullfile(scoreDir, 'partA_04_wis_performance_summary.csv');
 writetable(summary_stats, summaryFile);
@@ -240,3 +244,61 @@ function detail_rows = empty_pointwise_table()
         'VariableNames', {'Scenario', 'Model', 'ExoMode', 'WindowDay', ...
         'HorizonIdx', 'ForecastDay', 'Truth_Rt', 'Median_Forecast', 'WIS'});
 end
+
+function summary_stats = classify_wis_summary(summary_stats)
+%CLASSIFY_WIS_SUMMARY Mark out-of-scale WIS scores before plotting/ranking.
+    num_rows = height(summary_stats);
+    mean_wis = summary_stats.Mean_WindowWIS;
+
+    is_acceptable = true(num_rows, 1);
+    failure_reason = strings(num_rows, 1);
+
+    invalid_idx = ~isfinite(mean_wis) | mean_wis <= 0;
+    is_acceptable(invalid_idx) = false;
+    failure_reason(invalid_idx) = "nonfinite_or_nonpositive_wis";
+
+    finite_positive_idx = isfinite(mean_wis) & mean_wis > 0;
+    finite_positive_wis = mean_wis(finite_positive_idx);
+
+    if numel(finite_positive_wis) >= 3
+        log_wis = log10(finite_positive_wis);
+        center_log_wis = median(log_wis);
+        robust_spread = median(abs(log_wis - center_log_wis));
+        outlier_threshold = center_log_wis + max(6 * robust_spread, 3);
+
+        all_log_wis = nan(num_rows, 1);
+        all_log_wis(finite_positive_idx) = log10(mean_wis(finite_positive_idx));
+        outlier_idx = finite_positive_idx & all_log_wis > outlier_threshold;
+
+        is_acceptable(outlier_idx) = false;
+        failure_reason(outlier_idx) = "robust_log_outlier";
+    end
+
+    include_in_main = false(num_rows, 1);
+    config_table = unique(summary_stats(:, {'Model', 'ExoMode'}), 'rows');
+
+    for i = 1:height(config_table)
+        config_idx = summary_stats.Model == config_table.Model(i) & ...
+            summary_stats.ExoMode == config_table.ExoMode(i);
+        include_in_main(config_idx) = all(is_acceptable(config_idx));
+    end
+
+    summary_stats.IsAcceptable = is_acceptable;
+    summary_stats.FailureReason = failure_reason;
+    summary_stats.IncludeInMainComparison = include_in_main;
+end
+
+function score_registry = attach_comparison_flags(score_registry, summary_stats)
+%ATTACH_COMPARISON_FLAGS Propagate configuration-level plotting status.
+    include_in_main = false(height(score_registry), 1);
+    config_table = unique(summary_stats(:, {'Model', 'ExoMode', 'IncludeInMainComparison'}), 'rows');
+
+    for i = 1:height(config_table)
+        config_idx = score_registry.Model == config_table.Model(i) & ...
+            score_registry.ExoMode == config_table.ExoMode(i);
+        include_in_main(config_idx) = config_table.IncludeInMainComparison(i);
+    end
+
+    score_registry.IncludeInMainComparison = include_in_main;
+end
+

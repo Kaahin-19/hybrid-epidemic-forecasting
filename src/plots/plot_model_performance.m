@@ -6,9 +6,9 @@ function was_saved = plot_model_performance(score_registry, cfg)
 %
 %   Description:
 %       Generates a comparative boxplot of Weighted Interval Score (WIS)
-%       across different model configurations and scenarios. Automatically
-%       filters non-finite values and applies logarithmic scaling if scores
-%       span multiple orders of magnitude.
+%       across accepted model configurations and scenarios. Automatically
+%       filters non-finite values and any rows flagged as excluded from the
+%       main comparison before plotting.
 %
 %   Inputs:
 %       score_registry - Table containing merged evaluation scores.
@@ -47,11 +47,17 @@ function was_saved = plot_model_performance(score_registry, cfg)
     axtoolbar(ax, {'export'});
 
     config_id = string(score_registry.Model) + " (" + string(score_registry.ExoMode) + ")";
-    
-    valid_idx = isfinite(score_registry.WindowWIS);
+
+    if ismember('IncludeInMainComparison', score_registry.Properties.VariableNames)
+        comparison_idx = logical(score_registry.IncludeInMainComparison);
+    else
+        comparison_idx = true(height(score_registry), 1);
+    end
+
+    valid_idx = isfinite(score_registry.WindowWIS) & comparison_idx;
     
     if ~any(valid_idx)
-        warning('PLOT:NoData', 'All WIS values are Inf or NaN. Skipping visualization.');
+        warning('PLOT:NoData', 'No finite accepted WIS values were available. Skipping visualization.');
         close(fig);
         return;
     end
