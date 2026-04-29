@@ -135,6 +135,7 @@ function cfg = partA_config()
     cfg.forecast.state_diff_orders = 0;
     cfg.forecast.wis_alphas    = [0.05, 0.10, 0.20, 0.50];
     cfg.forecast.plot_alphas   = [0.10, 0.50];
+    cfg.forecast.plot_lead_time = 7;
 
     %% 8. Output Artifacts
     thisDir  = fileparts(mfilename('fullpath'));

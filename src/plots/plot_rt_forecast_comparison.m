@@ -5,9 +5,10 @@ function outPath = plot_rt_forecast_comparison(results, Rt_true, tspan, plot_nam
 %       outPath = plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg)
 %
 %   Description:
-%       Generates a summary figure comparing the expanding-window forecasts
-%       against the synthetic ground truth and overlaying predictive
-%       intervals across all forecast windows in a single visualization.
+%       Generates a fixed-lead summary figure comparing forecasts against
+%       the synthetic ground truth. For each forecast origin, one horizon
+%       index is selected so the plotted median and intervals describe the
+%       same lead time throughout the figure.
 %
 %   Inputs:
 %       results   - Struct array of forecast results per window.
@@ -22,7 +23,7 @@ function outPath = plot_rt_forecast_comparison(results, Rt_true, tspan, plot_nam
 %   See also PARTA_03_RUN_FORECASTS, PARTA_CONFIG.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-03-29
+% Modified: 2026-04-30
 
     %% 1. Initialization
     if isfield(cfg, 'output') && isfield(cfg.output, 'fig_dir')
@@ -46,54 +47,41 @@ function outPath = plot_rt_forecast_comparison(results, Rt_true, tspan, plot_nam
     axtoolbar(ax, {'export'});
 
     plot_alphas = sort(double(cfg.forecast.plot_alphas(:)'), 'ascend');
+    lead_time = local_plot_lead_time(cfg);
     num_intervals = min(numel(plot_alphas), 2);
     interval_colors = [0.30, 0.65, 0.95; 0.10, 0.45, 0.85];
-    interval_face_alpha = [0.08, 0.16];
+    interval_face_alpha = [0.14, 0.28];
     interval_handles = gobjects(1, num_intervals);
     interval_labels = cellstr(compose('%d%% Predictive Interval', round((1 - plot_alphas(1:num_intervals)) * 100)));
     hMed = gobjects(0);
 
-    if ~isempty(results) && isfield(results, 'forecast_interval_alphas')
-        for i = 1:numel(results)
-            stored_alphas = double(results(i).forecast_interval_alphas(:)');
-            t_f = results(i).time_horizon(:);
+    [target_days, median_forecast, lower_forecast, upper_forecast] = ...
+        local_extract_fixed_lead(results, lead_time, plot_alphas);
 
-            for j = 1:num_intervals
-                idx_alpha = local_alpha_index(stored_alphas, plot_alphas(j));
-                if ~isempty(idx_alpha)
-                    display_name = '';
-                    if ~isgraphics(interval_handles(j))
-                        display_name = interval_labels{j};
-                    end
-                    h = fill_interval(ax, t_f, results(i).forecast_lower(:, idx_alpha), ...
-                        results(i).forecast_upper(:, idx_alpha), interval_colors(j, :), ...
-                        interval_face_alpha(j), display_name);
-                    if ~isgraphics(interval_handles(j))
-                        interval_handles(j) = h;
-                    end
-                end
-            end
-        end
-    end
+    for j = 1:num_intervals
+        valid_interval = isfinite(target_days) & ...
+            isfinite(lower_forecast(:, j)) & isfinite(upper_forecast(:, j));
 
-    for i = 1:numel(results)
-        t_f = results(i).time_horizon(:);
-        y_f = results(i).forecast_median(:);
-
-        if isempty(hMed)
-            hMed = plot(ax, t_f, y_f, 'b--', 'LineWidth', 1.3, ...
-                'DisplayName', 'Median Forecasts');
-        else
-            plot(ax, t_f, y_f, 'b--', 'LineWidth', 1.0, 'HandleVisibility', 'off');
+        if nnz(valid_interval) >= 2
+            interval_handles(j) = fill_interval(ax, target_days(valid_interval), ...
+                lower_forecast(valid_interval, j), upper_forecast(valid_interval, j), ...
+                interval_colors(j, :), interval_face_alpha(j), interval_labels{j});
         end
     end
 
     hTruth = plot(ax, tspan, Rt_true, 'k-', 'LineWidth', 2.2, ...
         'DisplayName', 'Ground Truth');
 
-    title(ax, sprintf('Forecast vs Truth: %s', strrep(plot_name, '_', ' ')));
+    valid_median = isfinite(target_days) & isfinite(median_forecast);
+    if any(valid_median)
+        hMed = plot(ax, target_days(valid_median), median_forecast(valid_median), ...
+            'b--o', 'LineWidth', 1.3, 'MarkerSize', 3.2, ...
+            'DisplayName', sprintf('%d-Day-Ahead Median Forecast', lead_time));
+    end
+
+    title(ax, sprintf('%d-Day-Ahead Forecast vs Truth: %s', lead_time, strrep(plot_name, '_', ' ')));
     xlabel(ax, 'Time (days)');
-    ylabel(ax, '$\mathcal{R}_t$ Value', 'Interpreter', 'latex');
+    ylabel(ax, '$\mathcal{R}_t$', 'Interpreter', 'latex');
     grid(ax, 'on');
 
     if isfield(cfg, 'Rt') && isfield(cfg.Rt, 'bounds')
@@ -110,7 +98,7 @@ function outPath = plot_rt_forecast_comparison(results, Rt_true, tspan, plot_nam
 
     if ~isempty(hMed)
         legend_handles(end+1) = hMed;
-        legend_labels{end+1} = 'Median Forecasts';
+        legend_labels{end+1} = sprintf('%d-Day-Ahead Median Forecast', lead_time);
     end
 
     for j = 1:num_intervals
@@ -124,6 +112,62 @@ function outPath = plot_rt_forecast_comparison(results, Rt_true, tspan, plot_nam
     
     %% 3. Persistence
     exportgraphics(fig, outPath, 'Resolution', 300);
+end
+
+function lead_time = local_plot_lead_time(cfg)
+    lead_time = 7;
+    if isfield(cfg, 'forecast') && isfield(cfg.forecast, 'plot_lead_time')
+        lead_time = double(cfg.forecast.plot_lead_time);
+    end
+
+    if ~isscalar(lead_time) || ~isfinite(lead_time) || lead_time < 1
+        error('PLOT:InvalidLeadTime', 'Forecast plot lead time must be a positive scalar.');
+    end
+
+    lead_time = round(lead_time);
+end
+
+function [target_days, median_forecast, lower_forecast, upper_forecast] = ...
+    local_extract_fixed_lead(results, lead_time, plot_alphas)
+    num_results = numel(results);
+    num_alphas = numel(plot_alphas);
+
+    target_days = nan(num_results, 1);
+    median_forecast = nan(num_results, 1);
+    lower_forecast = nan(num_results, num_alphas);
+    upper_forecast = nan(num_results, num_alphas);
+
+    if isempty(results) || ~isfield(results, 'forecast_interval_alphas')
+        return;
+    end
+
+    for i = 1:num_results
+        t_f = results(i).time_horizon(:);
+        y_f = results(i).forecast_median(:);
+
+        if numel(t_f) < lead_time || numel(y_f) < lead_time
+            continue;
+        end
+
+        target_days(i) = t_f(lead_time);
+        median_forecast(i) = y_f(lead_time);
+
+        stored_alphas = double(results(i).forecast_interval_alphas(:)');
+        for j = 1:num_alphas
+            idx_alpha = local_alpha_index(stored_alphas, plot_alphas(j));
+            if isempty(idx_alpha)
+                continue;
+            end
+
+            if size(results(i).forecast_lower, 1) >= lead_time && ...
+                    size(results(i).forecast_upper, 1) >= lead_time && ...
+                    size(results(i).forecast_lower, 2) >= idx_alpha && ...
+                    size(results(i).forecast_upper, 2) >= idx_alpha
+                lower_forecast(i, j) = results(i).forecast_lower(lead_time, idx_alpha);
+                upper_forecast(i, j) = results(i).forecast_upper(lead_time, idx_alpha);
+            end
+        end
+    end
 end
 
 function idx = local_alpha_index(stored_alphas, target_alpha)
