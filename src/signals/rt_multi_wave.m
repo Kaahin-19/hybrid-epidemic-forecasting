@@ -1,5 +1,5 @@
 function Rt = rt_multi_wave(t, p)
-%RT_MULTI_WAVE Generate a four-peak Gaussian transmission-potential signal.
+%RT_MULTI_WAVE Generate a four-peak Gaussian effective reproduction-number signal.
 %
 %   Syntax:
 %       Rt = rt_multi_wave(t, p)
@@ -12,13 +12,13 @@ function Rt = rt_multi_wave(t, p)
 %   Inputs:
 %       t - Time vector [days].
 %       p - Parameter structure containing:
-%           .baseline              - Constant baseline transmission-potential level.
+%           .baseline              - Constant effective reproduction-number level.
 %           .mu1, .mu2, .mu3, .mu4 - Center time points for each peak.
 %           .A1, .A2, .A3, .A4     - Amplitudes of each peak.
 %           .denom                 - Variance parameter controlling wave duration.
 %
 %   Outputs:
-%       Rt - Vector of transmission-potential values evaluated at t.
+%       Rt - Vector of effective reproduction-number values evaluated at t.
 %
 %   See also PARTA_CONFIG, RT_SEASONAL, RT_SIGMOID.
 

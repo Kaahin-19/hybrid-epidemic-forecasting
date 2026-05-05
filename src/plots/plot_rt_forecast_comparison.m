@@ -12,7 +12,7 @@ function outPath = plot_rt_forecast_comparison(results, Rt_true, tspan, plot_nam
 %
 %   Inputs:
 %       results   - Struct array of forecast results per window.
-%       Rt_true   - Numeric vector of the ground-truth transmission-potential curve.
+%       Rt_true   - Numeric vector of the ground-truth effective-Rt curve.
 %       tspan     - Numeric vector of time points.
 %       plot_name - String identifier for the plot title (scenario name).
 %       cfg       - Configuration struct containing output directories.

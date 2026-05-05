@@ -1,9 +1,9 @@
-%PARTA_00_MAKE_SCENARIOS Generate and visualize transmission signals for synthetic validation.
+%PARTA_00_MAKE_SCENARIOS Generate and visualize effective-Rt signals for synthetic validation.
 %
 %   Description:
 %       Entry point for the signal generation phase. Generates time-series
-%       data (Rt curves, mathematically beta/gamma) based on the
-%       configurations defined in partA_config.m and visualizes the input scenarios.
+%       data representing desired effective reproduction-number curves based
+%       on the configurations defined in partA_config.m.
 %
 %   Workflow:
 %       1. Configuration loading
@@ -14,7 +14,7 @@
 %   See also PARTA_CONFIG, PLOT_RT_SCENARIOS.
 
 % A. M. Kaahin 2026-02-18
-% Modified: 2026-03-28
+% Modified: 2026-05-04
 
 %% 1. Initialization
 clear; close all; clc;
@@ -33,7 +33,7 @@ scenarios = repmat(struct( ...
 ), 1, numel(cfg.scenarios));
 
 %% 3. Scenario Generation
-fprintf('Generating %d synthetic transmission-potential scenarios...\n', numel(cfg.scenarios));
+fprintf('Generating %d synthetic effective-Rt scenarios...\n', numel(cfg.scenarios));
 
 for i = 1:numel(cfg.scenarios)
     slot = cfg.scenarios(i);

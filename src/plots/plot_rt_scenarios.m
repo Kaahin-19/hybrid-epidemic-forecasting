@@ -1,12 +1,12 @@
 function plot_rt_scenarios(scenarios, cfg)
-%PLOT_RT_SCENARIOS Visualize the synthetic transmission-potential profiles for Part A.
+%PLOT_RT_SCENARIOS Visualize the synthetic effective-Rt profiles for Part A.
 %
 %   Syntax:
 %       plot_rt_scenarios(scenarios, cfg)
 %
 %   Description:
-%       Generates a tiled summary figure of the synthetic transmission-potential
-%       curves. The struct field name Rt is retained for artifact compatibility.
+%       Generates a tiled summary figure of the synthetic effective
+%       reproduction-number curves.
 %
 %   Inputs:
 %       scenarios - Struct array containing .t, .Rt, .id, and .name.
@@ -26,7 +26,7 @@ function plot_rt_scenarios(scenarios, cfg)
     outPath = fullfile(figDir, 'partA_00_rt_scenarios.png');
 
     %% 2. Visualization
-    fig = figure('Name', 'Synthetic Transmission Scenarios (Part A)', 'Visible', 'off');
+    fig = figure('Name', 'Synthetic Effective Rt Scenarios (Part A)', 'Visible', 'off');
     fig.Units = 'centimeters';
     fig.Position(3) = 17.0;   
     fig.Position(4) = 12.0;  

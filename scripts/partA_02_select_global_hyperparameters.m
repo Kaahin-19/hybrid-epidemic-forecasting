@@ -5,8 +5,10 @@
 %       model family and exogenous-input setting using the synthetic
 %       ground truth data. Each candidate is scored across all scenarios
 %       and expanding forecast windows using the Weighted Interval Score
-%       (WIS), and the configuration with the lowest aggregated score is
-%       saved for use by the forecast execution stage.
+%       (WIS). Future SIRS covariates are projected by holding the current
+%       effective-Rt value flat over the forecast horizon, and the
+%       configuration with the lowest aggregated score is saved for use by
+%       the forecast execution stage.
 %
 %   Workflow:
 %       1. Load the active run configuration and synthetic truth datasets.
@@ -15,10 +17,11 @@
 %       4. Select the candidate with the minimum global mean WIS.
 %       5. Persist machine-readable tuning artifacts for downstream use.
 %
-%   See also PARTA_CONFIG, GENDATA_SIRS, PARTA_01_GENERATE_TRUTH.
+%   See also PARTA_CONFIG, GENDATA_SIRS, ...
+%            PARTA_01_GENERATE_TRUTH.
 
 % A. M. Kaahin 2026-03-28
-% Modified: 2026-03-29
+% Modified: 2026-05-04
 
 %% 1. Initialization
 clear; close all; clc;
@@ -288,23 +291,24 @@ function [U_past, U_future] = prepare_exogenous_inputs(data, idx_T, horizon, exo
 
     U_past = data.U_true(1:idx_T, :);
 
-    % Rt_true stores the prescribed transmission potential beta/gamma.
     current_Rt = data.Rt_true(idx_T);
     current_I  = data.I_true(idx_T);
     current_S  = data.S_true(idx_T);
     current_R  = sirs_cfg.pop_size - current_S - current_I;
 
     future_tspan = 0:horizon;
-    flat_beta    = repmat(current_Rt * sirs_cfg.gamma, 1, length(future_tspan));
+    % The flat effective-Rt path is only an auxiliary assumption for
+    % constructing future SIRS covariates; the statistical model forecasts Rt.
+    flat_Rt      = repmat(current_Rt, 1, length(future_tspan));
 
     uds_params = sirs_cfg;
-    uds_params.beta    = flat_beta;
     uds_params.I0      = current_I;
     uds_params.R0_init = current_R;
     uds_params.solver  = 'uds';
     uds_params.compile = 0;
+    uds_params.Rt      = flat_Rt;
 
-    uds_mod = genData_SIRS(future_tspan, uds_params, sim_seed);
+    [uds_mod, ~] = genData_SIRS(future_tspan, uds_params, sim_seed);
 
     S_future_raw = uds_mod.U(1, 2:end)';
     I_future_raw = uds_mod.U(2, 2:end)';

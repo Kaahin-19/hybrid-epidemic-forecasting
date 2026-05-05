@@ -12,8 +12,8 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
 %       (ARIMAX) model to a historical Rt time series and associated exogenous
 %       covariates. Employs a threshold-clipped logarithmic transform for
 %       numerical stability and computes analytic predictive intervals from
-%       forecast uncertainty. Model selection is driven by the Corrected
-%       Akaike Information Criterion (AICc).
+%       forecast uncertainty. The returned AICc is reported for reference;
+%       global hyperparameter selection is performed by the pipeline using WIS.
 %
 %   Inputs:
 %       Rt_hist  - Numeric vector of historical Rt values.
@@ -29,7 +29,7 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
 %
 %   Outputs:
 %       Rt_curve       - Numeric vector of forecast medians.
-%       aicc           - Corrected Akaike Information Criterion score.
+%       aicc           - Corrected Akaike Information Criterion value.
 %       interval_alphas - Vector of interval miscoverage rates.
 %       lower_bounds   - Matrix of lower predictive interval bounds.
 %       upper_bounds   - Matrix of upper predictive interval bounds.
@@ -37,7 +37,7 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
 %   See also FIT_ARIMA, FIT_N4SID, FIT_SSEST, PARTA_03_RUN_FORECASTS.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-03-28
+% Modified: 2026-05-04
 
     %% 1. Preprocessing
     if nargin < 10 || isempty(interval_alphas)

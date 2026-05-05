@@ -17,7 +17,7 @@
 %   See also PARTA_CONFIG, PLOT_MODEL_PERFORMANCE, PARTA_03_RUN_FORECASTS.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-03-29
+% Modified: 2026-05-04
 
 %% 1. Initialization
 clear; close all; clc;
@@ -164,7 +164,9 @@ else
 end
 fprintf('=== Evaluation Complete ===\n\n');
 
+%% 5. Local Functions
 function [score_row, detail_rows] = evaluate_window_result(result_entry, scenario_id, model_type, exo_mode)
+%EVALUATE_WINDOW_RESULT Compute WIS summaries for a single forecast window.
     truth_Rt = double(result_entry.truth_Rt_window(:));
     pred_Rt  = double(result_entry.forecast_median(:));
     alphas   = reshape(double(result_entry.forecast_interval_alphas), 1, []);
@@ -216,6 +218,7 @@ function [score_row, detail_rows] = evaluate_window_result(result_entry, scenari
 end
 
 function wis = compute_wis(truth_Rt, median_Rt, lower_Rt, upper_Rt, alphas)
+%COMPUTE_WIS Compute pointwise weighted interval score values.
     num_intervals = numel(alphas);
     wis = 0.5 * abs(truth_Rt - median_Rt);
 
@@ -231,6 +234,7 @@ function wis = compute_wis(truth_Rt, median_Rt, lower_Rt, upper_Rt, alphas)
 end
 
 function detail_rows = empty_pointwise_table()
+%EMPTY_POINTWISE_TABLE Construct an empty pointwise WIS table.
     detail_rows = table( ...
         categorical.empty(0, 1), ...
         categorical.empty(0, 1), ...
@@ -301,4 +305,3 @@ function score_registry = attach_comparison_flags(score_registry, summary_stats)
 
     score_registry.IncludeInMainComparison = include_in_main;
 end
-

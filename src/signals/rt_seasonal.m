@@ -1,24 +1,24 @@
 function Rt = rt_seasonal(t, p)
-%RT_SEASONAL Generate a seasonal transmission-potential signal.
+%RT_SEASONAL Generate a seasonal effective reproduction-number signal.
 %
 %   Syntax:
 %       Rt = rt_seasonal(t, p)
 %
 %   Description:
-%       Generates a sinusoidal Rt trajectory, where Rt denotes beta/gamma
-%       in the synthetic validation artifacts. This signal is fully defined
-%       by the input parameters, useful for simulating recurrent epidemic 
-%       waves or seasonal environmental forcing.
+%       Generates a sinusoidal Rt trajectory, where Rt denotes the desired
+%       effective reproduction number in the synthetic validation artifacts.
+%       This signal is fully defined by the input parameters, useful for
+%       simulating recurrent epidemic waves or seasonal environmental forcing.
 %
 %   Inputs:
 %       t - Time vector [days].
 %       p - Parameter structure containing:
-%           .center - Baseline transmission-potential level (mean value).
+%           .center - Baseline effective reproduction-number level.
 %           .amp    - Amplitude of the sine wave.
 %           .period - Period of the oscillation [days].
 %
 %   Outputs:
-%       Rt - Vector of transmission-potential values evaluated at t.
+%       Rt - Vector of effective reproduction-number values evaluated at t.
 %
 %   See also PARTA_CONFIG, RT_MULTI_WAVE, RT_SIGMOID.
 

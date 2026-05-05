@@ -6,23 +6,23 @@
 %       configuration for the active model family and exogenous-input
 %       setting. Each forecast window is refit on its own local history and
 %       produces analytic predictive intervals. Future exogenous covariates
-%       (Susceptible and Infected populations) are projected dynamically
-%       using the deterministic compartmental solver ('uds') to ensure
-%       causality.
+%       (Susceptible and Infected populations) are projected by holding the
+%       current effective-Rt value flat and advancing the deterministic
+%       compartmental solver ('uds').
 %
 %   Workflow:
 %       1. Initialize experiment and model configurations.
 %       2. Load the globally selected hyperparameter artifact.
-%       3. Process synthetic ground truth datasets iteratively.
-%       4. Perform expanding-window forecast estimation.
-%       5. Aggregate results and generate performance visualizations.
+%       3. Run expanding-window forecasts for each synthetic truth dataset.
+%       4. Persist forecast artifacts and visualizations.
 %
-%   See also PARTA_CONFIG, GENDATA_SIRS, PLOT_RT_FORECAST_COMPARISON, ... 
+%   See also PARTA_CONFIG, GENDATA_SIRS, ...
+%            PLOT_RT_FORECAST_COMPARISON, ...
 %            PARTA_01_GENERATE_TRUTH, ... 
 %            PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-03-29
+% Modified: 2026-05-04
 
 %% 1. Initialization
 clear; close all; clc;
@@ -55,7 +55,7 @@ if ~exist(saveDir, 'dir')
     mkdir(saveDir);
 end
 
-%% 3. Evaluation Loop
+%% 3. Evaluation and Artifact Loop
 for i = 1:length(fileList)
     filename = fileList(i).name;
     fullPath = fullfile(dataDir, filename);
@@ -113,23 +113,24 @@ for i = 1:length(fileList)
         else
             U_past = U_true(1:idx_T, :);
             
-            % Rt_true stores the prescribed transmission potential beta/gamma.
             current_Rt = Rt_true(idx_T);
             current_I  = loaded.I_true(idx_T);
             current_S  = loaded.S_true(idx_T);
             current_R  = cfg.sirs.pop_size - current_S - current_I;
             
             future_tspan = 0:horizon; 
-            flat_beta    = repmat(current_Rt * cfg.sirs.gamma, 1, length(future_tspan));
+            % The flat effective-Rt path is only an auxiliary assumption for
+            % constructing future SIRS covariates; the statistical model forecasts Rt.
+            flat_Rt      = repmat(current_Rt, 1, length(future_tspan));
             
             uds_params = cfg.sirs;
-            uds_params.beta    = flat_beta;
             uds_params.I0      = current_I;
             uds_params.R0_init = current_R;
             uds_params.solver  = 'uds'; 
             uds_params.compile = 0; 
+            uds_params.Rt      = flat_Rt;
             
-            uds_mod = genData_SIRS(future_tspan, uds_params, cfg.sim.seed);
+            [uds_mod, ~] = genData_SIRS(future_tspan, uds_params, cfg.sim.seed);
             
             S_future_raw = uds_mod.U(1, 2:end)';
             I_future_raw = uds_mod.U(2, 2:end)';
@@ -164,7 +165,7 @@ for i = 1:length(fileList)
 
     results = results(1:count-1);
     
-    %% 4. Artifact Generation
+    % Persist scenario-level forecast artifacts and visualization.
     summary_table = array2table([selected_model, count - 1], ...
         'VariableNames', table_headers);
     
@@ -185,7 +186,7 @@ end
 
 fprintf('=== Forecast Pipeline Complete ===\n\n');
 
-%% 5. Local Functions
+%% 4. Local Functions
 function valid_exo_mode = validate_configuration(model_type, exo_mode)
 %VALIDATE_CONFIGURATION Resolve logical conflicts in configuration.
     valid_exo_mode = exo_mode;

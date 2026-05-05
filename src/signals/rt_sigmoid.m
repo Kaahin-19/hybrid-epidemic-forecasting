@@ -1,24 +1,24 @@
 function Rt = rt_sigmoid(t, p)
-%RT_SIGMOID Generate a sigmoid step transmission-potential signal.
+%RT_SIGMOID Generate a sigmoid step effective reproduction-number signal.
 %
 %   Syntax:
 %       Rt = rt_sigmoid(t, p)
 %
 %   Description:
-%       Generates a smooth sigmoid transition from a high transmission 
-%       baseline to a lower level, typically used to model the impact 
-%       of a policy intervention (e.g., lockdown).
+%       Generates a smooth sigmoid transition from a high effective
+%       reproduction-number baseline to a lower level, typically used to
+%       model the impact of a policy intervention (e.g., lockdown).
 %
 %   Inputs:
 %       t - Time vector [days].
 %       p - Parameter structure containing:
-%           .high - Initial transmission-potential level.
-%           .low  - Final transmission-potential level.
+%           .high - Initial effective reproduction-number level.
+%           .low  - Final effective reproduction-number level.
 %           .t0   - Inflection point of the curve [days].
 %           .k    - Steepness of the transition.
 %
 %   Outputs:
-%       Rt - Vector of transmission-potential values evaluated at t.
+%       Rt - Vector of effective reproduction-number values evaluated at t.
 %
 %   See also PARTA_CONFIG, RT_MULTI_WAVE, RT_SEASONAL.
 
