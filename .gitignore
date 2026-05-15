@@ -20,3 +20,7 @@ data/synthetic/
 report/archive/
 report/stages/
 
+# Closed-loop ARX
+results/closed_loop_arx/
+scripts/partA_closed_loop_arx/
+

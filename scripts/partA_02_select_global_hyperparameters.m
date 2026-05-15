@@ -5,10 +5,10 @@
 %       model family and exogenous-input setting using the synthetic
 %       ground truth data. Each candidate is scored across all scenarios
 %       and expanding forecast windows using the Weighted Interval Score
-%       (WIS). Future SIRS covariates are projected by holding the current
-%       effective-Rt value flat over the forecast horizon, and the
-%       configuration with the lowest aggregated score is saved for use by
-%       the forecast execution stage.
+%       (WIS). Exogenous SIRS covariates are generated recursively inside
+%       the fit function from one-step Rt forecasts and URDME/UDS SIRS
+%       advancement. The configuration with the lowest aggregated score is
+%       saved for use by the forecast execution stage.
 %
 %   Workflow:
 %       1. Load the active run configuration and synthetic truth datasets.
@@ -98,7 +98,7 @@ for i = 1:length(fileList)
         'Rt_past', [], ...
         'truth_Rt', [], ...
         'U_past', [], ...
-        'U_future', []), numel(windows), 1);
+        'sirs_state', []), numel(windows), 1);
 
     for w = 1:numel(windows)
         T = windows(w);
@@ -110,9 +110,8 @@ for i = 1:length(fileList)
         idx_end = idx_T + horizon;
         window_data(w).Rt_past = precompute_data.Rt_true(1:idx_T);
         window_data(w).truth_Rt = precompute_data.Rt_true(idx_T+1:idx_end);
-        [window_data(w).U_past, window_data(w).U_future] = ...
-            prepare_exogenous_inputs(precompute_data, idx_T, horizon, ...
-            EXO_MODE, sirs_cfg, sim_seed);
+        [window_data(w).U_past, window_data(w).sirs_state] = ...
+            prepare_exogenous_inputs(precompute_data, idx_T, sirs_cfg);
     end
 
     scenario_data(i).scenario_id = scenario_id;
@@ -131,7 +130,7 @@ for i = 1:length(scenario_data)
 end
 
 if isempty(gcp('nocreate'))
-    parpool;
+    parpool('Processes', 4);
 end
 
 %% 3. Candidate Evaluation
@@ -162,7 +161,7 @@ parfor idx = 1:num_models
 
             [Rt_pred, ~, out_alphas, Rt_lower, Rt_upper] = fit_candidate( ...
                 MODEL_TYPE, params, window_entry.Rt_past, window_entry.U_past, ...
-                window_entry.U_future, data.num_exo, ...
+                window_entry.sirs_state, sirs_cfg, EXO_MODE, sim_seed, data.num_exo, ...
                 horizon, wis_alphas);
 
             if ~is_valid_forecast(Rt_pred, out_alphas, Rt_lower, Rt_upper, ...
@@ -258,12 +257,12 @@ function [candidate_models, parameter_names] = get_candidate_models(cfg, model_t
 %GET_CANDIDATE_MODELS Construct the candidate hyperparameter grid.
     switch model_type
         case 'AR'
-            candidate_models = (0:cfg.forecast.max_ar_order)';
+            candidate_models = (1:cfg.forecast.max_ar_order)';
             parameter_names  = {'p'};
 
         case 'ARX'
             [P, NB, NK] = ndgrid( ...
-                0:cfg.forecast.max_ar_order, ...
+                1:cfg.forecast.max_ar_order, ...
                 1:cfg.forecast.max_exo_order, ...
                 1:cfg.forecast.max_exo_delay);
             candidate_models = [P(:), NB(:), NK(:)];
@@ -281,51 +280,25 @@ function [candidate_models, parameter_names] = get_candidate_models(cfg, model_t
     end
 end
 
-function [U_past, U_future] = prepare_exogenous_inputs(data, idx_T, horizon, exo_mode, sirs_cfg, sim_seed)
-%PREPARE_EXOGENOUS_INPUTS Build historical and projected exogenous inputs.
+function [U_past, sirs_state] = prepare_exogenous_inputs(data, idx_T, sirs_cfg)
+%PREPARE_EXOGENOUS_INPUTS Build historical exogenous inputs and current SIRS state.
     if isempty(data.U_true)
         U_past = [];
-        U_future = [];
+        sirs_state = [];
         return;
     end
 
     U_past = data.U_true(1:idx_T, :);
 
-    current_Rt = data.Rt_true(idx_T);
     current_I  = data.I_true(idx_T);
     current_S  = data.S_true(idx_T);
     current_R  = sirs_cfg.pop_size - current_S - current_I;
-
-    future_tspan = 0:horizon;
-    % The flat effective-Rt path is only an auxiliary assumption for
-    % constructing future SIRS covariates; the statistical model forecasts Rt.
-    flat_Rt      = repmat(current_Rt, 1, length(future_tspan));
-
-    uds_params = sirs_cfg;
-    uds_params.I0      = current_I;
-    uds_params.R0_init = current_R;
-    uds_params.solver  = 'uds';
-    uds_params.compile = 0;
-    uds_params.Rt      = flat_Rt;
-
-    [uds_mod, ~] = genData_SIRS(future_tspan, uds_params, sim_seed);
-
-    S_future_raw = uds_mod.U(1, 2:end)';
-    I_future_raw = uds_mod.U(2, 2:end)';
-
-    scaled_S_fut = S_future_raw / sirs_cfg.pop_size;
-    scaled_I_fut = I_future_raw / sirs_cfg.pop_size;
-
-    switch exo_mode
-        case 'S',    U_future = scaled_S_fut;
-        case 'I',    U_future = scaled_I_fut;
-        case 'Both', U_future = [scaled_S_fut, scaled_I_fut];
-        otherwise,   U_future = [];
-    end
+    sirs_state = [current_S, current_I, current_R];
 end
 
 function [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = fit_candidate( ...
-    model_type, params, Rt_past, U_past, U_future, num_exo, horizon, wis_alphas)
+    model_type, params, Rt_past, U_past, sirs_state, sirs_cfg, exo_mode, sim_seed, ...
+    num_exo, horizon, wis_alphas)
 %FIT_CANDIDATE Fit and forecast one candidate hyperparameter configuration.
     Rt_pred = [];
     aicc = [];
@@ -342,18 +315,19 @@ function [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = fit_candidate( ...
             nb_vec = repmat(params(2), 1, num_exo);
             nk_vec = repmat(params(3), 1, num_exo);
             [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = ...
-                fit_arimax(Rt_past, U_past, U_future, params(1), 0, 0, ...
-                nb_vec, nk_vec, horizon, wis_alphas);
+                fit_arimax(Rt_past, U_past, [], params(1), 0, 0, ...
+                nb_vec, nk_vec, horizon, wis_alphas, ...
+                sirs_state, sirs_cfg, exo_mode, sim_seed);
 
         case 'N4SID'
             [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = ...
-                fit_n4sid(Rt_past, U_past, U_future, params(1), params(2), ...
-                horizon, wis_alphas);
+                fit_n4sid(Rt_past, U_past, [], params(1), params(2), ...
+                horizon, wis_alphas, sirs_state, sirs_cfg, exo_mode, sim_seed);
 
         case 'SSEST'
             [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = ...
-                fit_ssest(Rt_past, U_past, U_future, params(1), params(2), ...
-                horizon, wis_alphas);
+                fit_ssest(Rt_past, U_past, [], params(1), params(2), ...
+                horizon, wis_alphas, sirs_state, sirs_cfg, exo_mode, sim_seed);
     end
 end
 

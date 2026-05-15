@@ -5,10 +5,9 @@
 %       ground truth data using a globally selected hyperparameter
 %       configuration for the active model family and exogenous-input
 %       setting. Each forecast window is refit on its own local history and
-%       produces analytic predictive intervals. Future exogenous covariates
-%       (Susceptible and Infected populations) are projected by holding the
-%       current effective-Rt value flat and advancing the deterministic
-%       compartmental solver ('uds').
+%       produces analytic predictive intervals. Exogenous covariates
+%       (Susceptible and Infected populations) are generated recursively
+%       from one-step Rt forecasts and URDME/UDS SIRS advancement.
 %
 %   Workflow:
 %       1. Initialize experiment and model configurations.
@@ -109,45 +108,19 @@ for i = 1:length(fileList)
         
         if isempty(U_true)
             U_past   = [];
-            U_future = [];
+            sirs_state = [];
         else
             U_past = U_true(1:idx_T, :);
             
-            current_Rt = Rt_true(idx_T);
             current_I  = loaded.I_true(idx_T);
             current_S  = loaded.S_true(idx_T);
             current_R  = cfg.sirs.pop_size - current_S - current_I;
-            
-            future_tspan = 0:horizon; 
-            % The flat effective-Rt path is only an auxiliary assumption for
-            % constructing future SIRS covariates; the statistical model forecasts Rt.
-            flat_Rt      = repmat(current_Rt, 1, length(future_tspan));
-            
-            uds_params = cfg.sirs;
-            uds_params.I0      = current_I;
-            uds_params.R0_init = current_R;
-            uds_params.solver  = 'uds'; 
-            uds_params.compile = 0; 
-            uds_params.Rt      = flat_Rt;
-            
-            [uds_mod, ~] = genData_SIRS(future_tspan, uds_params, cfg.sim.seed);
-            
-            S_future_raw = uds_mod.U(1, 2:end)';
-            I_future_raw = uds_mod.U(2, 2:end)';
-            
-            scaled_S_fut = S_future_raw / cfg.sirs.pop_size;
-            scaled_I_fut = I_future_raw / cfg.sirs.pop_size;
-            
-            switch EXO_MODE
-                case 'S',    U_future = scaled_S_fut;
-                case 'I',    U_future = scaled_I_fut;
-                case 'Both', U_future = [scaled_S_fut, scaled_I_fut];
-            end
+            sirs_state = [current_S, current_I, current_R];
         end
         
         [best_Rt_pred, aicc, best_wis_alpha, best_Rt_lower, best_Rt_upper] = ...
             fit_selected_model(MODEL_TYPE, selected_model, Rt_past, U_past, ...
-            U_future, num_exo, horizon, wis_alphas);
+            sirs_state, cfg.sirs, EXO_MODE, cfg.sim.seed, num_exo, horizon, wis_alphas);
         
         results(count).window_day      = T;
         results(count).window_day_idx  = idx_T;
@@ -296,7 +269,8 @@ function [parameter_headers, expected_num_params] = get_parameter_headers(model_
 end
 
 function [Rt_pred, aicc, wis_alpha, Rt_lower, Rt_upper] = fit_selected_model( ...
-    model_type, selected_model, Rt_past, U_past, U_future, num_exo, horizon, wis_alphas)
+    model_type, selected_model, Rt_past, U_past, sirs_state, sirs_cfg, exo_mode, sim_seed, ...
+    num_exo, horizon, wis_alphas)
 %FIT_SELECTED_MODEL Fit and forecast the selected global hyperparameter configuration.
     switch model_type
         case 'AR'
@@ -307,18 +281,19 @@ function [Rt_pred, aicc, wis_alpha, Rt_lower, Rt_upper] = fit_selected_model( ..
             nb_vec = repmat(selected_model(2), 1, num_exo);
             nk_vec = repmat(selected_model(3), 1, num_exo);
             [Rt_pred, aicc, wis_alpha, Rt_lower, Rt_upper] = ...
-                fit_arimax(Rt_past, U_past, U_future, selected_model(1), 0, 0, ...
-                nb_vec, nk_vec, horizon, wis_alphas);
+                fit_arimax(Rt_past, U_past, [], selected_model(1), 0, 0, ...
+                nb_vec, nk_vec, horizon, wis_alphas, ...
+                sirs_state, sirs_cfg, exo_mode, sim_seed);
 
         case 'N4SID'
             [Rt_pred, aicc, wis_alpha, Rt_lower, Rt_upper] = ...
-                fit_n4sid(Rt_past, U_past, U_future, selected_model(1), selected_model(2), ...
-                horizon, wis_alphas);
+                fit_n4sid(Rt_past, U_past, [], selected_model(1), selected_model(2), ...
+                horizon, wis_alphas, sirs_state, sirs_cfg, exo_mode, sim_seed);
 
         case 'SSEST'
             [Rt_pred, aicc, wis_alpha, Rt_lower, Rt_upper] = ...
-                fit_ssest(Rt_past, U_past, U_future, selected_model(1), selected_model(2), ...
-                horizon, wis_alphas);
+                fit_ssest(Rt_past, U_past, [], selected_model(1), selected_model(2), ...
+                horizon, wis_alphas, sirs_state, sirs_cfg, exo_mode, sim_seed);
 
         otherwise
             error('CFG:UnknownModel', 'Unsupported MODEL_TYPE: %s', model_type);
