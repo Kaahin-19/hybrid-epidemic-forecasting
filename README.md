@@ -15,7 +15,7 @@ The implementation is divided into three major phases as outlined in the project
 ## Directory Structure
 
 * ``config/``: Stores central configuration scripts for Part A synthetic validation and Part B robustness testing.
-* ``data/``: Contains static empirical datasets (``R0a.mat``, ``F.mat``, etc.), generated SIRS truth under ``data/partA/``, and generated SEIR truth under ``data/partB/``.
+* ``data/``: Contains generated SIRS truth under ``data/partA/``, and generated SEIR truth under ``data/partB/``.
 * ``results/``: Stores generated outputs, with Part A artifacts under ``results/partA/`` and Part B artifacts under ``results/partB/``.
 * ``scripts/``: Contains high-level execution scripts, with Part A scripts under ``scripts/partA/`` and Part B scripts under ``scripts/partB/``.
 * ``src/``: Core functional modules, separated into ``models/`` (simulation and forecasting algorithms), ``plots/`` (visualization helpers), and ``signals/`` (analytic $R_t$ generators).
@@ -44,7 +44,6 @@ The implementation is divided into three major phases as outlined in the project
 * ``src/models/fit_arimax.m``: Fits an autoregressive model with exogenous inputs to historical data through a standardized ARIMAX wrapper.
 * ``src/models/fit_n4sid.m``: Fits a discrete-time state-space model utilizing the Subspace State-Space System Identification (N4SID) algorithm.
 * ``src/models/fit_ssest.m``: Fits an optimized discrete-time state-space model using iterative Prediction Error Minimization (PEM).
-* ``src/models/genData.m``: A general utility for generating synthetic data from compartmental epidemic models using URDME.
 * ``src/models/genData_SIRS.m``: Simulates SIRS trajectories from desired effective-``R_t`` inputs, computing the state-consistent internal transmission rates required by URDME.
 * ``src/models/genData_SEIR.m``: Simulates deterministic SEIR trajectories for Part B robustness testing.
 * ``src/plots/plot_model_performance.m``: Visualizes the comparative WIS distributions across various model configurations and scenarios.
