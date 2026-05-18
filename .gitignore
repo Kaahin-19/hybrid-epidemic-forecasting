@@ -6,12 +6,15 @@ Thumbs.db
 
 # MATLAB / build artifacts
 SIRS.c
+SEIR.c
 *.mexa64
 *.mexw64
 *.mexmaci64
 
 # Runtime outputs
 results/logs/
+results/partB/logs/
+
 
 # Generated synthetic data
 data/synthetic/
@@ -19,8 +22,3 @@ data/synthetic/
 # Report scratch and archived exports
 report/archive/
 report/stages/
-
-# Closed-loop ARX
-results/closed_loop_arx/
-scripts/partA_closed_loop_arx/
-original_partA_arx_I_performance_profile.md
