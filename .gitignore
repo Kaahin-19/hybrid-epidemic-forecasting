@@ -12,12 +12,13 @@ SEIR.c
 *.mexmaci64
 
 # Runtime outputs
-results/logs/
+results/partA/logs/
 results/partB/logs/
 
 
-# Generated synthetic data
-data/synthetic/
+# Generated data
+data/partA/
+data/partB/
 
 # Report scratch and archived exports
 report/archive/

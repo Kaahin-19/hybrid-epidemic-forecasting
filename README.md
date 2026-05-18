@@ -15,9 +15,9 @@ The implementation is divided into three major phases as outlined in the project
 ## Directory Structure
 
 * ``config/``: Stores the central configuration scripts that define simulation parameters and hyperparameter grids.
-* ``data/``: Contains both the static empirical datasets (``R0a.mat``, ``F.mat``, etc.) and the generated ``synthetic/`` ground-truth trajectories.
-* ``results/``: The primary output destination for the pipeline, categorized into ``forecasts/`` (raw prediction artifacts), ``scores/`` (aggregated CSV summaries), ``figures/`` (visualizations), ``tuning/`` (global hyperparameter selection artifacts), and ``logs/`` (per-run execution logs and manifests).
-* ``scripts/``: High-level execution pipelines that run the scenario generation, truth simulation, global hyperparameter selection, model forecasting, and evaluation processes.
+* ``data/``: Contains static empirical datasets (``R0a.mat``, ``F.mat``, etc.) plus generated Part A and Part B data under ``partA/`` and ``partB/``.
+* ``results/``: The primary output destination for the pipeline, with Part A outputs under ``partA/`` and Part B outputs under ``partB/``.
+* ``scripts/``: High-level execution pipelines that run the scenario generation, truth simulation, global hyperparameter selection, model forecasting, and evaluation processes. Part A scripts live under ``scripts/partA/``.
 * ``src/``: Core functional modules, separated into ``models/`` (standardized fitting algorithms), ``plots/`` (visualization helpers), and ``signals/`` (data generators).
 
 ## Active Files Summary
@@ -27,11 +27,11 @@ The implementation is divided into three major phases as outlined in the project
 * ``config/partA_config.m``: Serves as the central configuration hub, defining the simulation environment, active run settings, ground truth constraints, and forecasting hyperparameters for the synthetic validation phase. The active Model Type and Exogenous Mode can also be overridden externally via environment variables.
 
 ### Execution Scripts
-* ``scripts/partA_00_make_scenarios.m``: Generates and visualizes the distinct effective reproduction-number scenarios (seasonality, interventions, resurgences) to be used as ground truth.
-* ``scripts/partA_01_generate_truth.m``: Simulates the SIRS epidemic model to generate and save the synthetic ground-truth datasets for each scenario.
-* ``scripts/partA_02_select_global_hyperparameters.m``: Selects one global hyperparameter configuration per model family and exogenous-input setting using cross-scenario WIS and the active ``cfg.run`` configuration.
-* ``scripts/partA_03_run_forecasts.m``: Acts as a unified switchboard to execute expanding-window probabilistic forecasts using the selected global hyperparameter configuration, causal effective-``R_t`` SIRS covariate projection, and the active ``cfg.run`` configuration.
-* ``scripts/partA_04_evaluate_models.m``: Aggregates the forecast results, calculates WIS metrics, and produces final statistical summaries.
+* ``scripts/partA/partA_00_make_scenarios.m``: Generates and visualizes the distinct effective reproduction-number scenarios (seasonality, interventions, resurgences) to be used as ground truth.
+* ``scripts/partA/partA_01_generate_truth.m``: Simulates the SIRS epidemic model to generate and save the synthetic ground-truth datasets for each scenario.
+* ``scripts/partA/partA_02_select_global_hyperparameters.m``: Selects one global hyperparameter configuration per model family and exogenous-input setting using cross-scenario WIS and the active ``cfg.run`` configuration.
+* ``scripts/partA/partA_03_run_forecasts.m``: Acts as a unified switchboard to execute expanding-window probabilistic forecasts using the selected global hyperparameter configuration, causal effective-``R_t`` SIRS covariate projection, and the active ``cfg.run`` configuration.
+* ``scripts/partA/partA_04_evaluate_models.m``: Aggregates the forecast results, calculates WIS metrics, and produces final statistical summaries.
 
 ### Source Code (``src/``)
 * ``src/models/fit_arima.m``: Fits an autoregressive model to a historical reproduction number time series through a standardized ARIMA wrapper.

@@ -140,11 +140,12 @@ function cfg = partA_config()
     thisDir  = fileparts(mfilename('fullpath'));
     repoRoot = fileparts(thisDir);
 
-    cfg.output.data_dir     = fullfile(repoRoot, "data", "synthetic");
-    cfg.output.fig_dir      = fullfile(repoRoot, "results", "figures");
-    cfg.output.forecast_dir = fullfile(repoRoot, "results", "forecasts");
-    cfg.output.score_dir    = fullfile(repoRoot, "results", "scores");
-    cfg.output.tuning_dir   = fullfile(repoRoot, "results", "tuning");
+    cfg.output.data_dir     = fullfile(repoRoot, "data", "partA");
+    cfg.output.root_dir     = fullfile(repoRoot, "results", "partA");
+    cfg.output.fig_dir      = fullfile(cfg.output.root_dir, "figures");
+    cfg.output.forecast_dir = fullfile(cfg.output.root_dir, "forecasts");
+    cfg.output.score_dir    = fullfile(cfg.output.root_dir, "scores");
+    cfg.output.tuning_dir   = fullfile(cfg.output.root_dir, "tuning");
 
 end
 

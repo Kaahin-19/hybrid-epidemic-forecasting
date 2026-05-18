@@ -29,7 +29,7 @@ function was_saved = plot_model_performance(score_registry, cfg)
     if isfield(cfg, 'output') && isfield(cfg.output, 'fig_dir')
         figDir = cfg.output.fig_dir;
     else
-        figDir = fullfile(pwd, 'results', 'figures');
+        figDir = fullfile(pwd, 'results', 'partA', 'figures');
     end
     out_path = fullfile(figDir, 'partA_04_wis_performance_boxplot.png');
 
