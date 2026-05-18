@@ -1,6 +1,6 @@
 # Hybrid Epidemic Forecasting
 
-This repository contains a MATLAB framework that combines mechanistic compartment models with statistical time-series models to forecast the time-varying reproduction number ($R_t$). Part A performs synthetic validation under SIRS ground truth, while Part B tests robustness under SEIR ground truth using fixed Part A-selected AR/ARX configurations. Forecast performance is evaluated primarily with the Weighted Interval Score (WIS).
+This repository contains a MATLAB framework that combines mechanistic SIR models with statistical time-series models to infer and predict the time-varying reproduction number ($R_t$). The project evaluates whether this hybrid methodology outperforms pure data-driven or mechanistic approaches in short-term forecasting.
 
 ## Project Progress
 
