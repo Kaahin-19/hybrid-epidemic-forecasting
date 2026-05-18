@@ -1,6 +1,6 @@
 # Hybrid Epidemic Forecasting
 
-This repository contains a MATLAB framework that combines mechanistic SIR models with statistical time-series models to infer and predict the time-varying reproduction number ($R_t$). The project evaluates whether this hybrid methodology outperforms pure data-driven or mechanistic approaches in short-term forecasting.
+This repository contains a MATLAB framework that combines mechanistic compartment models with statistical time-series models to forecast the time-varying reproduction number ($R_t$). Part A performs synthetic validation under SIRS ground truth, while Part B tests robustness under SEIR ground truth using fixed Part A-selected AR/ARX configurations. Forecast performance is evaluated primarily with the Weighted Interval Score (WIS).
 
 ## Project Progress
 
@@ -8,23 +8,26 @@ The implementation is divided into three major phases as outlined in the project
 
 | Phase | Scope / Description | Current Status | Last Revised | Supervisor Validated | Validation Date |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Part A** | Synthetic Validation | Completed | 2026-03-29 | [ ] Pending | - |
-| **Part B** | Robustness Testing | Not Started | - | [ ] Pending | - |
+| **Part A** | SIRS Synthetic Validation | Completed | 2026-05-18 | [ ] Pending | - |
+| **Part B** | SEIR Robustness Testing | Completed | 2026-05-18 | [ ] Pending | - |
 | **Part C** | Real-world Application | Not Started | - | [ ] Pending | - |
 
 ## Directory Structure
 
-* ``config/``: Stores the central configuration scripts that define simulation parameters and hyperparameter grids.
-* ``data/``: Contains static empirical datasets (``R0a.mat``, ``F.mat``, etc.) plus generated Part A and Part B data under ``partA/`` and ``partB/``.
-* ``results/``: The primary output destination for the pipeline, with Part A outputs under ``partA/`` and Part B outputs under ``partB/``.
-* ``scripts/``: High-level execution pipelines that run the scenario generation, truth simulation, global hyperparameter selection, model forecasting, and evaluation processes. Part A scripts live under ``scripts/partA/``.
-* ``src/``: Core functional modules, separated into ``models/`` (standardized fitting algorithms), ``plots/`` (visualization helpers), and ``signals/`` (data generators).
+* ``config/``: Stores central configuration scripts for Part A synthetic validation and Part B robustness testing.
+* ``data/``: Contains static empirical datasets (``R0a.mat``, ``F.mat``, etc.), generated SIRS truth under ``data/partA/``, and generated SEIR truth under ``data/partB/``.
+* ``results/``: Stores generated outputs, with Part A artifacts under ``results/partA/`` and Part B artifacts under ``results/partB/``.
+* ``scripts/``: Contains high-level execution scripts, with Part A scripts under ``scripts/partA/`` and Part B scripts under ``scripts/partB/``.
+* ``src/``: Core functional modules, separated into ``models/`` (simulation and forecasting algorithms), ``plots/`` (visualization helpers), and ``signals/`` (analytic $R_t$ generators).
 
 ## Active Files Summary
 
 ### Root & Configuration
 * ``startup.m``: Initializes the project environment by dynamically adding internal subdirectories to the active MATLAB path.
-* ``config/partA_config.m``: Serves as the central configuration hub, defining the simulation environment, active run settings, ground truth constraints, and forecasting hyperparameters for the synthetic validation phase. The active Model Type and Exogenous Mode can also be overridden externally via environment variables.
+* ``run_partA_pipeline.sh``: Orchestrates the Part A SIRS synthetic-validation pipeline and writes artifacts under ``data/partA/`` and ``results/partA/``.
+* ``run_partB_pipeline.sh``: Orchestrates the Part B SEIR robustness pipeline and writes artifacts under ``data/partB/`` and ``results/partB/``.
+* ``config/partA_config.m``: Defines the Part A time grid, analytic $R_t$ scenarios, SIRS parameters, active model/exogenous-input settings, forecast settings, and output paths.
+* ``config/partB_config.m``: Reuses the Part A scenarios and forecast settings while adding SEIR truth parameters, SIRS projection parameters, fixed Part A tuning references, and Part B output paths.
 
 ### Execution Scripts
 * ``scripts/partA/partA_00_make_scenarios.m``: Generates and visualizes the distinct effective reproduction-number scenarios (seasonality, interventions, resurgences) to be used as ground truth.
@@ -32,6 +35,9 @@ The implementation is divided into three major phases as outlined in the project
 * ``scripts/partA/partA_02_select_global_hyperparameters.m``: Selects one global hyperparameter configuration per model family and exogenous-input setting using cross-scenario WIS and the active ``cfg.run`` configuration.
 * ``scripts/partA/partA_03_run_forecasts.m``: Acts as a unified switchboard to execute expanding-window probabilistic forecasts using the selected global hyperparameter configuration, causal effective-``R_t`` SIRS covariate projection, and the active ``cfg.run`` configuration.
 * ``scripts/partA/partA_04_evaluate_models.m``: Aggregates the forecast results, calculates WIS metrics, and produces final statistical summaries.
+* ``scripts/partB/partB_01_generate_truth.m``: Generates SEIR ground-truth trajectories for the same four analytic $R_t$ scenarios used in Part A.
+* ``scripts/partB/partB_02_run_fixed_forecasts.m``: Runs fixed Part A-selected AR/ARX configurations against SEIR truth using SIRS-style future covariate projection.
+* ``scripts/partB/partB_03_evaluate_models.m``: Computes Part B WIS summaries, SIRS-vs-SEIR state-projection errors, and Part B evaluation figures.
 
 ### Source Code (``src/``)
 * ``src/models/fit_arima.m``: Fits an autoregressive model to a historical reproduction number time series through a standardized ARIMA wrapper.
@@ -40,6 +46,7 @@ The implementation is divided into three major phases as outlined in the project
 * ``src/models/fit_ssest.m``: Fits an optimized discrete-time state-space model using iterative Prediction Error Minimization (PEM).
 * ``src/models/genData.m``: A general utility for generating synthetic data from compartmental epidemic models using URDME.
 * ``src/models/genData_SIRS.m``: Simulates SIRS trajectories from desired effective-``R_t`` inputs, computing the state-consistent internal transmission rates required by URDME.
+* ``src/models/genData_SEIR.m``: Simulates deterministic SEIR trajectories for Part B robustness testing.
 * ``src/plots/plot_model_performance.m``: Visualizes the comparative WIS distributions across various model configurations and scenarios.
 * ``src/plots/plot_rt_forecast_comparison.m``: Generates a unified visualization comparing the expanding-window forecast medians and predictive intervals against the ground truth.
 * ``src/plots/plot_rt_scenarios.m``: Generates a tiled summary figure displaying the predefined synthetic reproduction number profiles.
