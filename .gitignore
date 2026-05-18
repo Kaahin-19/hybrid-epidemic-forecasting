@@ -17,8 +17,6 @@ results/partB/logs/
 
 
 # Generated data
-data/partA/
-data/partB/
 data/F.mat
 data/R0a.mat
 data/R0b.mat
