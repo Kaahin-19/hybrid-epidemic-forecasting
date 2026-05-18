@@ -20,6 +20,9 @@ results/partB/logs/
 data/partA/
 data/partB/
 
+#  Generated data scripts
+genData.m
+
 # Report scratch and archived exports
 report/archive/
 report/stages/
