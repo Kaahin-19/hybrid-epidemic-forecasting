@@ -73,7 +73,7 @@ for i = 1:numel(cfg.scenarios)
         Rt_true, beta_curve, params.pop_size, slot.id);
 
     outPath = fullfile(cfg.output.data_dir, ...
-        sprintf('partB_01_truth_seir_%s.mat', slot.id));
+        sprintf('partB_01_truth_%s.mat', slot.id));
     save(outPath, 'umod', 'Rt_true', 'S_true', 'E_true', 'I_true', ...
         'R_true', 'tspan', 'params', 'cfg', 'beta_curve');
 

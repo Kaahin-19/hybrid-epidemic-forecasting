@@ -30,7 +30,7 @@ wis_alphas = cfg.forecast.wis_alphas;
 if ~exist(saveDir, 'dir'), mkdir(saveDir); end
 if ~exist(figDir, 'dir'),  mkdir(figDir); end
 
-fileList = dir(fullfile(dataDir, 'partB_01_truth_seir_*.mat'));
+fileList = dir(fullfile(dataDir, 'partB_01_truth_*.mat'));
 if isempty(fileList)
     error('FORECAST:NoData', ...
         'No SEIR truth files found. Run partB_01_generate_truth.m first.');
@@ -44,7 +44,7 @@ for i = 1:length(fileList)
     fullPath = fullfile(dataDir, filename);
     [~, name_core] = fileparts(filename);
 
-    scenario_id = strrep(name_core, 'partB_01_truth_seir_', '');
+    scenario_id = strrep(name_core, 'partB_01_truth_', '');
     fprintf('  - Processing Scenario: %s...\n', scenario_id);
 
     loaded  = load(fullPath);

@@ -67,7 +67,7 @@ for i = 1:length(files)
     file_detail_blocks = cell(length(results), 1);
     file_state_blocks  = cell(length(results), 1);
 
-    truth_path = fullfile(dataDir, sprintf('partB_01_truth_seir_%s.mat', scenario_id));
+    truth_path = fullfile(dataDir, sprintf('partB_01_truth_%s.mat', scenario_id));
     if ~exist(truth_path, 'file')
         error('EVAL:MissingTruth', 'Missing SEIR truth file: %s.', truth_path);
     end
@@ -525,7 +525,7 @@ function saved_paths = local_plot_scenario_projection_paths( ...
     for i = 1:numel(scenario_ids)
         scenario_id = scenario_ids(i);
         truth_path = fullfile(dataDir, ...
-            sprintf('partB_01_truth_seir_%s.mat', scenario_id));
+            sprintf('partB_01_truth_%s.mat', scenario_id));
 
         if ~exist(truth_path, 'file')
             warning('PLOT:MissingTruth', ...
