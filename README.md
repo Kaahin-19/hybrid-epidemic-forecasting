@@ -10,7 +10,7 @@ The implementation is divided into three major phases as outlined in the project
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Part A** | Synthetic Validation | Completed | 2026-05-18 | [ ] Pending | - |
 | **Part B** | Robustness Testing | Completed | 2026-05-18 | [ ] Pending | - |
-| **Part C** | Real-Data application | Completed | 2026-05-19 | [ ] Pending | - |
+| **Part C** | Real-Data Application | Completed | 2026-05-19 | [ ] Pending | - |
 
 ## Directory Structure
 
