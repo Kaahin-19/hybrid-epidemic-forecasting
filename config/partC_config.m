@@ -17,6 +17,7 @@ function cfg = partC_config()
 %           .sim      : Reproducibility settings.
 %           .input    : WHO COVID-19 input schema and preprocessing settings.
 %           .models   : Fixed Part C AR/ARX configurations.
+%           .refinement : Held-out local recalibration extension settings.
 %           .output   : Absolute paths for data and result storage.
 %
 %   See also PARTA_CONFIG, PARTC_01_PREPARE_REAL_DATA.
@@ -37,6 +38,7 @@ function cfg = partC_config()
     cfg.output.forecast_dir       = fullfile(cfg.output.root_dir, "forecasts");
     cfg.output.score_dir          = fullfile(cfg.output.root_dir, "scores");
     cfg.output.fig_dir            = fullfile(cfg.output.root_dir, "figures");
+    cfg.output.refinement_dir     = fullfile(cfg.output.root_dir, "refinement");
     cfg.output.log_dir            = fullfile(cfg.output.root_dir, "logs");
 
     %% 2. WHO Input Schema and Preprocessing
@@ -60,7 +62,20 @@ function cfg = partC_config()
     cfg.input.serial_interval_sd_days   = 2;
     cfg.input.serial_interval_max_lag_days = 21;
 
-    %% 3. Fixed Real-Data Model Comparison
+    %% 3. Local Refinement Extension
+    cfg.refinement = struct();
+    cfg.refinement.calibration_fraction = 0.80;
+    cfg.refinement.output_dir = cfg.output.refinement_dir;
+
+    cfg.refinement.ar_grid = struct();
+    cfg.refinement.ar_grid.p = 1:5;
+
+    cfg.refinement.arx_i_grid = struct();
+    cfg.refinement.arx_i_grid.na = 5:9;
+    cfg.refinement.arx_i_grid.nb = 1:3;
+    cfg.refinement.arx_i_grid.nk = 1:4;
+
+    %% 4. Fixed Real-Data Model Comparison
     cfg.models = repmat(struct( ...
         'model_type', '', ...
         'exo_mode', '', ...
