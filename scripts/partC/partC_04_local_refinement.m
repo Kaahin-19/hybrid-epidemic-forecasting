@@ -303,9 +303,33 @@ else
     fprintf('Holdout WIS comparison visualization skipped: no finite values.\n');
 end
 
+%% 5. Holdout Projected Infection Proxy Diagnostics
+% These figures translate forecasted Rt_est paths into projected I_scaled
+% infection proxy paths. They are explanatory diagnostics only and do not
+% affect the primary Part C Rt WIS evaluation above.
+fprintf('Stage: Plotting holdout projected infection proxy diagnostics\n');
+
+frozenProjectedIPath = fullfile(figDir, ...
+    'partC_04_projected_I_proxy_frozen.png');
+local_plot_holdout_projected_i_proxy_comparison( ...
+    "Frozen", cfg, selected_families, selected_params, Rt_true, I_scaled, ...
+    tspan, date, window_days, window_indices, holdout_pos, wis_alphas, ...
+    frozenProjectedIPath);
+fprintf('Frozen projected infection proxy figure saved to: %s\n', ...
+    frozenProjectedIPath);
+
+refinedProjectedIPath = fullfile(figDir, ...
+    'partC_04_projected_I_proxy_refined.png');
+local_plot_holdout_projected_i_proxy_comparison( ...
+    "Refined", cfg, selected_families, selected_params, Rt_true, I_scaled, ...
+    tspan, date, window_days, window_indices, holdout_pos, wis_alphas, ...
+    refinedProjectedIPath);
+fprintf('Refined projected infection proxy figure saved to: %s\n', ...
+    refinedProjectedIPath);
+
 fprintf('=== Part C Local Refinement Extension Complete ===\n\n');
 
-%% 5. Local Functions
+%% 6. Local Functions
 function selected_families = local_parse_selected_model_families(raw_value)
 %LOCAL_PARSE_SELECTED_MODEL_FAMILIES Read PARTC_REFINEMENT_MODELS.
     raw_value = strtrim(string(raw_value));
@@ -678,6 +702,9 @@ function [Rt_pred, out_alphas, Rt_lower, Rt_upper] = local_fit_partC_model( ...
                 fit_arima(Rt_past, params(1), 0, 0, horizon, wis_alphas);
 
         case 'ARX'
+            % This unchanged Rt WIS path uses the retrospective Part C ARX/I
+            % setup. Projected infection proxy diagnostics use the no-future
+            % I_scaled helper below instead.
             U_past = I_scaled(1:idx_T);
             U_future = I_scaled(idx_T+1:idx_end);
             nb_vec = params(2);
@@ -1084,4 +1111,417 @@ function h = local_fill_interval(ax, t_fcst, lower_bound, upper_bound, ...
             'FaceAlpha', face_alpha, 'EdgeColor', 'none', ...
             'DisplayName', display_name);
     end
+end
+
+function local_plot_holdout_projected_i_proxy_comparison( ...
+    configuration_label, cfg, selected_families, selected_params, Rt_true, ...
+    I_scaled, tspan, date, window_days, window_indices, holdout_pos, ...
+    wis_alphas, out_path)
+%LOCAL_PLOT_HOLDOUT_PROJECTED_I_PROXY_COMPARISON Plot holdout I_scaled paths.
+    [ar_params, ar_order_text] = local_projection_params_for_family( ...
+        'AR', configuration_label, cfg, selected_families, selected_params);
+    [arx_params, arx_order_text] = local_projection_params_for_family( ...
+        'ARX', configuration_label, cfg, selected_families, selected_params);
+
+    ar_rows = local_projected_i_proxy_rows_for_order( ...
+        'AR', 'None', configuration_label, ar_params, Rt_true, I_scaled, ...
+        tspan, date, window_days, window_indices, holdout_pos, cfg, ...
+        wis_alphas);
+    arx_rows = local_projected_i_proxy_rows_for_order( ...
+        'ARX', 'I', configuration_label, arx_params, Rt_true, I_scaled, ...
+        tspan, date, window_days, window_indices, holdout_pos, cfg, ...
+        wis_alphas);
+
+    [observed_dates, observed_i_scaled] = local_observed_holdout_i_proxy( ...
+        I_scaled, date, window_indices, holdout_pos, cfg);
+    [ar_dates, ar_i_scaled] = local_median_projected_i_proxy_by_date(ar_rows);
+    [arx_dates, arx_i_scaled] = local_median_projected_i_proxy_by_date(arx_rows);
+
+    fig = figure('Name', sprintf('Part C Projected I_proxy %s', ...
+        char(configuration_label)), 'Visible', 'off');
+    fig.Units = 'centimeters';
+    fig.Position(3) = 17.0;
+    fig.Position(4) = 8.5;
+
+    ax = axes(fig);
+    hold(ax, 'on');
+    axtoolbar(ax, {'export'});
+
+    hObserved = plot(ax, observed_dates, observed_i_scaled, 'k-', ...
+        'LineWidth', 2.0, 'DisplayName', 'Observed infection proxy');
+
+    if isempty(ar_dates)
+        hAR = plot(ax, observed_dates(1), NaN, '--', ...
+            'Color', [0.00, 0.45, 0.74], 'LineWidth', 1.7, ...
+            'DisplayName', 'Projected infection proxy from AR/None');
+    else
+        hAR = plot(ax, ar_dates, ar_i_scaled, '--', ...
+            'Color', [0.00, 0.45, 0.74], 'LineWidth', 1.7, ...
+            'DisplayName', 'Projected infection proxy from AR/None');
+    end
+
+    if isempty(arx_dates)
+        hARX = plot(ax, observed_dates(1), NaN, '-.', ...
+            'Color', [0.85, 0.33, 0.10], 'LineWidth', 1.7, ...
+            'DisplayName', 'Projected infection proxy from ARX/I');
+    else
+        hARX = plot(ax, arx_dates, arx_i_scaled, '-.', ...
+            'Color', [0.85, 0.33, 0.10], 'LineWidth', 1.7, ...
+            'DisplayName', 'Projected infection proxy from ARX/I');
+    end
+
+    [y_limits, y_axis_bounded] = local_projected_i_proxy_ylim( ...
+        observed_i_scaled, ar_i_scaled, arx_i_scaled);
+    ylim(ax, y_limits);
+    xlim(ax, [observed_dates(1), observed_dates(end)]);
+
+    title_lines = {sprintf(['Part C Holdout Projected Infection Proxy ' ...
+        '(%s Orders)'], char(configuration_label)), ...
+        sprintf('AR/None %s | ARX/I %s', char(ar_order_text), ...
+        char(arx_order_text))};
+    if y_axis_bounded
+        title_lines{end + 1} = 'I_scaled axis bounded for readability';
+    end
+    title(ax, title_lines);
+    xlabel(ax, 'Date');
+    ylabel(ax, 'I_scaled infection proxy');
+    grid(ax, 'on');
+    xtickformat(ax, 'yyyy-MM');
+    legend(ax, [hObserved, hAR, hARX], ...
+        {'Observed infection proxy', ...
+        'Projected infection proxy from AR/None', ...
+        'Projected infection proxy from ARX/I'}, ...
+        'Location', 'best');
+
+    exportgraphics(fig, out_path, 'Resolution', 300);
+    close(fig);
+end
+
+function [params, order_text] = local_projection_params_for_family( ...
+    model_family, configuration_label, cfg, selected_families, selected_params)
+%LOCAL_PROJECTION_PARAMS_FOR_FAMILY Choose frozen or refined order values.
+    if string(configuration_label) == "Frozen"
+        model_cfg = local_frozen_model_cfg(cfg, model_family);
+        params = double(model_cfg.selected_model);
+        order_text = local_order_text(model_family, params);
+        return;
+    end
+
+    family_idx = find(selected_families == string(model_family), 1);
+    if isempty(family_idx)
+        warning('REFINE:MissingRefinedIProxyProjectionOrder', ...
+            ['No locally refined %s order was selected. The refined ' ...
+            'projected infection proxy figure uses the frozen %s order ' ...
+            'for that curve.'], model_family, model_family);
+        model_cfg = local_frozen_model_cfg(cfg, model_family);
+        params = double(model_cfg.selected_model);
+    else
+        params = double(selected_params{family_idx});
+    end
+
+    order_text = local_order_text(model_family, params);
+end
+
+function rows = local_projected_i_proxy_rows_for_order( ...
+    model_family, exo_mode, configuration_label, params, Rt_true, I_scaled, ...
+    tspan, date, window_days, window_indices, selected_pos, cfg, wis_alphas)
+%LOCAL_PROJECTED_I_PROXY_ROWS_FOR_ORDER Project I_scaled over holdout windows.
+    horizon = cfg.forecast.horizon;
+    row_blocks = cell(numel(selected_pos), 1);
+    order_text = local_order_text(model_family, params);
+
+    fprintf('Stage: Projected infection proxy %s %s/%s %s\n', ...
+        char(configuration_label), model_family, exo_mode, char(order_text));
+
+    for i = 1:numel(selected_pos)
+        idx_T = window_indices(selected_pos(i));
+        idx_end = idx_T + horizon;
+
+        if idx_T < 1 || idx_end > numel(I_scaled)
+            continue;
+        end
+
+        try
+            [forecast_Rt, projected_i_scaled] = ...
+                local_fit_partC_model_for_i_proxy_projection( ...
+                model_family, params, Rt_true(1:idx_T), ...
+                I_scaled(1:idx_T), horizon, wis_alphas, cfg);
+        catch ME
+            warning('REFINE:IProxyProjectionFailure', ...
+                ['Projected infection proxy failed for %s/%s window %d: ' ...
+                '%s'], model_family, exo_mode, window_days(selected_pos(i)), ...
+                ME.message);
+            forecast_Rt = nan(horizon, 1);
+            projected_i_scaled = nan(horizon, 1);
+        end
+
+        forecast_Rt = double(forecast_Rt(:));
+        projected_i_scaled = double(projected_i_scaled(:));
+        num_rows = min([horizon, numel(forecast_Rt), ...
+            numel(projected_i_scaled), numel(I_scaled) - idx_T]);
+        if num_rows < 1
+            continue;
+        end
+
+        horizon_idx = (1:num_rows)';
+        target_idx = idx_T + horizon_idx;
+
+        row_blocks{i} = table( ...
+            repmat("real", num_rows, 1), ...
+            repmat(string(model_family), num_rows, 1), ...
+            repmat(string(exo_mode), num_rows, 1), ...
+            repmat(string(configuration_label), num_rows, 1), ...
+            repmat(string(order_text), num_rows, 1), ...
+            repmat(window_days(selected_pos(i)), num_rows, 1), ...
+            repmat(date(idx_T), num_rows, 1), ...
+            horizon_idx, ...
+            double(tspan(target_idx)), ...
+            date(target_idx), ...
+            I_scaled(target_idx), ...
+            projected_i_scaled(1:num_rows), ...
+            forecast_Rt(1:num_rows), ...
+            'VariableNames', {'Scenario', 'Model', 'ExoMode', ...
+            'Configuration', 'OrderText', 'WindowDay', 'OriginDate', ...
+            'HorizonIdx', 'ForecastDay', 'ForecastDate', ...
+            'Observed_I_scaled', 'Projected_I_scaled', 'Forecast_Rt'});
+    end
+
+    row_blocks = row_blocks(~cellfun('isempty', row_blocks));
+    if isempty(row_blocks)
+        rows = local_empty_projected_i_proxy_table();
+    else
+        rows = vertcat(row_blocks{:});
+    end
+end
+
+function [Rt_pred, projected_i_scaled] = ...
+    local_fit_partC_model_for_i_proxy_projection(model_family, params, ...
+    Rt_past, I_scaled_history, horizon, wis_alphas, cfg)
+%LOCAL_FIT_PARTC_MODEL_FOR_I_PROXY_PROJECTION Forecast Rt without future I_scaled.
+    switch model_family
+        case 'AR'
+            [Rt_pred, ~, ~, ~, ~] = fit_arima(Rt_past, params(1), ...
+                0, 0, horizon, wis_alphas);
+            projected_i_scaled = local_project_i_scaled_renewal( ...
+                I_scaled_history, Rt_pred, cfg);
+
+        case 'ARX'
+            [Rt_pred, projected_i_scaled] = local_fit_arx_i_no_future_proxy( ...
+                Rt_past, I_scaled_history, params, horizon, wis_alphas, cfg);
+
+        otherwise
+            error('REFINE:UnknownModelFamily', ...
+                'Unsupported projected infection proxy model family: %s.', ...
+                model_family);
+    end
+end
+
+function [Rt_pred, projected_i_scaled] = local_fit_arx_i_no_future_proxy( ...
+    Rt_past, I_scaled_history, params, horizon, wis_alphas, cfg)
+%LOCAL_FIT_ARX_I_NO_FUTURE_PROXY Forecast ARX/I using projected I_scaled input.
+    nb_vec = params(2);
+    nk_vec = params(3);
+    max_iterations = 6;
+    convergence_tol = 1e-5;
+
+    U_future = local_initial_projected_i_proxy_input( ...
+        I_scaled_history, Rt_past, horizon, cfg);
+    if any(~isfinite(U_future))
+        U_future = repmat(I_scaled_history(end), horizon, 1);
+    end
+
+    for iter = 1:max_iterations
+        [Rt_candidate, ~, ~, ~, ~] = fit_arimax( ...
+            Rt_past, I_scaled_history, U_future, params(1), 0, 0, ...
+            nb_vec, nk_vec, horizon, wis_alphas, [], [], '', cfg.sim.seed);
+        projected_candidate = local_project_i_scaled_renewal( ...
+            I_scaled_history, Rt_candidate, cfg);
+
+        if any(~isfinite(Rt_candidate(:))) || ...
+                any(~isfinite(projected_candidate(:)))
+            Rt_pred = Rt_candidate;
+            projected_i_scaled = projected_candidate;
+            return;
+        end
+
+        denominator = max(1, max(abs(U_future(:))));
+        relative_change = max(abs(projected_candidate(:) - ...
+            U_future(:))) / denominator;
+        U_future = projected_candidate;
+
+        if relative_change < convergence_tol
+            break;
+        end
+    end
+
+    [Rt_pred, ~, ~, ~, ~] = fit_arimax( ...
+        Rt_past, I_scaled_history, U_future, params(1), 0, 0, nb_vec, ...
+        nk_vec, horizon, wis_alphas, [], [], '', cfg.sim.seed);
+    projected_i_scaled = local_project_i_scaled_renewal( ...
+        I_scaled_history, Rt_pred, cfg);
+end
+
+function U_future = local_initial_projected_i_proxy_input( ...
+    I_scaled_history, Rt_past, horizon, cfg)
+%LOCAL_INITIAL_PROJECTED_I_PROXY_INPUT Seed ARX/I with persistence Rt projection.
+    last_Rt = Rt_past(end);
+    Rt_seed = repmat(last_Rt, horizon, 1);
+    U_future = local_project_i_scaled_renewal(I_scaled_history, Rt_seed, cfg);
+end
+
+function projected_i_scaled = local_project_i_scaled_renewal( ...
+    I_scaled_history, forecast_Rt, cfg)
+%LOCAL_PROJECT_I_SCALED_RENEWAL Apply the Part C renewal ratio recursively.
+    I_scaled_history = double(I_scaled_history(:));
+    forecast_Rt = double(forecast_Rt(:));
+    horizon = numel(forecast_Rt);
+
+    weights = local_partC_serial_interval_weights(cfg);
+    max_lag = numel(weights);
+    if numel(I_scaled_history) < max_lag
+        error('REFINE:InsufficientIProxyHistory', ...
+            ['Projected infection proxy needs at least %d historical ' ...
+            'I_scaled values.'], max_lag);
+    end
+
+    rolling_i_scaled = [I_scaled_history; nan(horizon, 1)];
+    for h = 1:horizon
+        current_idx = numel(I_scaled_history) + h;
+        lagged_i_scaled = rolling_i_scaled(current_idx - (1:max_lag));
+        renewal_lambda = sum(weights .* lagged_i_scaled);
+        rolling_i_scaled(current_idx) = forecast_Rt(h) * renewal_lambda;
+    end
+
+    projected_i_scaled = rolling_i_scaled(numel(I_scaled_history)+1:end);
+end
+
+function weights = local_partC_serial_interval_weights(cfg)
+%LOCAL_PARTC_SERIAL_INTERVAL_WEIGHTS Match Part C preprocessing weights.
+    mean_days = cfg.input.serial_interval_mean_days;
+    sd_days = cfg.input.serial_interval_sd_days;
+    max_lag = cfg.input.serial_interval_max_lag_days;
+
+    if mean_days <= 0 || sd_days <= 0 || max_lag < 1
+        error('REFINE:InvalidSerialInterval', ...
+            ['Serial interval mean, standard deviation, and max lag must ' ...
+            'be positive.']);
+    end
+
+    lag_days = (1:max_lag)';
+    shape = (mean_days / sd_days)^2;
+    scale = (sd_days^2) / mean_days;
+    weights = (lag_days.^(shape - 1) .* exp(-lag_days / scale)) ./ ...
+        (gamma(shape) * scale^shape);
+    weights = weights / sum(weights);
+end
+
+function rows = local_empty_projected_i_proxy_table()
+%LOCAL_EMPTY_PROJECTED_I_PROXY_TABLE Empty projected I_scaled diagnostic table.
+    rows = table( ...
+        strings(0, 1), ...
+        strings(0, 1), ...
+        strings(0, 1), ...
+        strings(0, 1), ...
+        strings(0, 1), ...
+        zeros(0, 1), ...
+        datetime.empty(0, 1), ...
+        zeros(0, 1), ...
+        zeros(0, 1), ...
+        datetime.empty(0, 1), ...
+        zeros(0, 1), ...
+        zeros(0, 1), ...
+        zeros(0, 1), ...
+        'VariableNames', {'Scenario', 'Model', 'ExoMode', ...
+        'Configuration', 'OrderText', 'WindowDay', 'OriginDate', ...
+        'HorizonIdx', 'ForecastDay', 'ForecastDate', ...
+        'Observed_I_scaled', 'Projected_I_scaled', 'Forecast_Rt'});
+end
+
+function [observed_dates, observed_i_scaled] = local_observed_holdout_i_proxy( ...
+    I_scaled, date, window_indices, holdout_pos, cfg)
+%LOCAL_OBSERVED_HOLDOUT_I_PROXY Extract observed I_scaled over holdout dates.
+    horizon = cfg.forecast.horizon;
+    holdout_origins = window_indices(holdout_pos);
+    start_idx = holdout_origins(1);
+    end_idx = min(max(holdout_origins + horizon), numel(I_scaled));
+    observed_dates = date(start_idx:end_idx);
+    observed_i_scaled = I_scaled(start_idx:end_idx);
+end
+
+function [forecast_dates, median_projected_i_scaled] = ...
+    local_median_projected_i_proxy_by_date(rows)
+%LOCAL_MEDIAN_PROJECTED_I_PROXY_BY_DATE Collapse overlapping projections.
+    forecast_dates = datetime.empty(0, 1);
+    median_projected_i_scaled = zeros(0, 1);
+
+    if isempty(rows)
+        return;
+    end
+
+    valid_idx = isfinite(rows.Projected_I_scaled);
+    if ~any(valid_idx)
+        return;
+    end
+
+    [forecast_dates, ~, group_id] = unique(rows.ForecastDate(valid_idx));
+    median_projected_i_scaled = splitapply(@median, ...
+        rows.Projected_I_scaled(valid_idx), group_id);
+end
+
+function [y_limits, y_axis_bounded] = local_projected_i_proxy_ylim( ...
+    observed_i_scaled, ar_i_scaled, arx_i_scaled)
+%LOCAL_PROJECTED_I_PROXY_YLIM Choose a readable I_scaled axis range.
+    observed_values = observed_i_scaled(isfinite(observed_i_scaled));
+    projected_values = [ar_i_scaled(:); arx_i_scaled(:)];
+    projected_values = projected_values(isfinite(projected_values));
+    all_values = [observed_values(:); projected_values(:)];
+
+    if isempty(all_values)
+        y_limits = [0, 1];
+        y_axis_bounded = false;
+        return;
+    end
+
+    all_values = all_values(all_values >= 0);
+    if isempty(all_values)
+        y_limits = [0, 1];
+        y_axis_bounded = false;
+        return;
+    end
+
+    full_max = max(all_values);
+    observed_max = 0;
+    if ~isempty(observed_values)
+        observed_max = max(observed_values);
+    end
+
+    projected_nonnegative = projected_values(projected_values >= 0);
+    if isempty(projected_nonnegative)
+        robust_projected_max = 0;
+    else
+        robust_projected_max = local_percentile(projected_nonnegative, 75);
+    end
+    display_max = max([observed_max, robust_projected_max, 1e-6]) * 1.25;
+    y_axis_bounded = full_max > display_max * 1.5;
+
+    if ~y_axis_bounded
+        display_max = max(full_max * 1.10, 1e-6);
+    end
+
+    y_limits = [0, display_max];
+end
+
+function pct_value = local_percentile(values, pct)
+%LOCAL_PERCENTILE Compute a simple nearest-rank percentile.
+    values = sort(double(values(:)));
+    values = values(isfinite(values));
+
+    if isempty(values)
+        pct_value = NaN;
+        return;
+    end
+
+    pct = min(max(double(pct), 0), 100);
+    rank_idx = max(1, ceil((pct / 100) * numel(values)));
+    pct_value = values(rank_idx);
 end
