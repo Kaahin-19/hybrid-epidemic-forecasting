@@ -14,6 +14,7 @@ SEIR.c
 # Runtime outputs
 results/partA/logs/
 results/partB/logs/
+results/partC/logs/
 
 
 # Generated data
@@ -21,6 +22,9 @@ data/F.mat
 data/R0a.mat
 data/R0b.mat
 data/R0c.mat
+
+# Downloaded WHO data files
+data/partC/raw/WHO-COVID-19-global-weekly-data.csv
 
 # Generated data scripts
 src/models/genData.m
