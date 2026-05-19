@@ -1,6 +1,6 @@
 # Hybrid Epidemic Forecasting
 
-This repository contains a MATLAB framework that combines mechanistic SIR models with statistical time-series models to infer and predict the time-varying reproduction number ($R_t$). The project evaluates whether this hybrid methodology outperforms pure data-driven or mechanistic approaches in short-term forecasting.
+This repository contains a MATLAB framework that combines mechanistic SIR models with statistical time-series methods to infer and forecast the effective reproduction number ($R_t$). The project evaluates whether this hybrid framework improves short-term forecasting performance relative to purely statistical or purely mechanistic approaches.
 
 ## Project Progress
 
