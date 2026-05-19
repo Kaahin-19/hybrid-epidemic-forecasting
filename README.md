@@ -15,9 +15,9 @@ The implementation is divided into three major phases as outlined in the project
 ## Directory Structure
 
 * ``config/``: Stores central configuration scripts for Part A synthetic validation, Part B robustness testing, and the Part C real-data proof of concept.
-* ``data/``: Contains generated SIRS truth under ``data/partA/``, generated SEIR truth under ``data/partB/``, and WHO COVID-19 raw inputs/processed Part C artifacts under ``data/partC/``.
-* ``results/``: Stores generated outputs, with artifacts under ``results/partA/``, ``results/partB/``, and ``results/partC/``.
-* ``scripts/``: Contains high-level execution scripts, with Part A scripts under ``scripts/partA/``, Part B scripts under ``scripts/partB/``, and Part C scripts under ``scripts/partC/``.
+* ``data/``: Contains generated SIRS truth under ``data/partA/``, generated SEIR truth under ``data/partB/``, and WHO COVID-19 raw inputs under ``data/partC/raw/`` with processed real-data artifacts under ``data/partC/processed/``.
+* ``results/``: Stores generated outputs, with artifacts under ``results/partA/``, ``results/partB/``, and ``results/partC/`` including forecasts, scores, figures, logs, and local-refinement outputs under ``results/partC/refinement/``.
+* ``scripts/``: Contains high-level execution scripts, with Part A scripts under ``scripts/partA/``, Part B scripts under ``scripts/partB/``, and Part C frozen real-data plus local-refinement scripts under ``scripts/partC/``.
 * ``src/``: Core functional modules, separated into ``models/`` (simulation and forecasting algorithms), ``plots/`` (visualization helpers), and ``signals/`` (analytic $R_t$ generators).
 
 ## Active Files Summary
@@ -26,10 +26,10 @@ The implementation is divided into three major phases as outlined in the project
 * ``startup.m``: Initializes the project environment by dynamically adding internal subdirectories to the active MATLAB path.
 * ``run_partA_pipeline.sh``: Orchestrates the Part A SIRS synthetic-validation pipeline and writes artifacts under ``data/partA/`` and ``results/partA/``.
 * ``run_partB_pipeline.sh``: Orchestrates the Part B SEIR robustness pipeline and writes artifacts under ``data/partB/`` and ``results/partB/``.
-* ``run_partC_pipeline.sh``: Orchestrates the Part C WHO COVID-19 proof-of-concept pipeline and writes artifacts under ``data/partC/`` and ``results/partC/``.
+* ``run_partC_pipeline.sh``: Orchestrates the Part C WHO COVID-19 proof-of-concept pipeline in frozen or refined mode, supports ``--models`` for refined AR/ARX runs, and writes artifacts under ``data/partC/`` and ``results/partC/``.
 * ``config/partA_config.m``: Defines the Part A time grid, analytic $R_t$ scenarios, SIRS parameters, active model/exogenous-input settings, forecast settings, and output paths.
 * ``config/partB_config.m``: Reuses the Part A scenarios and forecast settings while adding SEIR truth parameters, SIRS projection parameters, fixed Part A tuning references, and Part B output paths.
-* ``config/partC_config.m``: Reuses the Part A forecast settings while defining WHO COVID-19 input paths, the Sweden default date window, case preprocessing settings, Part C output paths, and the fixed AR/None versus ARX/I comparison.
+* ``config/partC_config.m``: Reuses the Part A forecast settings while defining WHO COVID-19 input paths, the Sweden default date window, case preprocessing settings, Part C output paths, fixed AR/None versus ARX/I configurations, and local-refinement grids.
 
 ### Execution Scripts
 * ``scripts/partA/partA_00_make_scenarios.m``: Generates and visualizes the distinct effective reproduction-number scenarios (seasonality, interventions, resurgences) to be used as ground truth.
@@ -43,6 +43,7 @@ The implementation is divided into three major phases as outlined in the project
 * ``scripts/partC/partC_01_prepare_real_data.m``: Reads the WHO daily COVID-19 case file, derives a smoothed case proxy and empirical ``Rt_est`` internally, and writes processed Part C real-data artifacts.
 * ``scripts/partC/partC_02_run_forecasts.m``: Runs fixed expanding-window AR/None and ARX/I forecasts for the WHO-derived real-data $R_t$ signal, using ``I_scaled`` as the ARX/I exogenous input, and writes full plus capped diagnostic forecast figures.
 * ``scripts/partC/partC_03_evaluate_models.m``: Computes the primary all-window Part C WIS summaries for ``Rt_est``, the fixed-comparison evaluation figure, and diagnostic explosive-window/stable-window artifacts.
+* ``scripts/partC/partC_04_local_refinement.m``: Runs held-out local AR/ARX recalibration, all-window diagnostics, holdout WIS comparison, refined forecast figures, and projected infection-proxy diagnostics.
 
 ### Source Code (``src/``)
 * ``src/models/fit_arima.m``: Fits an autoregressive model to a historical reproduction number time series through a standardized ARIMA wrapper.
