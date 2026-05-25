@@ -10,6 +10,7 @@ SEIR.c
 *.mexa64
 *.mexw64
 *.mexmaci64
+build/
 
 # Runtime outputs
 results/partA/logs/
