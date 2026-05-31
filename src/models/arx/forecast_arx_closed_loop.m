@@ -1,12 +1,14 @@
-function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = ...
+function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds, timing] = ...
     forecast_arx_closed_loop(model, Rt_hist, U_hist, sirs_state, sirs_params, ...
-    exo_mode, horizon, interval_alphas, sim_seed)
+    exo_mode, horizon, interval_alphas, sim_seed, options)
 %FORECAST_ARX_CLOSED_LOOP Forecast ARX recursively with epidemic feedback.
 %
 %   Syntax:
 %       [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = ...
 %           forecast_arx_closed_loop(model, Rt_hist, U_hist, sirs_state, ...
 %           sirs_params, exo_mode, horizon, interval_alphas, sim_seed)
+%       [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds, timing] = ...
+%           forecast_arx_closed_loop(..., options)
 %
 %   Description:
 %       Forecasts a fitted ARX model over the requested horizon by applying
@@ -24,6 +26,7 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = ...
 %       horizon         - Positive integer forecast horizon.
 %       interval_alphas - Vector of interval miscoverage rates.
 %       sim_seed        - URDME simulation seed.
+%       options         - Optional structure for non-invasive diagnostics.
 %
 %   Outputs:
 %       Rt_curve        - Horizon-by-one forecast median vector.
@@ -31,21 +34,30 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = ...
 %       interval_alphas - Row vector of interval miscoverage rates.
 %       lower_bounds    - Horizon-by-numAlphas lower interval matrix.
 %       upper_bounds    - Horizon-by-numAlphas upper interval matrix.
+%       timing          - Optional diagnostic timing structure.
 %
 %   See also FIT_ARX_MODEL, RECURSIVE_ARX_STEP, ADVANCE_EPIDEMIC_STATE.
 %
 % A. M. Kaahin 2026-05-31
+% Modified: 2026-06-01
 
     %% 1. Input Validation
+    if nargin < 10 || isempty(options)
+        options = struct();
+    end
+
     horizon = local_validate_horizon(horizon);
     interval_alphas = local_validate_alphas(interval_alphas);
     Rt_hist = local_validate_rt_history(Rt_hist);
     U_hist = local_validate_exogenous_history(U_hist, numel(Rt_hist));
     aicc = model.aicc;
+    timing = local_init_timing(options, nargout);
 
     if ~isfield(model, 'is_persistence') || model.is_persistence
         [Rt_curve, lower_bounds, upper_bounds] = ...
             local_persistence_forecast(Rt_hist(end), horizon, interval_alphas);
+        timing.used_persistence_fallback = true;
+        timing.fallback_identifier = "ARX:PersistenceModel";
         return;
     end
 
@@ -56,6 +68,9 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = ...
 
     %% 2. Closed-Loop Forecast
     try
+        if timing.collect_timing
+            forecast_tic = tic;
+        end
         rolling_log_Rt = log(max(Rt_hist, eps));
         rolling_U = U_hist;
         current_state = reshape(double(sirs_state), 1, []);
@@ -65,17 +80,42 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = ...
         sim_options = struct('solver', 'uds', 'compile', false, 'seed', sim_seed);
 
         for h = 1:horizon
+            if timing.collect_timing
+                step_tic = tic;
+            end
             next_log_Rt = recursive_arx_step(model.coefficients, rolling_log_Rt, rolling_U);
+            if timing.collect_timing
+                timing.recursive_arx_step_total = timing.recursive_arx_step_total + toc(step_tic);
+                timing.recursive_arx_step_calls = timing.recursive_arx_step_calls + 1;
+            end
+
             Rt_next = exp(next_log_Rt);
             if ~isfinite(Rt_next) || Rt_next <= 0
                 error('ARX:InvalidForecastOutput', ...
                     'Closed-loop ARX Rt forecast is invalid.');
             end
 
+            if timing.collect_timing
+                advance_tic = tic;
+            end
             current_state = advance_epidemic_state( ...
                 "SIRS", current_state, Rt_next, sirs_params, sim_options);
+            if timing.collect_timing
+                timing.advance_epidemic_state_total = timing.advance_epidemic_state_total + toc(advance_tic);
+                timing.advance_epidemic_state_calls = timing.advance_epidemic_state_calls + 1;
+            end
+
+            if timing.collect_timing
+                extract_tic = tic;
+            end
             U_next = extract_exogenous_from_state( ...
                 current_state, exo_mode, sirs_params.pop_size);
+            if timing.collect_timing
+                timing.extract_exogenous_from_state_total = ...
+                    timing.extract_exogenous_from_state_total + toc(extract_tic);
+                timing.extract_exogenous_from_state_calls = ...
+                    timing.extract_exogenous_from_state_calls + 1;
+            end
 
             if numel(U_next) ~= size(rolling_U, 2)
                 error('ARX:InvalidExogenousState', ...
@@ -93,6 +133,9 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = ...
         [Rt_curve, lower_bounds, upper_bounds] = ...
             local_log_normal_output(pred_log_Rt, pred_sd, interval_alphas);
         local_validate_forecast_output(Rt_curve, lower_bounds, upper_bounds);
+        if timing.collect_timing
+            timing.forecast_arx_closed_loop_total = toc(forecast_tic);
+        end
     catch ME
         if local_is_structural_arx_error(ME)
             rethrow(ME);
@@ -101,7 +144,29 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = ...
         [Rt_curve, lower_bounds, upper_bounds] = ...
             local_persistence_forecast(Rt_hist(end), horizon, interval_alphas);
         aicc = inf;
+        timing.used_persistence_fallback = true;
+        timing.fallback_identifier = string(ME.identifier);
     end
+end
+
+function timing = local_init_timing(options, requested_outputs)
+%LOCAL_INIT_TIMING Initialize non-invasive profiling fields.
+    collect_timing = requested_outputs >= 6;
+    if isfield(options, 'collect_timing') && ~isempty(options.collect_timing)
+        collect_timing = logical(options.collect_timing);
+    end
+
+    timing = struct();
+    timing.collect_timing = collect_timing;
+    timing.forecast_arx_closed_loop_total = 0;
+    timing.recursive_arx_step_total = 0;
+    timing.advance_epidemic_state_total = 0;
+    timing.extract_exogenous_from_state_total = 0;
+    timing.recursive_arx_step_calls = 0;
+    timing.advance_epidemic_state_calls = 0;
+    timing.extract_exogenous_from_state_calls = 0;
+    timing.used_persistence_fallback = false;
+    timing.fallback_identifier = "";
 end
 
 function horizon = local_validate_horizon(horizon)

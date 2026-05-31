@@ -1,4 +1,4 @@
-function model = fit_arx_model(Rt_hist, U_hist, na, nb_vec, nk_vec, options)
+function [model, timing] = fit_arx_model(Rt_hist, U_hist, na, nb_vec, nk_vec, options)
 %FIT_ARX_MODEL Fit an ARX model once for Part A model selection.
 %
 %   Syntax:
@@ -22,14 +22,20 @@ function model = fit_arx_model(Rt_hist, U_hist, na, nb_vec, nk_vec, options)
 %
 %   Outputs:
 %       model - Structure containing the fitted ARX model and coefficients.
+%       timing - Optional diagnostic timing structure.
 %
 %   See also EXTRACT_ARX_COEFFICIENTS, FORECAST_ARX_CLOSED_LOOP.
 %
 % A. M. Kaahin 2026-05-31
+% Modified: 2026-06-01
 
     %% 1. Input Validation
     if nargin < 6 || isempty(options)
         options = struct();
+    end
+    timing = local_init_timing(nargout);
+    if timing.collect_timing
+        total_tic = tic;
     end
 
     na = local_validate_order(na, 'na');
@@ -54,23 +60,75 @@ function model = fit_arx_model(Rt_hist, U_hist, na, nb_vec, nk_vec, options)
     if std(log_Rt) < 1e-8 || numel(log_Rt) <= num_parameters + 1 || ...
             numel(log_Rt) <= max_lag + 1
         model.is_persistence = true;
+        timing.used_persistence_fallback = true;
+        timing.fallback_identifier = "ARX:InsufficientOrConstantHistory";
+        if timing.collect_timing
+            timing.fit_arx_model_total = toc(total_tic);
+        end
         return;
     end
 
     %% 3. Model Fitting
     try
+        if timing.collect_timing
+            iddata_tic = tic;
+        end
         fit_data = iddata(log_Rt, U_hist, 1);
+        if timing.collect_timing
+            timing.iddata_total = timing.iddata_total + toc(iddata_tic);
+            timing.iddata_calls = timing.iddata_calls + 1;
+            arx_tic = tic;
+        end
+
         sys = arx(fit_data, [na, nb_vec, nk_vec]);
+        if timing.collect_timing
+            timing.arx_total = timing.arx_total + toc(arx_tic);
+            timing.arx_calls = timing.arx_calls + 1;
+            extract_tic = tic;
+        end
+
         coefficients = extract_arx_coefficients(sys, nb_vec, nk_vec);
+        if timing.collect_timing
+            timing.extract_arx_coefficients_total = ...
+                timing.extract_arx_coefficients_total + toc(extract_tic);
+            timing.extract_arx_coefficients_calls = ...
+                timing.extract_arx_coefficients_calls + 1;
+            residual_tic = tic;
+        end
 
         model.sys = sys;
         model.coefficients = coefficients;
         model.aicc = local_extract_aicc(sys);
         model.residual_std = local_arx_residual_std(coefficients, log_Rt, U_hist);
+        if timing.collect_timing
+            timing.residual_std_total = timing.residual_std_total + toc(residual_tic);
+            timing.fit_arx_model_total = toc(total_tic);
+        end
     catch
         model.is_persistence = true;
         model.aicc = inf;
+        timing.used_persistence_fallback = true;
+        timing.fallback_identifier = "ARX:FitFailed";
+        if timing.collect_timing
+            timing.fit_arx_model_total = toc(total_tic);
+        end
     end
+end
+
+function timing = local_init_timing(requested_outputs)
+%LOCAL_INIT_TIMING Initialize optional fit diagnostics.
+    timing = struct();
+    timing.collect_timing = requested_outputs >= 2;
+    timing.fit_arx_model_total = 0;
+    timing.iddata_total = 0;
+    timing.arx_total = 0;
+    timing.extract_arx_coefficients_total = 0;
+    timing.residual_std_total = 0;
+    timing.iddata_calls = 0;
+    timing.arx_calls = 0;
+    timing.extract_arx_coefficients_calls = 0;
+    timing.used_persistence_fallback = false;
+    timing.fallback_identifier = "";
 end
 
 function model = local_base_model(Rt_hist, na, nb_vec, nk_vec)
@@ -168,7 +226,7 @@ function residual_std = local_arx_residual_std(coefficients, log_Rt, U_hist)
     residuals = nan(max(0, numel(log_Rt) - max_lag), 1);
 
     for t = (max_lag + 1):numel(log_Rt)
-        y_pred = recursive_arx_step(coefficients, log_Rt(1:(t - 1)), U_hist(1:(t - 1), :));
+        y_pred = local_arx_one_step(coefficients, log_Rt(1:(t - 1)), U_hist(1:(t - 1), :));
         residuals(t - max_lag) = log_Rt(t) - y_pred;
     end
 
@@ -181,5 +239,31 @@ function residual_std = local_arx_residual_std(coefficients, log_Rt, U_hist)
 
     if isempty(residual_std) || ~isfinite(residual_std) || residual_std < 0
         residual_std = 0;
+    end
+end
+
+function next_log_Rt = local_arx_one_step(coefficients, rolling_log_Rt, rolling_U)
+%LOCAL_ARX_ONE_STEP Compute one ARX prediction for residual diagnostics.
+    rolling_log_Rt = double(rolling_log_Rt(:));
+    rolling_U = double(rolling_U);
+    if isvector(rolling_U)
+        rolling_U = rolling_U(:);
+    end
+
+    num_history = numel(rolling_log_Rt);
+    next_log_Rt = 0;
+    for lag = 1:coefficients.na
+        next_log_Rt = next_log_Rt - ...
+            coefficients.a_values(lag) * rolling_log_Rt(num_history + 1 - lag);
+    end
+
+    for input_idx = 1:coefficients.num_inputs
+        b_values = coefficients.B{input_idx};
+        for coeff_idx = 1:coefficients.nb_vec(input_idx)
+            input_lag = coefficients.nk_vec(input_idx) + coeff_idx - 1;
+            history_idx = num_history + 1 - input_lag;
+            next_log_Rt = next_log_Rt + ...
+                b_values(coeff_idx) * rolling_U(history_idx, input_idx);
+        end
     end
 end
