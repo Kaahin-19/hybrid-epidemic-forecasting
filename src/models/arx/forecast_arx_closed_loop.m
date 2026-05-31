@@ -13,8 +13,8 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds, timing] =
 %   Description:
 %       Forecasts a fitted ARX model over the requested horizon by applying
 %       stored ARX coefficients recursively. Each predicted effective Rt
-%       advances the SIRS state directly through URDME, and the next
-%       exogenous input is extracted from the advanced state.
+%       advances the SIRS state through a reusable URDME stepper, and the
+%       next exogenous input is extracted from the advanced state.
 %
 %   Inputs:
 %       model           - Structure returned by fit_arx_model.
@@ -36,7 +36,7 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds, timing] =
 %       upper_bounds    - Horizon-by-numAlphas upper interval matrix.
 %       timing          - Optional diagnostic timing structure.
 %
-%   See also FIT_ARX_MODEL, RECURSIVE_ARX_STEP, ADVANCE_EPIDEMIC_STATE.
+%   See also FIT_ARX_MODEL, RECURSIVE_ARX_STEP, INITIALIZE_SIRS_STEPPER.
 %
 % A. M. Kaahin 2026-05-31
 % Modified: 2026-06-01
@@ -78,6 +78,14 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds, timing] =
         pred_log_Rt = zeros(horizon, 1);
 
         sim_options = struct('solver', 'uds', 'compile', false, 'seed', sim_seed);
+        if timing.collect_timing
+            initialize_tic = tic;
+        end
+        stepper = initialize_sirs_stepper(sirs_params, sim_options);
+        if timing.collect_timing
+            timing.initialize_sirs_stepper_total = toc(initialize_tic);
+            timing.initialize_sirs_stepper_calls = 1;
+        end
 
         for h = 1:horizon
             if timing.collect_timing
@@ -98,11 +106,13 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds, timing] =
             if timing.collect_timing
                 advance_tic = tic;
             end
-            current_state = advance_epidemic_state( ...
-                "SIRS", current_state, Rt_next, sirs_params, sim_options);
+            [current_state, stepper] = advance_sirs_stepper( ...
+                stepper, current_state, Rt_next);
             if timing.collect_timing
-                timing.advance_epidemic_state_total = timing.advance_epidemic_state_total + toc(advance_tic);
-                timing.advance_epidemic_state_calls = timing.advance_epidemic_state_calls + 1;
+                timing.advance_sirs_stepper_total = ...
+                    timing.advance_sirs_stepper_total + toc(advance_tic);
+                timing.advance_sirs_stepper_calls = ...
+                    timing.advance_sirs_stepper_calls + 1;
             end
 
             if timing.collect_timing
@@ -159,12 +169,16 @@ function timing = local_init_timing(options, requested_outputs)
     timing = struct();
     timing.collect_timing = collect_timing;
     timing.forecast_arx_closed_loop_total = 0;
+    timing.initialize_sirs_stepper_total = 0;
     timing.recursive_arx_step_total = 0;
-    timing.advance_epidemic_state_total = 0;
+    timing.advance_sirs_stepper_total = 0;
     timing.extract_exogenous_from_state_total = 0;
+    timing.initialize_sirs_stepper_calls = 0;
     timing.recursive_arx_step_calls = 0;
-    timing.advance_epidemic_state_calls = 0;
+    timing.advance_sirs_stepper_calls = 0;
     timing.extract_exogenous_from_state_calls = 0;
+    timing.advance_epidemic_state_total = 0;
+    timing.advance_epidemic_state_calls = 0;
     timing.used_persistence_fallback = false;
     timing.fallback_identifier = "";
 end
