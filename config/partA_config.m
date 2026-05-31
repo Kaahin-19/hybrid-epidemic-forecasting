@@ -125,7 +125,7 @@ function cfg = partA_config()
     cfg.sim.seed = 1234;
 
     %% 7. Active Run Configuration
-    cfg.run.model_type = string(local_env_or_default('PARTA_MODEL_TYPE', 'AR'));
+    cfg.run.model_type = string(local_env_or_default('PARTA_MODEL_TYPE', 'ARX'));
     cfg.run.exo_mode   = string(local_env_or_default('PARTA_EXO_MODE', 'I'));
     local_validate_run_configuration(cfg.run.model_type, cfg.run.exo_mode);
 
