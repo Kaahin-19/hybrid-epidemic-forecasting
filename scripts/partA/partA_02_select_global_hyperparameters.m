@@ -18,7 +18,7 @@
 %       5. Persist machine-readable tuning artifacts for downstream use.
 %
 %   See also PARTA_CONFIG, GENDATA_SIRS, ...
-%            PARTA_01_GENERATE_TRUTH.
+%            PARTA_01_GENERATE_SYNTHETIC_TRUTH.
 
 % A. M. Kaahin 2026-03-28
 % Modified: 2026-05-04
@@ -41,7 +41,7 @@ tuningDir = cfg.output.tuning_dir;
 fileList  = dir(fullfile(dataDir, '*.mat'));
 
 if isempty(fileList)
-    error('TUNE:NoData', 'No synthetic truth files found. Run partA_01_generate_truth.m first.');
+    error('TUNE:NoData', 'No synthetic truth files found. Run partA_01_generate_synthetic_truth.m first.');
 end
 
 if ~exist(tuningDir, 'dir')

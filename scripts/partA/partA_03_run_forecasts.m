@@ -17,7 +17,7 @@
 %
 %   See also PARTA_CONFIG, GENDATA_SIRS, ...
 %            PLOT_RT_FORECAST_COMPARISON, ...
-%            PARTA_01_GENERATE_TRUTH, ... 
+%            PARTA_01_GENERATE_SYNTHETIC_TRUTH, ...
 %            PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS.
 
 % A. M. Kaahin 2026-02-19
@@ -47,7 +47,7 @@ wis_alphas = cfg.forecast.wis_alphas;
 fprintf('Using global hyperparameters: %s\n', mat2str(selected_model));
 
 if isempty(fileList)
-    error('FORECAST:NoData', 'No synthetic truth files found. Run partA_01_generate_truth.m first.');
+    error('FORECAST:NoData', 'No synthetic truth files found. Run partA_01_generate_synthetic_truth.m first.');
 end
 
 if ~exist(saveDir, 'dir')

@@ -17,12 +17,11 @@ Usage:
 
 Description:
   Runs the Part A pipeline in the following order:
-    1. scripts/partA/partA_00_make_scenarios.m
-    2. scripts/partA/partA_01_generate_synthetic_truth.m
-    3. For each selected valid Model/Exo combination:
+    1. scripts/partA/partA_01_generate_synthetic_truth.m
+    2. For each selected valid Model/Exo combination:
          - scripts/partA/partA_02_select_global_hyperparameters.m
          - scripts/partA/partA_03_run_forecasts.m
-    4. scripts/partA/partA_04_evaluate_models.m
+    3. scripts/partA/partA_04_evaluate_models.m
 
   Each invocation creates a timestamped run folder under:
     results/partA/logs/<run_id>/
@@ -460,12 +459,8 @@ if [[ "${#skipped_combos[@]}" -gt 0 ]]; then
   done
 fi
 
-run_matlab_scripts "Generating synthetic scenarios" \
-  "scenarios" "-" "-" "$RUN_LOG_DIR/partA_00_make_scenarios.log" \
-  "scripts/partA/partA_00_make_scenarios.m"
-
 run_matlab_scripts "Generating synthetic ground truth" \
-  "truth" "-" "-" "$RUN_LOG_DIR/partA_01_generate_truth.log" \
+  "truth" "-" "-" "$RUN_LOG_DIR/partA_01_generate_synthetic_truth.log" \
   "scripts/partA/partA_01_generate_synthetic_truth.m"
 
 for idx in "${!combo_models[@]}"; do

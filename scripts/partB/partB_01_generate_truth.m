@@ -36,7 +36,7 @@ for i = 1:numel(cfg.scenarios)
     fprintf('  - Processing %s (%s)... ', slot.id, slot.name);
 
     params      = cfg.seir;
-    Rt_true     = slot.generator(t, slot.params);
+    Rt_true     = generate_rt_signal(t, slot);
     params.solver = 'uds';
 
     if isfield(slot.params, 'I0')

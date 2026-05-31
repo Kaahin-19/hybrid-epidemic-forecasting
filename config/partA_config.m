@@ -23,7 +23,7 @@ function cfg = partA_config()
 %           .forecast   : Hyperparameters for the hybrid model.
 %           .output     : Absolute paths for data and artifact storage.
 %
-%   See also PARTA_00_MAKE_SCENARIOS, PARTA_01_GENERATE_TRUTH, ...
+%   See also PARTA_01_GENERATE_SYNTHETIC_TRUTH, ...
 %            PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, ...
 %            PARTA_03_RUN_FORECASTS, PARTA_04_EVALUATE_MODELS.
 
@@ -44,7 +44,7 @@ function cfg = partA_config()
     cfg.scenarios = repmat(struct( ...
         "id", "", ...
         "name", "", ...
-        "generator", [], ...
+        "signal_type", "", ...
         "params", struct() ...
     ), 1, 4);
 
@@ -55,7 +55,7 @@ function cfg = partA_config()
     % Slot A1
     cfg.scenarios(1).id        = "A1"; 
     cfg.scenarios(1).name      = "Seasonal Forcing";
-    cfg.scenarios(1).generator = @rt_seasonal;
+    cfg.scenarios(1).signal_type = "seasonal";
     cfg.scenarios(1).params    = struct( ...
         "center", 1.2, ...
         "amp",    0.3, ...
@@ -65,7 +65,7 @@ function cfg = partA_config()
     % Slot A2
     cfg.scenarios(2).id        = "A2";
     cfg.scenarios(2).name      = "Policy Intervention";
-    cfg.scenarios(2).generator = @rt_sigmoid;
+    cfg.scenarios(2).signal_type = "sigmoid";
     cfg.scenarios(2).params    = struct( ...
         "high", 1.8, ...
         "low",  0.7, ...
@@ -77,7 +77,7 @@ function cfg = partA_config()
     % Slot A3
     cfg.scenarios(3).id        = "A3";
     cfg.scenarios(3).name      = "Damping Resurgence"; 
-    cfg.scenarios(3).generator = @rt_multi_wave;
+    cfg.scenarios(3).signal_type = "multi_wave";
     cfg.scenarios(3).params    = struct( ...
         "baseline", 0.6, ...  
         "mu1",      1 * wave_space, ...
@@ -94,7 +94,7 @@ function cfg = partA_config()
     % Slot A4
     cfg.scenarios(4).id        = "A4";
     cfg.scenarios(4).name      = "Amplifying Resurgence";
-    cfg.scenarios(4).generator = @rt_multi_wave;
+    cfg.scenarios(4).signal_type = "multi_wave";
     cfg.scenarios(4).params    = struct( ...
         "baseline", 0.6, ...  
         "mu1",      1 * wave_space, ...
@@ -118,6 +118,7 @@ function cfg = partA_config()
 
     %% 5. Ground-Truth Simulation
     cfg.truth.model_type = "SIRS";
+    cfg.truth.driver_type = "effective_Rt";
     cfg.truth.solver     = "uds";
     cfg.truth.compile    = true;
 
@@ -148,7 +149,8 @@ function cfg = partA_config()
 
     cfg.output.data_dir     = fullfile(repoRoot, "data", "partA");
     cfg.output.root_dir     = fullfile(repoRoot, "results", "partA");
-    cfg.output.tuning_dir   = fullfile(cfg.output.root_dir, "model_selection");
+    cfg.output.model_selection_dir = fullfile(cfg.output.root_dir, "model_selection");
+    cfg.output.tuning_dir   = cfg.output.model_selection_dir;
     cfg.output.forecast_dir = fullfile(cfg.output.root_dir, "forecasts");
     cfg.output.score_dir    = fullfile(cfg.output.root_dir, "evaluation");
     cfg.output.fig_dir      = fullfile(cfg.output.root_dir, "figures");

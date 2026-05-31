@@ -18,7 +18,7 @@ The implementation is divided into three major phases as outlined in the project
 * ``data/``: Contains generated SIRS truth under ``data/partA/``, generated SEIR truth under ``data/partB/``, and WHO COVID-19 raw inputs under ``data/partC/raw/`` with processed real-data artifacts under ``data/partC/processed/``.
 * ``results/``: Stores generated outputs, with Part A artifacts under ``results/partA/`` including ``model_selection/``, ``forecasts/``, ``evaluation/``, ``figures/``, ``tables/``, and ``logs/``; Part B and Part C artifacts include forecasts, scores, figures, logs, and local-refinement outputs under ``results/partC/refinement/``.
 * ``scripts/``: Contains high-level execution scripts, with Part A scripts under ``scripts/partA/``, Part B scripts under ``scripts/partB/``, and Part C frozen real-data plus local-refinement scripts under ``scripts/partC/``.
-* ``src/``: Core functional modules, separated into ``models/`` (simulation and forecasting algorithms), ``plots/`` (visualization helpers), and ``signals/`` (analytic $R_t$ generators).
+* ``src/``: Core functional modules, separated into ``scenarios/`` (analytic $R_t$ signals), ``epidemic/`` (ground-truth simulation), ``models/`` (forecasting algorithms and legacy simulators), and ``plots/`` (visualization helpers).
 
 ## Active Files Summary
 
@@ -32,7 +32,6 @@ The implementation is divided into three major phases as outlined in the project
 * ``config/partC_config.m``: Reuses the Part A forecast settings while defining WHO COVID-19 input paths, the Sweden default date window, case preprocessing settings, Part C output paths, fixed AR/None versus ARX/I configurations, and local-refinement grids.
 
 ### Execution Scripts
-* ``scripts/partA/partA_00_make_scenarios.m``: Generates and visualizes the distinct effective reproduction-number scenarios (seasonality, interventions, resurgences) to be used as ground truth.
 * ``scripts/partA/partA_01_generate_synthetic_truth.m``: Simulates the SIRS epidemic model to generate and save one synthetic ground-truth ``.mat`` artifact for each Part A scenario.
 * ``scripts/partA/partA_02_select_global_hyperparameters.m``: Selects one global hyperparameter configuration per model family and exogenous-input setting using cross-scenario WIS and the active ``cfg.run`` configuration.
 * ``scripts/partA/partA_03_run_forecasts.m``: Acts as a unified switchboard to execute expanding-window probabilistic forecasts using the selected global hyperparameter configuration, causal effective-``R_t`` SIRS covariate projection, and the active ``cfg.run`` configuration.
@@ -57,4 +56,3 @@ The implementation is divided into three major phases as outlined in the project
 * ``src/plots/plot_model_performance.m``: Visualizes the comparative WIS distributions across various model configurations and scenarios.
 * ``src/plots/plot_rt_forecast_comparison.m``: Generates a unified visualization comparing the expanding-window forecast medians and predictive intervals against the ground truth.
 * ``src/plots/plot_rt_scenarios.m``: Generates a tiled summary figure displaying the predefined synthetic reproduction number profiles.
-* ``src/signals/rt_multi_wave.m``, ``src/signals/rt_seasonal.m``, ``src/signals/rt_sigmoid.m``: Temporary compatibility wrappers for older callers that still use function handles from ``config/partA_config.m``.
