@@ -118,7 +118,6 @@ function cfg = partA_config()
 
     %% 5. Ground-Truth Simulation
     cfg.truth.model_type = "SIRS";
-    cfg.truth.driver_type = "effective_Rt";
     cfg.truth.solver     = "uds";
     cfg.truth.compile    = true;
 

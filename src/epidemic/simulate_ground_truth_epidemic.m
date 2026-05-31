@@ -27,6 +27,7 @@ function truth = simulate_ground_truth_epidemic(model_type, tspan, Rt_true, mode
 %   See also RPARSE, URDME, PARTA_01_GENERATE_SYNTHETIC_TRUTH.
 %
 % A. M. Kaahin 2026-05-31
+% Modified: 2026-05-31
 
     %% 1. Shared Input Validation
     model_type = upper(string(model_type));
@@ -96,6 +97,13 @@ function truth = local_simulate_sirs(tspan, Rt_true, model_params, sim_options)
     metadata.beta_formula = "beta_k = Rt_true(k) * gamma * N / S_k";
     metadata.num_intervals = numel(tspan) - 1;
     metadata.initial_state = U(:, 1);
+    if params.xi == 0
+        metadata.compartment_model_effective = "SIR";
+        metadata.waning_immunity = false;
+    else
+        metadata.compartment_model_effective = "SIRS";
+        metadata.waning_immunity = true;
+    end
     truth.metadata = metadata;
 end
 
@@ -220,9 +228,11 @@ function params = local_validate_sirs_params(model_params)
             error('EPIDEMIC:MissingModelParam', ...
                 'SIRS model_params.%s is required.', field_name);
         end
-        params.(field_name) = local_validate_positive_scalar( ...
-            params.(field_name), "model_params." + field_name);
     end
+
+    params.gamma = local_validate_positive_scalar(params.gamma, "model_params.gamma");
+    params.xi = local_validate_nonnegative_scalar(params.xi, "model_params.xi");
+    params.pop_size = local_validate_positive_scalar(params.pop_size, "model_params.pop_size");
 
     params.I0 = local_optional_nonnegative_scalar(params, 'I0', 500);
     params.R0_init = local_optional_nonnegative_scalar(params, 'R0_init', 0);
@@ -292,6 +302,14 @@ function value = local_validate_positive_scalar(value, label)
     value = double(value);
     if ~isscalar(value) || ~isfinite(value) || value <= 0
         error('EPIDEMIC:InvalidModelParam', '%s must be a finite positive scalar.', label);
+    end
+end
+
+function value = local_validate_nonnegative_scalar(value, label)
+%LOCAL_VALIDATE_NONNEGATIVE_SCALAR Validate a finite nonnegative scalar.
+    value = double(value);
+    if ~isscalar(value) || ~isfinite(value) || value < 0
+        error('EPIDEMIC:InvalidModelParam', '%s must be a finite nonnegative scalar.', label);
     end
 end
 

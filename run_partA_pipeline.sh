@@ -19,7 +19,7 @@ Description:
   Runs the Part A pipeline in the following order:
     1. scripts/partA/partA_01_generate_synthetic_truth.m
     2. For each selected valid Model/Exo combination:
-         - scripts/partA/partA_02_select_global_hyperparameters.m
+         - scripts/partA/partA_02_select_global_model_configurations.m
          - scripts/partA/partA_03_run_forecasts.m
     3. scripts/partA/partA_04_evaluate_models.m
 
@@ -472,10 +472,10 @@ for idx in "${!combo_models[@]}"; do
   PARTA_MODEL_TYPE="$model_name" \
   PARTA_EXO_MODE="$exo_name" \
   run_matlab_code \
-    "Selecting hyperparameters for ${model_name} | ${exo_name}" \
-    "tuning" "$model_name" "$exo_name" \
-    "$RUN_LOG_DIR/${safe_model}_${safe_exo}_tuning.log" \
-    "fprintf('Stage: Starting hyperparameter selection\\n'); run('scripts/partA/partA_02_select_global_hyperparameters.m'); fprintf('Stage: Hyperparameter selection complete\\n');"
+    "Selecting model configuration for ${model_name} | ${exo_name}" \
+    "model_selection" "$model_name" "$exo_name" \
+    "$RUN_LOG_DIR/${safe_model}_${safe_exo}_model_selection.log" \
+    "fprintf('Stage: Starting model-configuration selection\\n'); run('scripts/partA/partA_02_select_global_model_configurations.m'); fprintf('Stage: Model-configuration selection complete\\n');"
 
   PARTA_MODEL_TYPE="$model_name" \
   PARTA_EXO_MODE="$exo_name" \

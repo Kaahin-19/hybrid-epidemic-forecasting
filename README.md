@@ -33,7 +33,7 @@ The implementation is divided into three major phases as outlined in the project
 
 ### Execution Scripts
 * ``scripts/partA/partA_01_generate_synthetic_truth.m``: Simulates the SIRS epidemic model to generate and save one synthetic ground-truth ``.mat`` artifact for each Part A scenario.
-* ``scripts/partA/partA_02_select_global_hyperparameters.m``: Selects one global hyperparameter configuration per model family and exogenous-input setting using cross-scenario WIS and the active ``cfg.run`` configuration.
+* ``scripts/partA/partA_02_select_global_model_configurations.m``: Selects one global model configuration per model family and exogenous-input setting using cross-scenario WIS and the active ``cfg.run`` configuration.
 * ``scripts/partA/partA_03_run_forecasts.m``: Acts as a unified switchboard to execute expanding-window probabilistic forecasts using the selected global hyperparameter configuration, causal effective-``R_t`` SIRS covariate projection, and the active ``cfg.run`` configuration.
 * ``scripts/partA/partA_04_evaluate_models.m``: Aggregates the forecast results, calculates WIS metrics, and produces final statistical summaries.
 * ``scripts/partB/partB_01_generate_truth.m``: Generates SEIR ground-truth trajectories for the same four analytic $R_t$ scenarios used in Part A.
