@@ -79,16 +79,17 @@ function [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = local_fit_candidate( 
 
     switch char(model_type)
         case 'AR'
+            ar_model = fit_ar_model(Rt_past, params(1));
             [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = ...
-                fit_arima(Rt_past, params(1), 0, 0, horizon, wis_alphas);
+                forecast_ar_model(ar_model, horizon, wis_alphas);
 
         case 'ARX'
             nb_vec = repmat(params(2), 1, num_exo);
             nk_vec = repmat(params(3), 1, num_exo);
+            arx_model = fit_arx_model(Rt_past, U_past, params(1), nb_vec, nk_vec);
             [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = ...
-                fit_arimax(Rt_past, U_past, [], params(1), 0, 0, ...
-                nb_vec, nk_vec, horizon, wis_alphas, ...
-                sirs_state, sirs_cfg, exo_mode, sim_seed);
+                forecast_arx_closed_loop(arx_model, Rt_past, U_past, ...
+                sirs_state, sirs_cfg, exo_mode, horizon, wis_alphas, sim_seed);
 
         case 'N4SID'
             [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = ...
