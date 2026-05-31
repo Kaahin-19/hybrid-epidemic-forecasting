@@ -1,13 +1,13 @@
 function Rt = rt_sigmoid(t, p)
-%RT_SIGMOID Generate a sigmoid step effective reproduction-number signal.
+%RT_SIGMOID Compatibility wrapper for the sigmoid Rt signal.
 %
 %   Syntax:
 %       Rt = rt_sigmoid(t, p)
 %
 %   Description:
-%       Generates a smooth sigmoid transition from a high effective
-%       reproduction-number baseline to a lower level, typically used to
-%       model the impact of a policy intervention (e.g., lockdown).
+%       Delegates to generate_rt_signal. This wrapper is retained
+%       temporarily for scenario configurations and older scripts that still
+%       reference @rt_sigmoid.
 %
 %   Inputs:
 %       t - Time vector [days].
@@ -20,10 +20,10 @@ function Rt = rt_sigmoid(t, p)
 %   Outputs:
 %       Rt - Vector of effective reproduction-number values evaluated at t.
 %
-%   See also PARTA_CONFIG, RT_MULTI_WAVE, RT_SEASONAL.
+%   See also GENERATE_RT_SIGNAL, PARTA_CONFIG.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-03-28
+% Modified: 2026-05-31
 
-    Rt = p.high + (p.low - p.high) ./ (1 + exp(-p.k * (t - p.t0)));
+    Rt = generate_rt_signal(t, "sigmoid", p);
 end

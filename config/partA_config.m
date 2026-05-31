@@ -17,17 +17,18 @@ function cfg = partA_config()
 %           .Rt         : Effective reproduction-number constraints for checks.
 %           .scenarios  : Array of structs defining the signal slots.
 %           .sirs       : Biological parameters (gamma, xi, pop_size).
+%           .truth      : Ground-truth simulator model and solver settings.
 %           .sim        : Reproducibility settings.
 %           .run        : Active execution settings for Part A scripts.
 %           .forecast   : Hyperparameters for the hybrid model.
-%           .output     : Absolute paths for data and figure storage.
+%           .output     : Absolute paths for data and artifact storage.
 %
 %   See also PARTA_00_MAKE_SCENARIOS, PARTA_01_GENERATE_TRUTH, ...
 %            PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, ...
 %            PARTA_03_RUN_FORECASTS, PARTA_04_EVALUATE_MODELS.
 
 % A. M. Kaahin 2026-02-18
-% Modified: 2026-03-29
+% Modified: 2026-05-31
 
     cfg = struct();
 
@@ -115,15 +116,20 @@ function cfg = partA_config()
     cfg.sirs.I0       = 500;
     cfg.sirs.R0_init  = 0;
 
-    %% 5. Reproducibility
+    %% 5. Ground-Truth Simulation
+    cfg.truth.model_type = "SIRS";
+    cfg.truth.solver     = "uds";
+    cfg.truth.compile    = true;
+
+    %% 6. Reproducibility
     cfg.sim.seed = 1234;
 
-    %% 6. Active Run Configuration
+    %% 7. Active Run Configuration
     cfg.run.model_type = string(local_env_or_default('PARTA_MODEL_TYPE', 'N4SID'));
     cfg.run.exo_mode   = string(local_env_or_default('PARTA_EXO_MODE', 'I'));
     local_validate_run_configuration(cfg.run.model_type, cfg.run.exo_mode);
 
-    %% 7. Forecasting Hyperparameters
+    %% 8. Forecasting Hyperparameters
     cfg.forecast.min_window = 49;
     cfg.forecast.step_size  = 7;
     cfg.forecast.horizon    = 14;
@@ -136,16 +142,18 @@ function cfg = partA_config()
     cfg.forecast.plot_alphas   = [0.10, 0.50];
     cfg.forecast.plot_lead_time = 7;
 
-    %% 8. Output Artifacts
+    %% 9. Output Artifacts
     thisDir  = fileparts(mfilename('fullpath'));
     repoRoot = fileparts(thisDir);
 
     cfg.output.data_dir     = fullfile(repoRoot, "data", "partA");
     cfg.output.root_dir     = fullfile(repoRoot, "results", "partA");
-    cfg.output.fig_dir      = fullfile(cfg.output.root_dir, "figures");
+    cfg.output.tuning_dir   = fullfile(cfg.output.root_dir, "model_selection");
     cfg.output.forecast_dir = fullfile(cfg.output.root_dir, "forecasts");
-    cfg.output.score_dir    = fullfile(cfg.output.root_dir, "scores");
-    cfg.output.tuning_dir   = fullfile(cfg.output.root_dir, "tuning");
+    cfg.output.score_dir    = fullfile(cfg.output.root_dir, "evaluation");
+    cfg.output.fig_dir      = fullfile(cfg.output.root_dir, "figures");
+    cfg.output.table_dir    = fullfile(cfg.output.root_dir, "tables");
+    cfg.output.log_dir      = fullfile(cfg.output.root_dir, "logs");
 
 end
 

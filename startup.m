@@ -2,15 +2,17 @@
 %
 %   Description:
 %       Explicitly adds script, configuration, and nested
-%       source folders to the MATLAB path. Also initializes the required
-%       directory structure for data and results artifacts.
+%       source and third-party folders to the MATLAB path. Also initializes
+%       the required directory structure for data and results artifacts.
 
 % A. M. Kaahin 2026-02-18
+% Modified: 2026-05-31
 
 %% 1. Path Management
 addpath(fullfile(pwd, 'config'));
 addpath(genpath(fullfile(pwd, 'scripts')));
 addpath(genpath(fullfile(pwd, 'src')));
+addpath(genpath(fullfile(pwd, 'third_party')));
 
 %% 2. Directory Initialization
 required_dirs = {'data/partA', ...

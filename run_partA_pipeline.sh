@@ -18,7 +18,7 @@ Usage:
 Description:
   Runs the Part A pipeline in the following order:
     1. scripts/partA/partA_00_make_scenarios.m
-    2. scripts/partA/partA_01_generate_truth.m
+    2. scripts/partA/partA_01_generate_synthetic_truth.m
     3. For each selected valid Model/Exo combination:
          - scripts/partA/partA_02_select_global_hyperparameters.m
          - scripts/partA/partA_03_run_forecasts.m
@@ -345,10 +345,11 @@ remove_partA_contents() {
 
   mkdir -p \
     "$REPO_ROOT/data/partA" \
+    "$REPO_ROOT/results/partA/model_selection" \
     "$REPO_ROOT/results/partA/forecasts" \
-    "$REPO_ROOT/results/partA/scores" \
+    "$REPO_ROOT/results/partA/evaluation" \
     "$REPO_ROOT/results/partA/figures" \
-    "$REPO_ROOT/results/partA/tuning" \
+    "$REPO_ROOT/results/partA/tables" \
     "$REPO_ROOT/results/partA/logs"
 }
 
@@ -465,7 +466,7 @@ run_matlab_scripts "Generating synthetic scenarios" \
 
 run_matlab_scripts "Generating synthetic ground truth" \
   "truth" "-" "-" "$RUN_LOG_DIR/partA_01_generate_truth.log" \
-  "scripts/partA/partA_01_generate_truth.m"
+  "scripts/partA/partA_01_generate_synthetic_truth.m"
 
 for idx in "${!combo_models[@]}"; do
   model_name="${combo_models[$idx]}"
