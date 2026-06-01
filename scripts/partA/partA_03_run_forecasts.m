@@ -17,7 +17,7 @@
 %
 %   See also PARTA_CONFIG, BUILD_FORECASTING_DATASET, ...
 %            RUN_EXPANDING_WINDOW_FORECAST, RUN_MODEL_FORECAST, ...
-%            PARTA_02_SELECT_GLOBAL_MODEL_CONFIGURATIONS, PARTA_04_EVALUATE_MODELS.
+%            PARTA_02_SELECT_GLOBAL_MODEL_CONFIGURATIONS, PARTA_04_EVALUATE_FORECASTS.
 %
 % A. M. Kaahin 2026-02-19
 % Modified: 2026-06-01
@@ -130,16 +130,22 @@ function selected_configuration = local_load_selected_configuration( ...
     selection = load(artifact_path);
     local_validate_selection_artifact(selection, artifact_path, ...
         model_type, exo_mode, cfg, expected_num_params);
-    selected_configuration = reshape(double(selection.selected_model), 1, []);
+    selected_configuration = local_extract_selected_configuration(selection);
 end
 
 function local_validate_selection_artifact(selection, artifact_path, ...
     model_type, exo_mode, cfg, expected_num_params)
 %LOCAL_VALIDATE_SELECTION_ARTIFACT Validate a loaded model-selection artifact.
-    required_fields = {'model_type', 'exo_mode', 'selected_model', 'cfg_snapshot', 'wis_alphas'};
+    required_fields = {'model_type', 'exo_mode', 'cfg_snapshot'};
     if ~all(isfield(selection, required_fields))
         error('FORECAST:InvalidSelectionArtifact', ...
             'Model-selection artifact is missing required fields: %s.', artifact_path);
+    end
+
+    if ~isfield(selection, 'selected_configuration') && ~isfield(selection, 'selected_model')
+        error('FORECAST:InvalidSelectionArtifact', ...
+            ['Model-selection artifact is missing selected_configuration ', ...
+            'or selected_model: %s.'], artifact_path);
     end
 
     if ~strcmp(string(selection.model_type), string(model_type))
@@ -154,8 +160,8 @@ function local_validate_selection_artifact(selection, artifact_path, ...
             exo_mode, string(selection.exo_mode));
     end
 
-    selected_model = reshape(double(selection.selected_model), 1, []);
-    if numel(selected_model) ~= expected_num_params
+    selected_configuration = local_extract_selected_configuration(selection);
+    if numel(selected_configuration) ~= expected_num_params
         error('FORECAST:SelectionDimensionMismatch', ...
             'Selected configuration dimensionality is invalid in artifact: %s.', ...
             artifact_path);
@@ -176,9 +182,19 @@ function local_validate_selection_artifact(selection, artifact_path, ...
             artifact_path);
     end
 
-    if ~isequal(double(selection.wis_alphas(:)), double(cfg.forecast.wis_alphas(:)))
+    if isfield(selection, 'wis_alphas') && ...
+            ~isequal(double(selection.wis_alphas(:)), double(cfg.forecast.wis_alphas(:)))
         error('FORECAST:SelectionAlphaMismatch', ...
             'Model-selection artifact uses different WIS alphas: %s.', artifact_path);
+    end
+end
+
+function selected_configuration = local_extract_selected_configuration(selection)
+%LOCAL_EXTRACT_SELECTED_CONFIGURATION Prefer canonical selected configuration field.
+    if isfield(selection, 'selected_configuration')
+        selected_configuration = reshape(double(selection.selected_configuration), 1, []);
+    else
+        selected_configuration = reshape(double(selection.selected_model), 1, []);
     end
 end
 

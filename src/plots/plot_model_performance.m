@@ -18,10 +18,10 @@ function was_saved = plot_model_performance(score_registry, cfg)
 %       was_saved      - Logical flag indicating whether the figure was
 %                        written to disk.
 %
-%   See also PARTA_04_EVALUATE_MODELS, PARTA_CONFIG.
+%   See also PARTA_04_EVALUATE_FORECASTS, PARTA_CONFIG.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-03-29
+% Modified: 2026-06-01
 
     %% 1. Initialization
     was_saved = false;

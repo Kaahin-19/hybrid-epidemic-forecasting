@@ -1,4 +1,4 @@
-%PARTA_04_EVALUATE_MODELS Comparative Evaluation of Epidemic Forecasts
+%PARTA_04_EVALUATE_FORECASTS Comparative evaluation of epidemic forecasts.
 %
 %   Description:
 %       Aggregates and scores the performance of all forecasting models
@@ -17,7 +17,7 @@
 %   See also PARTA_CONFIG, PLOT_MODEL_PERFORMANCE, PARTA_03_RUN_FORECASTS.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-05-04
+% Modified: 2026-06-01
 
 %% 1. Initialization
 clear; close all; clc;

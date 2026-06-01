@@ -25,10 +25,10 @@ function cfg = partA_config()
 %
 %   See also PARTA_01_GENERATE_SYNTHETIC_TRUTH, ...
 %            PARTA_02_SELECT_GLOBAL_MODEL_CONFIGURATIONS, ...
-%            PARTA_03_RUN_FORECASTS, PARTA_04_EVALUATE_MODELS.
+%            PARTA_03_RUN_FORECASTS, PARTA_04_EVALUATE_FORECASTS.
 
 % A. M. Kaahin 2026-02-18
-% Modified: 2026-05-31
+% Modified: 2026-06-01
 
     cfg = struct();
 

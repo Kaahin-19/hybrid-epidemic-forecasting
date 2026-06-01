@@ -21,7 +21,7 @@ Description:
     2. For each selected valid Model/Exo combination:
          - scripts/partA/partA_02_select_global_model_configurations.m
          - scripts/partA/partA_03_run_forecasts.m
-    3. scripts/partA/partA_04_evaluate_models.m
+    3. scripts/partA/partA_04_evaluate_forecasts.m
 
   Each invocation creates a timestamped run folder under:
     results/partA/logs/<run_id>/
@@ -487,8 +487,8 @@ for idx in "${!combo_models[@]}"; do
 done
 
 run_matlab_scripts "Evaluating accumulated forecast artifacts" \
-  "evaluation" "-" "-" "$RUN_LOG_DIR/partA_04_evaluate_models.log" \
-  "scripts/partA/partA_04_evaluate_models.m"
+  "evaluation" "-" "-" "$RUN_LOG_DIR/partA_04_evaluate_forecasts.log" \
+  "scripts/partA/partA_04_evaluate_forecasts.m"
 
 log_status "Part A pipeline completed successfully."
 log_status "Run logs saved to: ${RUN_LOG_DIR}"
