@@ -82,11 +82,23 @@ for i = 1:numel(cases)
 end
 results.direct_results = direct_results;
 
+%% 3b. Final-Stage Interval Profiling
+interval_results = repmat(local_empty_interval_result(), numel(cases), 1);
+profinfo_interval_cases = cell(numel(cases), 1);
+for i = 1:numel(cases)
+    fprintf('Stage: Interval profile for %s | %s\n', ...
+        cases(i).model_type, cases(i).exo_mode);
+    [interval_results(i), profinfo_interval_cases{i}] = ...
+        local_interval_profile_case(cfg, cases(i).model_type, ...
+        cases(i).exo_mode, "final");
+end
+results.interval_results = interval_results;
+
 %% 4. Report Assembly
 results.search_validation = local_search_validation(repo_root);
 report_text = local_build_report(results);
 local_write_text(report_path, report_text);
-save(profile_path, 'profinfo_cases', 'results');
+save(profile_path, 'profinfo_cases', 'profinfo_interval_cases', 'results');
 
 fprintf('\n%s\n', report_text);
 fprintf('Profile MAT saved to: %s\n', profile_path);
@@ -216,6 +228,102 @@ function direct = local_direct_exception_result(model_type, exo_mode, ME)
     direct.error_message = string(ME.message);
 end
 
+function result = local_empty_interval_result()
+%LOCAL_EMPTY_INTERVAL_RESULT Initialize interval-profile result fields.
+    result = struct();
+    result.model_type = "";
+    result.exo_mode = "";
+    result.stage = "";
+    result.runtime_seconds = NaN;
+    result.passed = false;
+    result.aicc = NaN;
+    result.truth_artifact = "";
+    result.candidate = [];
+    result.num_draws = NaN;
+    result.num_valid_draws = NaN;
+    result.interval_method = "";
+    result.interval_status = "";
+    result.residual_status = "";
+    result.error_identifier = "";
+    result.error_message = "";
+    result.counts = local_empty_interval_counts();
+end
+
+function counts = local_empty_interval_counts()
+%LOCAL_EMPTY_INTERVAL_COUNTS Initialize selected interval profiler counts.
+    counts = struct();
+    counts.estimator = 0;
+    counts.forecast = 0;
+    counts.iddata = 0;
+    counts.sample_centered_residuals = 0;
+    counts.compute_interval_bounds_from_ensemble = 0;
+    counts.simulate_statespace_intervals = 0;
+    counts.simulate_statespace_closed_loop_bootstrap_paths = 0;
+    counts.initialize_sirs_stepper = 0;
+    counts.advance_sirs_stepper = 0;
+    counts.rparse = 0;
+    counts.urdme = 0;
+    counts.genData_SIRS = 0;
+end
+
+function [result, profinfo] = local_interval_profile_case(cfg, model_type, exo_mode, stage)
+%LOCAL_INTERVAL_PROFILE_CASE Profile one state-space interval simulation.
+    result = local_empty_interval_result();
+    profinfo = struct();
+    result.model_type = string(model_type);
+    result.exo_mode = string(exo_mode);
+    result.stage = string(stage);
+
+    try
+        [truth_path, window_entry, num_exo] = ...
+            local_build_interval_inputs(cfg, char(exo_mode));
+        [candidate_grid, ~] = generate_candidate_grid(cfg, char(model_type));
+        candidate = candidate_grid(1, :);
+
+        context = struct('stage', char(stage), 'exo_mode', char(exo_mode), ...
+            'sirs_cfg', cfg.sirs, 'horizon', cfg.forecast.horizon, ...
+            'alphas', cfg.forecast.wis_alphas, 'sim_seed', cfg.sim.seed, ...
+            'scenario_key', "A1", 'window_index', window_entry.window_day_idx, ...
+            'model_type', string(model_type));
+        interval_options = make_interval_options(cfg.intervals, context);
+
+        profile clear;
+        profile on;
+        timer_obj = tic;
+        [Rt_curve, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
+            simulate_statespace_intervals(char(model_type), candidate, ...
+            window_entry.Rt_past, window_entry.U_past, ...
+            window_entry.sirs_state, num_exo, interval_options);
+        result.runtime_seconds = toc(timer_obj);
+        profile off;
+
+        profinfo = profile('info');
+        local_validate_forecast_output( ...
+            Rt_curve, out_alphas, lower_bounds, upper_bounds, cfg.forecast.horizon);
+
+        result.passed = true;
+        result.aicc = aicc;
+        result.truth_artifact = string(truth_path);
+        result.candidate = candidate;
+        result.num_draws = interval_options.num_draws;
+        result.num_valid_draws = meta.num_valid_draws;
+        result.interval_method = string(meta.interval_method);
+        result.interval_status = string(meta.interval_status);
+        result.residual_status = string(meta.residual_status);
+        result.counts = local_interval_counts(profinfo, model_type);
+    catch ME
+        try
+            profile off;
+            profinfo = profile('info');
+            result.counts = local_interval_counts(profinfo, model_type);
+        catch
+            profinfo = struct();
+        end
+        result.error_identifier = string(ME.identifier);
+        result.error_message = string(ME.message);
+    end
+end
+
 function [truth_path, scenario_inputs] = local_load_scenario_inputs(cfg, exo_mode)
 %LOCAL_LOAD_SCENARIO_INPUTS Build Part A 03 scenario inputs from first truth.
     truth_files = dir(fullfile(cfg.output.data_dir, 'partA_01_truth_*.mat'));
@@ -246,6 +354,14 @@ function [truth_path, scenario_inputs] = local_load_scenario_inputs(cfg, exo_mod
         'S_true', loaded.S_true(:), ...
         'I_true', loaded.I_true(:), ...
         'U_true', U_true);
+end
+
+function [truth_path, window_entry, num_exo] = local_build_interval_inputs(cfg, exo_mode)
+%LOCAL_BUILD_INTERVAL_INPUTS Build one expanding window from the first truth.
+    [truth_path, scenario_inputs] = local_load_scenario_inputs(cfg, exo_mode);
+    window_entry = prepare_window_data(scenario_inputs, ...
+        cfg.forecast.min_window, cfg.forecast.horizon, cfg.sirs);
+    num_exo = size(window_entry.U_past, 2);
 end
 
 function local_validate_forecast_output(Rt_curve, out_alphas, lower_bounds, upper_bounds, horizon)
@@ -284,6 +400,35 @@ function counts = local_profile_counts(profinfo, model_type)
     counts.iddata = local_profile_metric(profinfo, 'iddata');
     counts.initialize_sirs_stepper = local_profile_metric(profinfo, 'initialize_sirs_stepper');
     counts.advance_sirs_stepper = local_profile_metric(profinfo, 'advance_sirs_stepper');
+    counts.rparse = local_profile_metric(profinfo, 'rparse');
+    counts.urdme = local_profile_metric(profinfo, 'urdme');
+    counts.genData_SIRS = local_profile_metric(profinfo, 'genData_SIRS');
+end
+
+function counts = local_interval_counts(profinfo, model_type)
+%LOCAL_INTERVAL_COUNTS Count selected interval and epidemic functions.
+    counts = local_empty_interval_counts();
+    if strcmp(string(model_type), "N4SID")
+        estimator_target = 'n4sid';
+    else
+        estimator_target = 'ssest';
+    end
+
+    counts.estimator = local_profile_metric(profinfo, estimator_target);
+    counts.forecast = local_profile_metric(profinfo, 'forecast');
+    counts.iddata = local_profile_metric(profinfo, 'iddata');
+    counts.sample_centered_residuals = ...
+        local_profile_metric(profinfo, 'sample_centered_residuals');
+    counts.compute_interval_bounds_from_ensemble = ...
+        local_profile_metric(profinfo, 'compute_interval_bounds_from_ensemble');
+    counts.simulate_statespace_intervals = ...
+        local_profile_metric(profinfo, 'simulate_statespace_intervals');
+    counts.simulate_statespace_closed_loop_bootstrap_paths = ...
+        local_profile_metric(profinfo, 'simulate_statespace_closed_loop_bootstrap_paths');
+    counts.initialize_sirs_stepper = ...
+        local_profile_metric(profinfo, 'initialize_sirs_stepper');
+    counts.advance_sirs_stepper = ...
+        local_profile_metric(profinfo, 'advance_sirs_stepper');
     counts.rparse = local_profile_metric(profinfo, 'rparse');
     counts.urdme = local_profile_metric(profinfo, 'urdme');
     counts.genData_SIRS = local_profile_metric(profinfo, 'genData_SIRS');
@@ -370,11 +515,39 @@ function text = local_build_report(results)
     text = text + "- I cases should not call `forecast(...)` or construct `iddata` inside the closed-loop horizon loop when the d = 0 manual state-space path validates." + newline;
     text = text + "- `forecast(...)` may still appear for the initial state/uncertainty calculation and for None cases." + newline + newline;
 
+    text = text + local_interval_report_section(results, ...
+        "Final-Stage State-Space Interval Profiling");
+
     text = text + "## Static Checks" + newline + newline;
     text = text + sprintf("- AR/ARX files unchanged in git diff: %s.\n", ...
         string(results.search_validation.ar_arx_git_diff_empty));
     text = text + sprintf("- Part A 02 selection path unchanged in git diff: %s.\n", ...
         string(results.search_validation.partA02_git_diff_empty));
+end
+
+function text = local_interval_report_section(results, title)
+%LOCAL_INTERVAL_REPORT_SECTION Format interval-profiling results.
+    text = "## " + string(title) + newline + newline;
+    if ~isfield(results, 'interval_results') || isempty(results.interval_results)
+        text = text + "No interval profiling was collected." + newline + newline;
+        return;
+    end
+
+    text = text + "| model | exogenous mode | method | draws | valid draws | status | residual status | runtime (s) | simulate_statespace_intervals calls | path-sim calls | n4sid/ssest calls | forecast calls | iddata calls | advance_sirs_stepper calls | urdme calls | passed |" + newline;
+    text = text + "|---|---|---|---:|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|" + newline;
+    for i = 1:numel(results.interval_results)
+        r = results.interval_results(i);
+        c = r.counts;
+        text = text + sprintf('| %s | %s | %s | %d | %d | %s | %s | %.3f | %d | %d | %d | %d | %d | %d | %d | %s |\n', ...
+            r.model_type, r.exo_mode, r.interval_method, r.num_draws, ...
+            r.num_valid_draws, r.interval_status, r.residual_status, ...
+            r.runtime_seconds, c.simulate_statespace_intervals, ...
+            c.simulate_statespace_closed_loop_bootstrap_paths, c.estimator, ...
+            c.forecast, c.iddata, c.advance_sirs_stepper, c.urdme, ...
+            string(r.passed));
+    end
+    text = text + newline;
+    text = text + "- Final-stage state-space intervals use the resimulated closed-loop Monte Carlo configured by `cfg.intervals.final_*`." + newline + newline;
 end
 
 function is_empty = local_git_diff_empty(repo_root, path_spec)

@@ -73,9 +73,15 @@ results.search_validation = local_search_validation(repo_root);
 results.top_total_time = local_profile_top(profinfo, 'TotalTime', 20);
 results.top_self_time = local_profile_top(profinfo, 'SelfTime', 20);
 
+%% 4b. Selection-Stage Interval Residual-Bootstrap Profiling
+fprintf('Stage: Profiling selection-stage interval residual bootstrap (AR/ARX)\n');
+[results.interval_results, interval_profinfo_cases] = ...
+    local_profile_interval_cases(cfg, "selection", ...
+    {"AR", "None"; "ARX", "I"});
+
 report_text = local_build_report(results);
 local_write_text(report_path, report_text);
-save(profile_path, 'profinfo', 'results');
+save(profile_path, 'profinfo', 'interval_profinfo_cases', 'results');
 
 fprintf('\n%s\n', report_text);
 fprintf('Profile MAT saved to: %s\n', profile_path);
@@ -564,7 +570,9 @@ function text = local_build_report(results)
     end
     text = text + "- The coefficient-recursive ARX horizon path is used when the closed-loop call count equals the forecast horizon." + newline;
     text = text + "- The full Part A 02 runtime measurements are collected from clean MATLAB child processes; the MATLAB profiler table comes from the direct ARX window in the current process." + newline;
-    text = text + "- Recommended next optimization step: consider reusing more solve-time URDME data inside `advance_sirs_stepper` only if further profiling shows solve setup still dominates." + newline;
+    text = text + "- Recommended next optimization step: consider reusing more solve-time URDME data inside `advance_sirs_stepper` only if further profiling shows solve setup still dominates." + newline + newline;
+
+    text = text + local_interval_report_section(results, "Selection-Stage Interval Residual Bootstrap");
 end
 
 function row = local_comparison_row(label, before_value, after_value, number_format)
@@ -574,6 +582,154 @@ function row = local_comparison_row(label, before_value, after_value, number_for
         sprintf(number_format, before_value), ...
         sprintf(number_format, after_value), ...
         sprintf(number_format, change_value));
+end
+
+function [interval_results, profinfo_cases] = local_profile_interval_cases(cfg, stage, specs)
+%LOCAL_PROFILE_INTERVAL_CASES Profile the interval path for several cases.
+    interval_results = repmat(local_empty_interval_result(), size(specs, 1), 1);
+    profinfo_cases = cell(size(specs, 1), 1);
+    for i = 1:size(specs, 1)
+        [interval_results(i), profinfo_cases{i}] = local_profile_interval_case( ...
+            cfg, specs{i, 1}, specs{i, 2}, stage);
+    end
+end
+
+function [result, profinfo] = local_profile_interval_case(cfg, model_type, exo_mode, stage)
+%LOCAL_PROFILE_INTERVAL_CASE Profile one AR/ARX interval simulation window.
+    result = local_empty_interval_result();
+    profinfo = struct();
+    result.model_type = string(model_type);
+    result.exo_mode = string(exo_mode);
+    result.stage = string(stage);
+    try
+        [window_entry, num_exo] = local_build_interval_inputs(cfg, char(exo_mode));
+        params = local_first_candidate(cfg, char(model_type));
+        context = struct('stage', char(stage), 'exo_mode', char(exo_mode), ...
+            'sirs_cfg', cfg.sirs, 'horizon', cfg.forecast.horizon, ...
+            'alphas', cfg.forecast.wis_alphas, 'sim_seed', cfg.sim.seed, ...
+            'scenario_key', "A1", 'window_index', window_entry.window_day_idx, ...
+            'model_type', string(model_type));
+        interval_options = make_interval_options(cfg.intervals, context);
+
+        profile clear;
+        profile on;
+        timer_obj = tic;
+        [~, aicc, ~, ~, ~, meta] = simulate_ar_arx_intervals(char(model_type), ...
+            params, window_entry.Rt_past, window_entry.U_past, ...
+            window_entry.sirs_state, num_exo, interval_options);
+        result.runtime_seconds = toc(timer_obj);
+        profile off;
+
+        profinfo = profile('info');
+        result.counts = local_interval_counts(profinfo);
+        result.aicc = aicc;
+        result.num_draws = interval_options.num_draws;
+        result.num_valid_draws = meta.num_valid_draws;
+        result.interval_status = string(meta.interval_status);
+        result.interval_method = string(meta.interval_method);
+        result.residual_status = string(meta.residual_status);
+        result.passed = true;
+    catch ME
+        try
+            profile off;
+            profinfo = profile('info');
+            result.counts = local_interval_counts(profinfo);
+        catch
+            profinfo = struct();
+        end
+        result.error_identifier = string(ME.identifier);
+        result.error_message = string(ME.message);
+    end
+end
+
+function [window_entry, num_exo] = local_build_interval_inputs(cfg, exo_mode)
+%LOCAL_BUILD_INTERVAL_INPUTS Build one expanding window from the first truth.
+    truth_files = dir(fullfile(cfg.output.data_dir, 'partA_01_truth_*.mat'));
+    if isempty(truth_files)
+        error('PROFILE:MissingTruth', 'No Part A truth artifacts found.');
+    end
+    [~, order] = sort({truth_files.name});
+    truth_files = truth_files(order);
+    loaded = load(fullfile(truth_files(1).folder, truth_files(1).name));
+
+    scaled_S = loaded.S_true(:) / cfg.sirs.pop_size;
+    scaled_I = loaded.I_true(:) / cfg.sirs.pop_size;
+    switch exo_mode
+        case 'None', U_true = [];
+        case 'S',    U_true = scaled_S;
+        case 'I',    U_true = scaled_I;
+        case 'Both', U_true = [scaled_S, scaled_I];
+        otherwise
+            error('PROFILE:UnknownExoMode', 'Unsupported EXO_MODE: %s', exo_mode);
+    end
+
+    scenario_inputs = struct('Rt_true', loaded.Rt_true(:), 'tspan', loaded.tspan(:), ...
+        'S_true', loaded.S_true(:), 'I_true', loaded.I_true(:), 'U_true', U_true);
+    window_entry = prepare_window_data(scenario_inputs, cfg.forecast.min_window, ...
+        cfg.forecast.horizon, cfg.sirs);
+    num_exo = size(window_entry.U_past, 2);
+end
+
+function params = local_first_candidate(cfg, model_type)
+%LOCAL_FIRST_CANDIDATE Return the first candidate row for a model family.
+    grid = generate_candidate_grid(cfg, model_type);
+    params = grid(1, :);
+end
+
+function counts = local_interval_counts(profinfo)
+%LOCAL_INTERVAL_COUNTS Count selected interval and epidemic functions.
+    targets = {'make_interval_options', 'sample_centered_residuals', ...
+        'compute_interval_bounds_from_ensemble', 'simulate_ar_arx_intervals', ...
+        'simulate_ar_residual_bootstrap_paths', ...
+        'simulate_arx_closed_loop_bootstrap_paths', 'recursive_arx_step', ...
+        'initialize_sirs_stepper', 'advance_sirs_stepper'};
+    counts = struct();
+    for i = 1:numel(targets)
+        counts.(targets{i}) = local_profile_metric(profinfo, targets{i}, 'NumCalls');
+    end
+end
+
+function result = local_empty_interval_result()
+%LOCAL_EMPTY_INTERVAL_RESULT Initialize one interval-profile result.
+    result = struct();
+    result.model_type = "";
+    result.exo_mode = "";
+    result.stage = "";
+    result.runtime_seconds = NaN;
+    result.aicc = NaN;
+    result.num_draws = NaN;
+    result.num_valid_draws = NaN;
+    result.interval_status = "";
+    result.interval_method = "";
+    result.residual_status = "";
+    result.passed = false;
+    result.error_identifier = "";
+    result.error_message = "";
+    result.counts = local_interval_counts(struct());
+end
+
+function text = local_interval_report_section(results, title)
+%LOCAL_INTERVAL_REPORT_SECTION Format the interval-profiling Markdown section.
+    text = "## " + string(title) + newline + newline;
+    if ~isfield(results, 'interval_results') || isempty(results.interval_results)
+        text = text + "No interval profiling was collected." + newline + newline;
+        return;
+    end
+
+    text = text + "| model | exo | method | draws | valid draws | status | runtime (s) | path-sim calls | recursive_arx_step calls | advance_sirs_stepper calls | sample_centered_residuals calls |" + newline;
+    text = text + "|---|---|---|---:|---:|---|---:|---:|---:|---:|---:|" + newline;
+    for i = 1:numel(results.interval_results)
+        r = results.interval_results(i);
+        c = r.counts;
+        path_calls = c.simulate_ar_residual_bootstrap_paths + ...
+            c.simulate_arx_closed_loop_bootstrap_paths;
+        text = text + sprintf("| %s | %s | %s | %d | %d | %s | %.3f | %d | %d | %d | %d |\n", ...
+            r.model_type, r.exo_mode, r.interval_method, r.num_draws, ...
+            r.num_valid_draws, r.interval_status, r.runtime_seconds, path_calls, ...
+            c.recursive_arx_step, c.advance_sirs_stepper, c.sample_centered_residuals);
+    end
+    text = text + newline;
+    text = text + "- Selection uses the lightweight frozen-epidemic residual bootstrap; the epidemic is advanced once per window regardless of draw count." + newline + newline;
 end
 
 function table_text = local_top_table(rows)
