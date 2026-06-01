@@ -72,6 +72,11 @@ results.search_validation = local_search_validation(repo_root);
 results.top_total_time = local_profile_top(profinfo, 'TotalTime', 20);
 results.top_self_time = local_profile_top(profinfo, 'SelfTime', 20);
 
+%% 4b. Final-Stage Interval Monte Carlo Profiling
+fprintf('Stage: Profiling final-stage interval Monte Carlo (AR/ARX)\n');
+results.interval_results = local_profile_interval_cases(cfg, "final", ...
+    {"AR", "None"; "ARX", "I"});
+
 report_text = local_build_report(results);
 local_write_text(report_path, report_text);
 save(profile_path, 'profinfo', 'results');
@@ -548,7 +553,9 @@ function text = local_build_report(results)
     end
     text = text + "- The Part A 03 dispatch reproduces the corrected Part A 02 ARX behaviour through `run_model_forecast`." + newline;
     text = text + "- Full Part A 03 runtimes are collected from clean MATLAB child processes; the profiler table comes from one direct ARX window in the current process." + newline;
-    text = text + "- The direct ARX window measures one expanding-window forecast; the full Part A 03 runtime covers every window across all four scenarios." + newline;
+    text = text + "- The direct ARX window measures one expanding-window forecast; the full Part A 03 runtime covers every window across all four scenarios." + newline + newline;
+
+    text = text + local_interval_report_section(results, "Final-Stage Interval Monte Carlo");
 end
 
 function table_text = local_top_table(rows)

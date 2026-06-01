@@ -142,7 +142,25 @@ function cfg = partA_config()
     cfg.forecast.plot_alphas   = [0.10, 0.50];
     cfg.forecast.plot_lead_time = 7;
 
-    %% 9. Output Artifacts
+    %% 9. Predictive Interval Settings
+    % Part A 02 and Part A 03 estimate the same closed-loop predictive
+    % uncertainty target with different computational budgets. Part A 02 uses
+    % a lightweight closed-loop residual bootstrap during model selection;
+    % Part A 03 uses a fuller closed-loop Monte Carlo procedure for the final
+    % selected forecasts. selection_num_draws and final_num_draws are kept
+    % conservative so model selection and final forecasting remain runnable;
+    % raising them improves interval resolution at higher runtime cost.
+    cfg.intervals.enabled = true;
+    cfg.intervals.seed = 1234;
+    cfg.intervals.selection_method = "closed_loop_residual_bootstrap";
+    cfg.intervals.final_method = "closed_loop_monte_carlo";
+    cfg.intervals.selection_num_draws = 40;
+    cfg.intervals.final_num_draws = 80;
+    cfg.intervals.min_residual_std = 1e-6;
+    cfg.intervals.use_common_random_numbers = true;
+    cfg.intervals.include_epidemic_seed_variation = true;
+
+    %% 10. Output Artifacts
     thisDir  = fileparts(mfilename('fullpath'));
     repoRoot = fileparts(thisDir);
 

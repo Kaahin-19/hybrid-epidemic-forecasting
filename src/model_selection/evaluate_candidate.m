@@ -21,9 +21,11 @@ function scenario_scores = evaluate_candidate(model_type, candidate_configuratio
 %   Outputs:
 %       scenario_scores - Mean window WIS for each scenario.
 %
-%   See also AGGREGATE_CANDIDATE_SCORES, SELECT_BEST_CONFIGURATION.
+%   See also AGGREGATE_CANDIDATE_SCORES, SELECT_BEST_CONFIGURATION,
+%            SIMULATE_AR_ARX_INTERVALS, SIMULATE_STATESPACE_INTERVALS.
 %
 % A. M. Kaahin 2026-05-31
+% Modified: 2026-06-01
 
     %% 1. Candidate Evaluation
     params = reshape(double(candidate_configuration), 1, []);
@@ -32,6 +34,7 @@ function scenario_scores = evaluate_candidate(model_type, candidate_configuratio
     for s = 1:length(scenario_data)
         data = scenario_data(s);
         window_wis = inf(numel(data.window_data), 1);
+        scenario_key = local_scenario_key(data, s);
 
         for w = 1:numel(data.window_data)
             window_entry = data.window_data(w);
@@ -39,9 +42,9 @@ function scenario_scores = evaluate_candidate(model_type, candidate_configuratio
                 continue;
             end
 
-            [Rt_pred, ~, out_alphas, Rt_lower, Rt_upper] = local_fit_candidate( ...
-                model_type, params, window_entry.Rt_past, window_entry.U_past, ...
-                window_entry.sirs_state, evaluation_options, data.num_exo);
+            [Rt_pred, ~, out_alphas, Rt_lower, Rt_upper] = local_window_forecast( ...
+                model_type, params, window_entry, evaluation_options, ...
+                data.num_exo, scenario_key, w);
 
             if ~local_is_valid_forecast(Rt_pred, out_alphas, Rt_lower, Rt_upper, ...
                     window_entry.truth_Rt)
@@ -62,9 +65,62 @@ function scenario_scores = evaluate_candidate(model_type, candidate_configuratio
     end
 end
 
+function key = local_scenario_key(data, s)
+%LOCAL_SCENARIO_KEY Stable scenario identifier for interval seeding.
+    if isfield(data, 'scenario_id') && ~isempty(data.scenario_id)
+        key = string(data.scenario_id);
+    else
+        key = string(s);
+    end
+end
+
+function [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = local_window_forecast( ...
+    model_type, params, window_entry, evaluation_options, num_exo, scenario_key, w)
+%LOCAL_WINDOW_FORECAST Produce one window forecast and predictive intervals.
+%   When interval bootstrapping is enabled this uses the lightweight
+%   closed-loop residual-bootstrap intervals for model selection; otherwise it
+%   falls back to the legacy analytic forecast path.
+    if isfield(evaluation_options, 'intervals') && ...
+            isstruct(evaluation_options.intervals) && ...
+            evaluation_options.intervals.enabled
+        context = struct( ...
+            'stage', "selection", ...
+            'exo_mode', evaluation_options.exo_mode, ...
+            'sirs_cfg', evaluation_options.sirs_cfg, ...
+            'horizon', evaluation_options.horizon, ...
+            'alphas', evaluation_options.wis_alphas, ...
+            'sim_seed', evaluation_options.sim_seed, ...
+            'scenario_key', scenario_key, ...
+            'window_index', w, ...
+            'model_type', string(model_type));
+        interval_options = make_interval_options(evaluation_options.intervals, context);
+
+        switch char(model_type)
+            case {'AR', 'ARX'}
+                [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = ...
+                    simulate_ar_arx_intervals(model_type, params, ...
+                    window_entry.Rt_past, window_entry.U_past, ...
+                    window_entry.sirs_state, num_exo, interval_options);
+            case {'N4SID', 'SSEST'}
+                [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = ...
+                    simulate_statespace_intervals(model_type, params, ...
+                    window_entry.Rt_past, window_entry.U_past, ...
+                    window_entry.sirs_state, num_exo, interval_options);
+            otherwise
+                error('MODEL_SELECTION:UnknownModel', ...
+                    'Unsupported MODEL_TYPE: %s', string(model_type));
+        end
+        return;
+    end
+
+    [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = local_fit_candidate( ...
+        model_type, params, window_entry.Rt_past, window_entry.U_past, ...
+        window_entry.sirs_state, evaluation_options, num_exo);
+end
+
 function [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = local_fit_candidate( ...
     model_type, params, Rt_past, U_past, sirs_state, evaluation_options, num_exo)
-%LOCAL_FIT_CANDIDATE Fit and forecast one candidate model.
+%LOCAL_FIT_CANDIDATE Fit and forecast one candidate model (legacy analytic path).
     Rt_pred = [];
     aicc = [];
     out_alphas = [];

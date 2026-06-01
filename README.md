@@ -18,7 +18,7 @@ The implementation is divided into three major phases as outlined in the project
 * ``data/``: Contains generated SIRS truth under ``data/partA/``, generated SEIR truth under ``data/partB/``, and WHO COVID-19 raw inputs under ``data/partC/raw/`` with processed real-data artifacts under ``data/partC/processed/``.
 * ``results/``: Stores generated outputs, with Part A artifacts under ``results/partA/`` including ``model_selection/``, ``forecasts/``, ``evaluation/``, ``figures/``, ``tables/``, and ``logs/``; Part B and Part C artifacts include forecasts, scores, figures, logs, and local-refinement outputs under ``results/partC/refinement/``.
 * ``scripts/``: Contains high-level execution scripts, with Part A scripts under ``scripts/partA/``, Part B scripts under ``scripts/partB/``, and Part C frozen real-data plus local-refinement scripts under ``scripts/partC/``.
-* ``src/``: Core functional modules, separated into ``scenarios/`` (analytic $R_t$ signals), ``epidemic/`` (ground-truth simulation and the reusable one-day SIRS stepper), ``forecasting/`` (expanding-window orchestration and dataset assembly), ``model_selection/`` (Part A candidate generation, scoring, and selection), ``models/`` (forecasting algorithms grouped into ``ar/``, ``arx/``, ``n4sid/``, and ``ssest/`` subfolders alongside the ARIMA/ARIMAX wrappers and the ``genData`` simulators), and ``plots/`` (visualization helpers).
+* ``src/``: Core functional modules, separated into ``scenarios/`` (analytic $R_t$ signals), ``epidemic/`` (ground-truth simulation and the reusable one-day SIRS stepper), ``forecasting/`` (expanding-window orchestration and dataset assembly), ``model_selection/`` (Part A candidate generation, scoring, and selection), ``models/`` (forecasting algorithms grouped into ``ar/``, ``arx/``, ``n4sid/``, and ``ssest/`` subfolders alongside the ARIMA/ARIMAX wrappers and the ``genData`` simulators), ``intervals/`` (closed-loop residual-bootstrap and Monte Carlo predictive intervals, split into shared helpers, ``ar_arx/``, and ``statespace/``), and ``plots/`` (visualization helpers).
 
 ## Active Files Summary
 
@@ -82,6 +82,16 @@ The implementation is divided into three major phases as outlined in the project
 * ``arx/extract_exogenous_from_state.m``: Converts an epidemic state to ARX covariates.
 * ``n4sid/fit_n4sid_model.m``: Fits a discrete-time state-space model via the Subspace State-Space System Identification (N4SID) algorithm and forecasts.
 * ``ssest/fit_ssest_model.m``: Fits an optimized discrete-time state-space model using iterative Prediction Error Minimization (PEM) and forecasts.
+
+**Predictive intervals (``src/intervals/``)**
+* ``make_interval_options.m``: Builds the per-window interval-simulation options (lightweight residual bootstrap for selection, fuller Monte Carlo for final forecasts) with deterministic seeding.
+* ``sample_centered_residuals.m``: Centers and resamples one-step residual innovations, with a Gaussian fallback.
+* ``compute_interval_bounds_from_ensemble.m``: Reduces an ensemble of ``R_t`` trajectories to the empirical predictive median and central interval bounds.
+* ``ar_arx/simulate_ar_residual_bootstrap_paths.m``: Generates recursive AR bootstrap ``R_t`` trajectories.
+* ``ar_arx/simulate_arx_closed_loop_bootstrap_paths.m``: Generates closed-loop ARX bootstrap ``R_t`` trajectories with frozen or resimulated epidemic feedback.
+* ``ar_arx/simulate_ar_arx_intervals.m``: AR/ARX family entry that fits, bootstraps innovations, and assembles interval outputs.
+* ``statespace/simulate_statespace_closed_loop_bootstrap_paths.m``: Shared innovations-form closed-loop simulator for N4SID/SSEST trajectories.
+* ``statespace/simulate_statespace_intervals.m``: N4SID/SSEST family entry where the state-space estimator is the only family-specific step.
 
 **Visualization (``src/plots/``)**
 * ``plot_model_performance.m``: Visualizes the comparative WIS distributions across various model configurations and scenarios.
