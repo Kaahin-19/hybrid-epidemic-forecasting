@@ -41,7 +41,7 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_sse
 %   See also FIT_ARIMA, FIT_ARIMAX, FIT_N4SID, PARTA_03_RUN_FORECASTS.
 
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-05-04
+% Modified: 2026-06-01
 
     %% 1. Preprocessing
     if nargin < 7 || isempty(interval_alphas)
@@ -202,6 +202,11 @@ function [pred_y, pred_sd] = local_closed_loop_forecast( ...
 
     pred_y  = zeros(horizon, 1);
     pred_sd = zeros(horizon, 1);
+    sim_options = struct( ...
+        'solver', 'uds', ...
+        'compile', false, ...
+        'seed', local_resolve_sim_seed(sim_seed));
+    stepper = initialize_sirs_stepper(sirs_params, sim_options);
 
     for h = 1:horizon
         current_idx = num_history + h - 1;
@@ -227,8 +232,8 @@ function [pred_y, pred_sd] = local_closed_loop_forecast( ...
             error('FIT:InvalidForecastOutput', 'Closed-loop Rt forecast is invalid.');
         end
 
-        current_state = local_advance_sirs_one_day( ...
-            Rt_next, current_state, sirs_params, sim_seed);
+        [current_state, stepper] = advance_sirs_stepper( ...
+            stepper, current_state, Rt_next);
         U_next = local_state_to_exogenous(current_state, exo_mode, sirs_params.pop_size);
 
         if numel(U_next) ~= size(rolling_U, 2)
@@ -258,31 +263,8 @@ function [data_step, fit_u_next] = local_build_forecast_data(rolling_Rt, rolling
     data_step = iddata(fit_y_step, fit_u_step, 1);
 end
 
-function next_state = local_advance_sirs_one_day(Rt_next, current_state, sirs_params, sim_seed)
-    uds_params = sirs_params;
-    uds_params.I0      = current_state(2);
-    uds_params.R0_init = current_state(3);
-    uds_params.solver  = 'uds';
-    uds_params.compile = 0;
-    uds_params.Rt      = [Rt_next, Rt_next];
-
-    [uds_mod, ~] = genData_SIRS([0, 1], uds_params, sim_seed);
-    next_state = local_sanitize_sirs_state(uds_mod.U(:, end), sirs_params.pop_size);
-end
-
 function U_next = local_state_to_exogenous(state, exo_mode, pop_size)
-    switch char(string(exo_mode))
-        case 'S'
-            U_next = state(1) / pop_size;
-        case 'I'
-            U_next = state(2) / pop_size;
-        case 'Both'
-            U_next = [state(1), state(2)] / pop_size;
-        otherwise
-            U_next = [];
-    end
-
-    U_next = reshape(U_next, 1, []);
+    U_next = extract_exogenous_from_state(state, exo_mode, pop_size);
 end
 
 function state = local_sanitize_sirs_state(raw_state, pop_size)
@@ -308,4 +290,17 @@ function [Rt_curve, lower_bounds, upper_bounds] = local_persistence_forecast(las
     Rt_curve = repmat(last_value, horizon, 1);
     lower_bounds = repmat(Rt_curve, 1, numel(interval_alphas));
     upper_bounds = repmat(Rt_curve, 1, numel(interval_alphas));
+end
+
+function seed = local_resolve_sim_seed(sim_seed)
+    if isempty(sim_seed)
+        rng('shuffle');
+        seed = randi(intmax('uint32'));
+    else
+        seed = double(sim_seed);
+    end
+
+    if ~isscalar(seed) || ~isfinite(seed) || seed < 0 || seed ~= floor(seed)
+        error('FIT:InvalidSeed', 'sim_seed must be a finite nonnegative integer scalar.');
+    end
 end
