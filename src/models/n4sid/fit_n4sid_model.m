@@ -1,11 +1,11 @@
-function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_n4sid( ...
+function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_n4sid_model( ...
     Rt_hist, U_hist, U_future, n, d, horizon, interval_alphas, ...
     sirs_state, sirs_params, exo_mode, sim_seed)
 %FIT_N4SID Fit a State-Space model via N4SID to historical Rt data and forecast.
 %
 %   Syntax:
 %       [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = ...
-%           fit_n4sid(Rt_hist, U_hist, U_future, n, d, horizon, interval_alphas)
+%           fit_n4sid_model(Rt_hist, U_hist, U_future, n, d, horizon, interval_alphas)
 %
 %   Description:
 %       Fits a discrete-time state-space model using the Subspace State-Space

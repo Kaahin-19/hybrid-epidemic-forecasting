@@ -47,8 +47,8 @@ The implementation is divided into three major phases as outlined in the project
 ### Source Code (``src/``)
 * ``src/models/fit_arima.m``: Fits an autoregressive model to a historical reproduction number time series through a standardized ARIMA wrapper.
 * ``src/models/fit_arimax.m``: Fits an autoregressive model with exogenous inputs to historical data through a standardized ARIMAX wrapper.
-* ``src/models/fit_n4sid.m``: Fits a discrete-time state-space model utilizing the Subspace State-Space System Identification (N4SID) algorithm.
-* ``src/models/fit_ssest.m``: Fits an optimized discrete-time state-space model using iterative Prediction Error Minimization (PEM).
+* ``src/models/fit_n4sid_model.m``: Fits a discrete-time state-space model utilizing the Subspace State-Space System Identification (N4SID) algorithm.
+* ``src/models/fit_ssest_model.m``: Fits an optimized discrete-time state-space model using iterative Prediction Error Minimization (PEM).
 * ``src/models/genData_SIRS.m``: Simulates SIRS trajectories from desired effective-``R_t`` inputs, computing the state-consistent internal transmission rates required by URDME.
 * ``src/models/genData_SEIR.m``: Simulates deterministic SEIR trajectories for Part B robustness testing.
 * ``src/scenarios/generate_rt_signal.m``: Generates configured Part A analytic effective reproduction-number trajectories, with seasonal, sigmoid, and multi-wave formulas kept as local helpers.

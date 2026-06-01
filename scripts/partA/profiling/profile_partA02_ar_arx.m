@@ -407,7 +407,7 @@ function checks = local_search_validation(repo_root)
     checks.partA03_git_diff_empty = local_git_diff_empty(repo_root, ...
         'scripts/partA/partA_03_run_forecasts.m');
     checks.n4sid_ssest_git_diff_empty = local_git_diff_empty(repo_root, ...
-        'src/models/fit_n4sid.m src/models/fit_ssest.m src/models/n4sid src/models/ssest');
+        'src/models/fit_n4sid_model.m src/models/fit_ssest_model.m src/models/n4sid src/models/ssest');
 end
 
 function text = local_build_report(results)

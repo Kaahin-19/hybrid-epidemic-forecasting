@@ -191,10 +191,10 @@ function direct = local_direct_profile_case(cfg, model_type, exo_mode)
     switch char(model_type)
         case 'N4SID'
             [Rt_curve, aicc, out_alphas, lower_bounds, upper_bounds] = ...
-                fit_n4sid(fit_args{:});
+                fit_n4sid_model(fit_args{:});
         case 'SSEST'
             [Rt_curve, aicc, out_alphas, lower_bounds, upper_bounds] = ...
-                fit_ssest(fit_args{:});
+                fit_ssest_model(fit_args{:});
         otherwise
             error('PROFILE:InvalidModel', 'Unsupported direct profile model: %s', model_type);
     end

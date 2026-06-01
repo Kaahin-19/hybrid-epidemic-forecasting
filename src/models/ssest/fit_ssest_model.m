@@ -1,11 +1,11 @@
-function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ssest( ...
+function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ssest_model( ...
     Rt_hist, U_hist, U_future, n, d, horizon, interval_alphas, ...
     sirs_state, sirs_params, exo_mode, sim_seed)
 %FIT_SSEST Fit an optimized State-Space model to historical Rt data and forecast.
 %
 %   Syntax:
 %       [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = ...
-%           fit_ssest(Rt_hist, U_hist, U_future, n, d, horizon, interval_alphas)
+%           fit_ssest_model(Rt_hist, U_hist, U_future, n, d, horizon, interval_alphas)
 %
 %   Description:
 %       Fits a discrete-time state-space model using the iterative Prediction
