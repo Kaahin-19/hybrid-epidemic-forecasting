@@ -110,7 +110,7 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_sse
         if use_closed_loop
             [pred_y, pred_sd] = local_closed_loop_forecast( ...
                 sys, Rt_hist, U_hist, d, horizon, sirs_state, ...
-                sirs_params, exo_mode, sim_seed, opt);
+                sirs_params, exo_mode, sim_seed, opt, data);
         elseif isempty(fit_u_fut)
             [yf, ~, ~, yf_sd] = forecast(sys, data, horizon, opt);
             pred_fit = local_extract_output(yf);
@@ -185,13 +185,22 @@ function enabled = local_use_closed_loop(U_hist, sirs_state, sirs_params, exo_mo
 end
 
 function [pred_y, pred_sd] = local_closed_loop_forecast( ...
-    sys, Rt_hist, U_hist, d, horizon, sirs_state, sirs_params, exo_mode, sim_seed, opt)
+    sys, Rt_hist, U_hist, d, horizon, sirs_state, sirs_params, exo_mode, sim_seed, opt, origin_data)
     initial_Rt = double(Rt_hist(:));
     initial_U  = double(U_hist);
     num_history = numel(initial_Rt);
 
     if size(initial_U, 1) ~= num_history
         error('FIT:InvalidExogenousHistory', 'Rt and exogenous histories must have matching lengths.');
+    end
+
+    if d == 0
+        [manual_ok, pred_y, pred_sd] = local_manual_closed_loop_forecast( ...
+            sys, origin_data, initial_U, horizon, sirs_state, sirs_params, ...
+            exo_mode, sim_seed, opt);
+        if manual_ok
+            return;
+        end
     end
 
     rolling_Rt = zeros(num_history + horizon, 1);
@@ -245,6 +254,113 @@ function [pred_y, pred_sd] = local_closed_loop_forecast( ...
         rolling_Rt(current_idx + 1, 1) = Rt_next;
         rolling_U(current_idx + 1, :) = U_next;
     end
+end
+
+function [manual_ok, pred_y, pred_sd] = local_manual_closed_loop_forecast( ...
+    sys, origin_data, initial_U, horizon, sirs_state, sirs_params, exo_mode, sim_seed, opt)
+%LOCAL_MANUAL_CLOSED_LOOP_FORECAST Use forecast-model matrices for d = 0 recursion.
+    manual_ok = false;
+    pred_y = [];
+    pred_sd = [];
+
+    try
+        current_state = local_sanitize_sirs_state(sirs_state, sirs_params.pop_size);
+        current_u = initial_U(end, :);
+        placeholder_u = repmat(current_u, horizon, 1);
+
+        [yf_ref, x_current, sys_forecast, ~] = forecast( ...
+            sys, origin_data, horizon, placeholder_u, opt);
+        [A, B, C, D] = idssdata(sys_forecast);
+
+        local_validate_state_space_matrices(A, B, C, D, current_u);
+
+        sim_options = struct( ...
+            'solver', 'uds', ...
+            'compile', false, ...
+            'seed', local_resolve_sim_seed(sim_seed));
+        stepper = initialize_sirs_stepper(sirs_params, sim_options);
+
+        pred_y = zeros(horizon, 1);
+        future_U = zeros(horizon, size(initial_U, 2));
+        % x_current is the forecast-model state before output h; update it after consuming u_h.
+        x_current = double(x_current(:));
+
+        for h = 1:horizon
+            future_U(h, :) = current_u;
+            u_column = double(current_u(:));
+            step_y = C * x_current + D * u_column;
+            if ~isscalar(step_y) || ~isfinite(step_y)
+                error('FIT:InvalidManualStateSpace', 'Manual state-space prediction is invalid.');
+            end
+
+            x_current = A * x_current + B * u_column;
+            Rt_next = exp(step_y);
+            if ~isfinite(Rt_next) || Rt_next <= 0
+                error('FIT:InvalidForecastOutput', 'Closed-loop Rt forecast is invalid.');
+            end
+
+            [current_state, stepper] = advance_sirs_stepper( ...
+                stepper, current_state, Rt_next);
+            U_next = local_state_to_exogenous(current_state, exo_mode, sirs_params.pop_size);
+
+            if numel(U_next) ~= size(initial_U, 2)
+                error('FIT:InvalidExogenousState', 'Closed-loop exogenous state has invalid dimension.');
+            end
+
+            pred_y(h) = step_y;
+            current_u = U_next;
+        end
+
+        [yf_check, ~, ~, yf_sd] = forecast(sys, origin_data, horizon, future_U, opt);
+        check_y = local_extract_output(yf_check);
+        pred_sd = local_extract_output(yf_sd);
+
+        if numel(check_y) ~= horizon || numel(pred_sd) ~= horizon
+            error('FIT:InvalidManualStateSpace', 'Manual state-space validation output is invalid.');
+        end
+
+        mismatch = max(abs(pred_y(:) - check_y(:)));
+        first_ref = local_extract_output(yf_ref);
+        first_mismatch = abs(pred_y(1) - first_ref(1));
+        tolerance = local_state_space_match_tolerance(check_y);
+        if mismatch > tolerance || first_mismatch > tolerance
+            manual_ok = false;
+            pred_y = [];
+            pred_sd = [];
+            return;
+        end
+
+        pred_sd = max(double(pred_sd(:)), 0);
+        manual_ok = true;
+    catch
+        manual_ok = false;
+        pred_y = [];
+        pred_sd = [];
+    end
+end
+
+function local_validate_state_space_matrices(A, B, C, D, u_next)
+%LOCAL_VALIDATE_STATE_SPACE_MATRICES Validate forecast-model matrix dimensions.
+    if isempty(A) || isempty(C) || any(~isfinite(A(:))) || any(~isfinite(C(:)))
+        error('FIT:InvalidManualStateSpace', 'Forecast state-space matrices are invalid.');
+    end
+
+    num_states = size(A, 1);
+    num_inputs = numel(u_next);
+    valid_dimensions = size(A, 2) == num_states && ...
+        size(B, 1) == num_states && size(B, 2) == num_inputs && ...
+        size(C, 2) == num_states && size(C, 1) == 1 && ...
+        size(D, 1) == 1 && size(D, 2) == num_inputs;
+
+    if ~valid_dimensions || any(~isfinite(B(:))) || any(~isfinite(D(:)))
+        error('FIT:InvalidManualStateSpace', 'Forecast state-space dimensions are inconsistent.');
+    end
+end
+
+function tolerance = local_state_space_match_tolerance(reference)
+%LOCAL_STATE_SPACE_MATCH_TOLERANCE Tolerance for MATLAB forecast agreement.
+    reference = double(reference(:));
+    tolerance = 1e-8 + 1e-6 * max(1, max(abs(reference)));
 end
 
 function [data_step, fit_u_next] = local_build_forecast_data(rolling_Rt, rolling_U, d)

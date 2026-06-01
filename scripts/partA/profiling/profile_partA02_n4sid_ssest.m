@@ -371,7 +371,8 @@ function text = local_build_report(results)
     text = text + newline + "## Expected Direct Profile Pattern" + newline + newline;
     text = text + "- None cases should have zero SIRS stepper, `rparse`, `urdme`, and `genData_SIRS` calls." + newline;
     text = text + "- I cases should initialize the SIRS stepper once, advance it once per horizon step, and keep `genData_SIRS` at zero." + newline;
-    text = text + "- `forecast(...)` remains in the N4SID/SSEST paths in this pass." + newline + newline;
+    text = text + "- I cases should not call `forecast(...)` or construct `iddata` inside the closed-loop horizon loop when the d = 0 manual state-space path validates." + newline;
+    text = text + "- `forecast(...)` may still appear for the initial state/uncertainty calculation and for None cases." + newline + newline;
 
     text = text + "## Static Checks" + newline + newline;
     text = text + sprintf("- AR/ARX files unchanged in git diff: %s.\n", ...
