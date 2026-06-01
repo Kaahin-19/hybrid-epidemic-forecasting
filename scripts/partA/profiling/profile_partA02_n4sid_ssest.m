@@ -13,7 +13,7 @@
 %       3. Profile one direct expanding-window call for each case.
 %       4. Write a Markdown report and save profiler data.
 %
-%   See also PARTA_02_SELECT_GLOBAL_MODEL_CONFIGURATIONS, FIT_N4SID, FIT_SSEST.
+%   See also PARTA_02_SELECT_GLOBAL_MODEL_CONFIGURATIONS, FIT_N4SID_MODEL, FIT_SSEST_MODEL.
 %
 % A. M. Kaahin 2026-06-01
 

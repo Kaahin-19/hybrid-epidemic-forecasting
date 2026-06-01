@@ -29,7 +29,7 @@ function forecast = run_model_forecast(model_type, selected_configuration, ...
 %                  lower_bounds, and upper_bounds.
 %
 %   See also FIT_AR_MODEL, FORECAST_AR_MODEL, FIT_ARX_MODEL, ...
-%            FORECAST_ARX_CLOSED_LOOP, FIT_N4SID, FIT_SSEST.
+%            FORECAST_ARX_CLOSED_LOOP, FIT_N4SID_MODEL, FIT_SSEST_MODEL.
 %
 % A. M. Kaahin 2026-06-01
 
