@@ -22,6 +22,7 @@ function stepper = initialize_sirs_stepper(model_params, sim_options)
 %   See also ADVANCE_SIRS_STEPPER, FORECAST_ARX_CLOSED_LOOP.
 %
 % A. M. Kaahin 2026-06-01
+% Modified: 2026-06-01
 
     %% 1. Input Validation
     params = local_validate_sirs_params(model_params);
@@ -175,9 +176,27 @@ end
 
 function build_dir = local_urdme_build_dir()
 %LOCAL_URDME_BUILD_DIR Return the repository-local URDME build directory.
-    source_file = mfilename('fullpath');
-    repo_root = fileparts(fileparts(fileparts(source_file)));
+    source_dir = fileparts(mfilename('fullpath'));
+    repo_root = local_find_repo_root(source_dir);
     build_dir = fullfile(repo_root, 'build', 'urdme');
+end
+
+function repo_root = local_find_repo_root(start_dir)
+%LOCAL_FIND_REPO_ROOT Walk upward until the repository root marker is found.
+    repo_root = start_dir;
+    while true
+        if exist(fullfile(repo_root, '.git'), 'dir') == 7 || ...
+                exist(fullfile(repo_root, 'AGENTS.md'), 'file') == 2
+            return;
+        end
+
+        parent_dir = fileparts(repo_root);
+        if strcmp(parent_dir, repo_root)
+            error('EPIDEMIC:RepoRootNotFound', ...
+                'Could not resolve repository root from %s.', start_dir);
+        end
+        repo_root = parent_dir;
+    end
 end
 
 function compile_flag = local_resolve_compile_flag(solver, model_name, compile_requested)
