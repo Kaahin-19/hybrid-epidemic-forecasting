@@ -1,27 +1,26 @@
-%PARTA_03_RUN_FORECASTS Execute expanding-window epidemic forecasts.
+%PARTA_03_RUN_FORECASTS Run final Part A expanding-window forecasts.
 %
 %   Description:
-%       Executes an expanding-window forecasting pipeline over synthetic
-%       ground truth data using a globally selected hyperparameter
-%       configuration for the active model family and exogenous-input
-%       setting. Each forecast window is refit on its own local history and
-%       produces analytic predictive intervals. Exogenous covariates
-%       (Susceptible and Infected populations) are generated recursively
-%       from one-step Rt forecasts and URDME/UDS SIRS advancement.
+%       Generates the final Part A forecasts using the globally selected model
+%       configuration for the active model family and exogenous-input setting.
+%       The forecast dataset, expanding-window protocol, and model dispatch
+%       reproduce the corrected Part A model-selection behaviour so that final
+%       forecasts and selection share identical model logic. The script is a
+%       thin orchestration layer over the reusable forecasting helpers and
+%       saves only MATLAB forecast artifacts.
 %
 %   Workflow:
-%       1. Initialize experiment and model configurations.
-%       2. Load the globally selected hyperparameter artifact.
-%       3. Run expanding-window forecasts for each synthetic truth dataset.
-%       4. Persist forecast artifacts and visualizations.
+%       1. Load configuration and resolve the active model/exogenous setting.
+%       2. Load and validate the global model-selection artifact.
+%       3. Build the expanding-window forecast dataset and run forecasts.
+%       4. Save one MATLAB forecast artifact per scenario.
 %
-%   See also PARTA_CONFIG, GENDATA_SIRS, ...
-%            PLOT_RT_FORECAST_COMPARISON, ...
-%            PARTA_01_GENERATE_SYNTHETIC_TRUTH, ...
-%            PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS.
-
+%   See also PARTA_CONFIG, BUILD_FORECASTING_DATASET, ...
+%            RUN_EXPANDING_WINDOW_FORECAST, RUN_MODEL_FORECAST, ...
+%            PARTA_02_SELECT_GLOBAL_MODEL_CONFIGURATIONS, PARTA_04_EVALUATE_MODELS.
+%
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-05-04
+% Modified: 2026-06-01
 
 %% 1. Initialization
 clear; close all; clc;
@@ -32,136 +31,77 @@ cfg = partA_config();
 MODEL_TYPE = char(cfg.run.model_type);
 EXO_MODE   = char(cfg.run.exo_mode);
 
-EXO_MODE = validate_configuration(MODEL_TYPE, EXO_MODE);
+EXO_MODE = local_validate_configuration(MODEL_TYPE, EXO_MODE);
 fprintf('Configuration: Model = %s | Exogenous Mode = %s\n', MODEL_TYPE, EXO_MODE);
 
-%% 2. Configuration and Grid Setup
-dataDir  = cfg.output.data_dir;     
-saveDir  = cfg.output.forecast_dir; 
-tuningDir = cfg.output.tuning_dir;
-fileList = dir(fullfile(dataDir, '*.mat'));
-wis_alphas = cfg.forecast.wis_alphas;
-
-[selected_model, table_headers] = load_selected_hyperparameters( ...
-    tuningDir, MODEL_TYPE, EXO_MODE, cfg);
-fprintf('Using global hyperparameters: %s\n', mat2str(selected_model));
-
-if isempty(fileList)
-    error('FORECAST:NoData', 'No synthetic truth files found. Run partA_01_generate_synthetic_truth.m first.');
-end
-
+saveDir = cfg.output.forecast_dir;
 if ~exist(saveDir, 'dir')
     mkdir(saveDir);
 end
 
-%% 3. Evaluation and Artifact Loop
-for i = 1:length(fileList)
-    filename = fileList(i).name;
-    fullPath = fullfile(dataDir, filename);
-    [~, name_core] = fileparts(filename);
-    
-    scenario_id = strrep(name_core, 'partA_01_truth_', '');
-    fprintf('  - Processing Scenario: %s...\n', scenario_id);
-    
-    loaded  = load(fullPath);
-    Rt_true = loaded.Rt_true;
-    tspan   = loaded.tspan;
-    
-    scaled_S = loaded.S_true(:) / cfg.sirs.pop_size;
-    scaled_I = loaded.I_true(:) / cfg.sirs.pop_size;
-    
-    switch EXO_MODE
-        case 'None', U_true = [];
-        case 'S',    U_true = scaled_S;
-        case 'I',    U_true = scaled_I;
-        case 'Both', U_true = [scaled_S, scaled_I];
-    end
-    
-    num_exo = size(U_true, 2);
-    
-    T_end   = length(Rt_true);
-    max_T   = T_end - cfg.forecast.horizon;
-    windows = cfg.forecast.min_window : cfg.forecast.step_size : max_T;
-    num_windows = numel(windows);
-    
-    results = repmat(struct( ...
-        'window_day', [], ...
-        'window_day_idx', [], ...
-        'forecast_median', [], ...
-        'forecast_interval_alphas', [], ...
-        'forecast_lower', [], ...
-        'forecast_upper', [], ...
-        'best_model', [], ...
-        'aic_landscape', [], ...
-        'truth_Rt_window', [], ...
-        'time_horizon', []), num_windows, 1);
-    count = 1;
-    
-    for T = windows
-        idx_T = find(tspan == T, 1);
-        if isempty(idx_T), continue; end
-        
-        horizon = cfg.forecast.horizon;
-        idx_end = idx_T + horizon;
-        
-        Rt_past = Rt_true(1:idx_T);
-        
-        if isempty(U_true)
-            U_past   = [];
-            sirs_state = [];
-        else
-            U_past = U_true(1:idx_T, :);
-            
-            current_I  = loaded.I_true(idx_T);
-            current_S  = loaded.S_true(idx_T);
-            current_R  = cfg.sirs.pop_size - current_S - current_I;
-            sirs_state = [current_S, current_I, current_R];
-        end
-        
-        [best_Rt_pred, aicc, best_wis_alpha, best_Rt_lower, best_Rt_upper] = ...
-            fit_selected_model(MODEL_TYPE, selected_model, Rt_past, U_past, ...
-            sirs_state, cfg.sirs, EXO_MODE, cfg.sim.seed, num_exo, horizon, wis_alphas);
-        
-        results(count).window_day      = T;
-        results(count).window_day_idx  = idx_T;
-        results(count).forecast_median = best_Rt_pred;
-        results(count).forecast_interval_alphas = best_wis_alpha;
-        results(count).forecast_lower  = best_Rt_lower;
-        results(count).forecast_upper  = best_Rt_upper;
-        results(count).best_model      = selected_model;
-        results(count).aic_landscape   = [selected_model, aicc];
-        results(count).truth_Rt_window = Rt_true(idx_T+1 : idx_end);
-        results(count).time_horizon    = tspan(idx_T+1 : idx_end);
-        
-        count = count + 1;
+%% 2. Load Selected Configuration
+selected_configuration = local_load_selected_configuration( ...
+    cfg.output.model_selection_dir, MODEL_TYPE, EXO_MODE, cfg);
+fprintf('Using global configuration: %s\n', mat2str(selected_configuration));
+
+%% 3. Build Dataset and Run Forecasts
+scenario_data = build_forecasting_dataset(cfg, EXO_MODE);
+
+forecast_options = struct( ...
+    'horizon', cfg.forecast.horizon, ...
+    'wis_alphas', cfg.forecast.wis_alphas, ...
+    'sirs_cfg', cfg.sirs, ...
+    'exo_mode', EXO_MODE, ...
+    'sim_seed', cfg.sim.seed, ...
+    'num_exo', 0);
+
+cfg_snapshot = struct( ...
+    'min_window', cfg.forecast.min_window, ...
+    'step_size', cfg.forecast.step_size, ...
+    'horizon', cfg.forecast.horizon, ...
+    'wis_alphas', cfg.forecast.wis_alphas, ...
+    'pop_size', cfg.sirs.pop_size, ...
+    'gamma', cfg.sirs.gamma, ...
+    'xi', cfg.sirs.xi, ...
+    'sim_seed', cfg.sim.seed);
+
+model_type = MODEL_TYPE;
+exo_mode = EXO_MODE;
+
+for i = 1:numel(scenario_data)
+    scenario_entry = scenario_data(i);
+    scenario_id   = char(scenario_entry.scenario_id);
+    scenario_name = scenario_entry.scenario_name; %#ok<NASGU>
+    fprintf('  - Forecasting Scenario: %s...\n', scenario_id);
+
+    forecast_results = run_expanding_window_forecast(scenario_entry, ...
+        MODEL_TYPE, selected_configuration, forecast_options);
+
+    if isempty(forecast_results)
+        warning('FORECAST:NoWindows', ...
+            'No valid forecast windows for scenario %s.', scenario_id);
     end
 
-    results = results(1:count-1);
-    
-    % Persist scenario-level forecast artifacts and visualization.
-    summary_table = array2table([selected_model, count - 1], ...
-        'VariableNames', table_headers);
-    
+    %% 4. Persist Forecast Artifact
+    % Legacy mirror so the existing partA_04 evaluator runs unmodified.
+    results = local_build_legacy_results(forecast_results, selected_configuration); %#ok<NASGU>
+
     file_prefix = sprintf('partA_03_forecast_%s_%s_%s', scenario_id, MODEL_TYPE, EXO_MODE);
-    
-    csvName = fullfile(saveDir, [file_prefix, '_summary.csv']);
-    writetable(summary_table, csvName);
-    fprintf('Forecast summary saved to: %s\n', csvName);
-    
     outName = fullfile(saveDir, [file_prefix, '.mat']);
-    save(outName, 'results', 'cfg');
+
+    save(outName, ...
+        'model_type', 'exo_mode', ...
+        'scenario_id', 'scenario_name', ...
+        'selected_configuration', 'forecast_results', 'cfg_snapshot', ...
+        'results');
     fprintf('Forecast artifact saved to: %s\n', outName);
-    
-    plot_name = sprintf('%s_%s_%s', scenario_id, MODEL_TYPE, EXO_MODE);
-    plotPath = plot_rt_forecast_comparison(results, Rt_true, tspan, plot_name, cfg);
-    fprintf('Forecast visualization saved to: %s\n', plotPath);
 end
 
 fprintf('=== Forecast Pipeline Complete ===\n\n');
 
-%% 4. Local Functions
-function valid_exo_mode = validate_configuration(model_type, exo_mode)
-%VALIDATE_CONFIGURATION Resolve logical conflicts in configuration.
+%% 5. Local Functions
+function valid_exo_mode = local_validate_configuration(model_type, exo_mode)
+%LOCAL_VALIDATE_CONFIGURATION Resolve logical conflicts in run configuration.
     valid_exo_mode = exo_mode;
     if strcmp(model_type, 'AR') && ~strcmp(exo_mode, 'None')
         warning('CFG:ArExo', 'AR is strictly autoregressive. Forcing EXO_MODE to None.');
@@ -173,129 +113,119 @@ function valid_exo_mode = validate_configuration(model_type, exo_mode)
     end
 end
 
-function [selected_model, table_headers] = load_selected_hyperparameters(tuning_dir, model_type, exo_mode, cfg)
-%LOAD_SELECTED_HYPERPARAMETERS Load and validate a global tuning artifact.
-    [parameter_headers, expected_num_params] = get_parameter_headers(model_type);
-    table_headers = [parameter_headers, {'Times_Selected'}];
+function selected_configuration = local_load_selected_configuration( ...
+    selection_dir, model_type, exo_mode, cfg)
+%LOCAL_LOAD_SELECTED_CONFIGURATION Load and validate the selection artifact.
+    expected_num_params = local_expected_param_count(model_type);
 
     file_prefix = sprintf('partA_02_global_hyperparameters_%s_%s', model_type, exo_mode);
-    tuning_path = fullfile(tuning_dir, [file_prefix, '.mat']);
+    artifact_path = fullfile(selection_dir, [file_prefix, '.mat']);
 
-    if ~exist(tuning_path, 'file')
-        error('FORECAST:MissingTuningArtifact', ...
-            'Missing global hyperparameter artifact: %s. Run partA_02_select_global_hyperparameters.m first.', ...
-            tuning_path);
+    if ~exist(artifact_path, 'file')
+        error('FORECAST:MissingSelectionArtifact', ...
+            ['Missing global model-selection artifact: %s. ', ...
+            'Run partA_02_select_global_model_configurations.m first.'], artifact_path);
     end
 
-    tuning = load(tuning_path);
-    validate_tuning_artifact(tuning, tuning_path, model_type, exo_mode, cfg, expected_num_params);
-    selected_model = reshape(double(tuning.selected_model), 1, []);
+    selection = load(artifact_path);
+    local_validate_selection_artifact(selection, artifact_path, ...
+        model_type, exo_mode, cfg, expected_num_params);
+    selected_configuration = reshape(double(selection.selected_model), 1, []);
 end
 
-function validate_tuning_artifact(tuning, tuning_path, model_type, exo_mode, cfg, expected_num_params)
-%VALIDATE_TUNING_ARTIFACT Validate a loaded global tuning artifact.
+function local_validate_selection_artifact(selection, artifact_path, ...
+    model_type, exo_mode, cfg, expected_num_params)
+%LOCAL_VALIDATE_SELECTION_ARTIFACT Validate a loaded model-selection artifact.
     required_fields = {'model_type', 'exo_mode', 'selected_model', 'cfg_snapshot', 'wis_alphas'};
-    if ~all(isfield(tuning, required_fields))
-        error('FORECAST:InvalidTuningArtifact', ...
-            'Global hyperparameter artifact is missing required fields: %s.', ...
-            tuning_path);
+    if ~all(isfield(selection, required_fields))
+        error('FORECAST:InvalidSelectionArtifact', ...
+            'Model-selection artifact is missing required fields: %s.', artifact_path);
     end
 
-    if ~strcmp(string(tuning.model_type), string(model_type))
-        error('FORECAST:TuningModelMismatch', ...
-            'Tuning artifact model mismatch. Expected %s, found %s.', ...
-            model_type, string(tuning.model_type));
+    if ~strcmp(string(selection.model_type), string(model_type))
+        error('FORECAST:SelectionModelMismatch', ...
+            'Selection artifact model mismatch. Expected %s, found %s.', ...
+            model_type, string(selection.model_type));
     end
 
-    if ~strcmp(string(tuning.exo_mode), string(exo_mode))
-        error('FORECAST:TuningExoMismatch', ...
-            'Tuning artifact exogenous-mode mismatch. Expected %s, found %s.', ...
-            exo_mode, string(tuning.exo_mode));
+    if ~strcmp(string(selection.exo_mode), string(exo_mode))
+        error('FORECAST:SelectionExoMismatch', ...
+            'Selection artifact exogenous-mode mismatch. Expected %s, found %s.', ...
+            exo_mode, string(selection.exo_mode));
     end
 
-    selected_model = reshape(double(tuning.selected_model), 1, []);
+    selected_model = reshape(double(selection.selected_model), 1, []);
     if numel(selected_model) ~= expected_num_params
-        error('FORECAST:TuningDimensionMismatch', ...
-            'Selected hyperparameter dimensionality is invalid in tuning artifact: %s.', ...
-            tuning_path);
+        error('FORECAST:SelectionDimensionMismatch', ...
+            'Selected configuration dimensionality is invalid in artifact: %s.', ...
+            artifact_path);
     end
 
-    if ~isfield(tuning.cfg_snapshot, 'min_window') || ...
-            tuning.cfg_snapshot.min_window ~= cfg.forecast.min_window || ...
-            ~isfield(tuning.cfg_snapshot, 'step_size') || ...
-            tuning.cfg_snapshot.step_size ~= cfg.forecast.step_size || ...
-            ~isfield(tuning.cfg_snapshot, 'horizon') || ...
-            tuning.cfg_snapshot.horizon ~= cfg.forecast.horizon || ...
-            ~isfield(tuning.cfg_snapshot, 'wis_alphas') || ...
-            ~isequal(double(tuning.cfg_snapshot.wis_alphas(:)), double(cfg.forecast.wis_alphas(:))) || ...
-            ~isfield(tuning.cfg_snapshot, 'pop_size') || ...
-            tuning.cfg_snapshot.pop_size ~= cfg.sirs.pop_size || ...
-            ~isfield(tuning.cfg_snapshot, 'gamma') || ...
-            tuning.cfg_snapshot.gamma ~= cfg.sirs.gamma || ...
-            ~isfield(tuning.cfg_snapshot, 'xi') || ...
-            tuning.cfg_snapshot.xi ~= cfg.sirs.xi || ...
-            ~isfield(tuning.cfg_snapshot, 'sim_seed') || ...
-            tuning.cfg_snapshot.sim_seed ~= cfg.sim.seed
-        error('FORECAST:TuningConfigMismatch', ...
-            'Global hyperparameter artifact is incompatible with the current forecast configuration: %s.', ...
-            tuning_path);
+    snapshot = selection.cfg_snapshot;
+    if ~isfield(snapshot, 'min_window') || snapshot.min_window ~= cfg.forecast.min_window || ...
+            ~isfield(snapshot, 'step_size') || snapshot.step_size ~= cfg.forecast.step_size || ...
+            ~isfield(snapshot, 'horizon') || snapshot.horizon ~= cfg.forecast.horizon || ...
+            ~isfield(snapshot, 'wis_alphas') || ...
+            ~isequal(double(snapshot.wis_alphas(:)), double(cfg.forecast.wis_alphas(:))) || ...
+            ~isfield(snapshot, 'pop_size') || snapshot.pop_size ~= cfg.sirs.pop_size || ...
+            ~isfield(snapshot, 'gamma') || snapshot.gamma ~= cfg.sirs.gamma || ...
+            ~isfield(snapshot, 'xi') || snapshot.xi ~= cfg.sirs.xi || ...
+            ~isfield(snapshot, 'sim_seed') || snapshot.sim_seed ~= cfg.sim.seed
+        error('FORECAST:SelectionConfigMismatch', ...
+            'Model-selection artifact is incompatible with the current configuration: %s.', ...
+            artifact_path);
     end
 
-    if ~isequal(double(tuning.wis_alphas(:)), double(cfg.forecast.wis_alphas(:)))
-        error('FORECAST:TuningAlphaMismatch', ...
-            'Global hyperparameter artifact uses different WIS alphas: %s.', ...
-            tuning_path);
+    if ~isequal(double(selection.wis_alphas(:)), double(cfg.forecast.wis_alphas(:)))
+        error('FORECAST:SelectionAlphaMismatch', ...
+            'Model-selection artifact uses different WIS alphas: %s.', artifact_path);
     end
 end
 
-function [parameter_headers, expected_num_params] = get_parameter_headers(model_type)
-%GET_PARAMETER_HEADERS Return parameter labels for the active model family.
+function expected_num_params = local_expected_param_count(model_type)
+%LOCAL_EXPECTED_PARAM_COUNT Return the parameter count for a model family.
     switch model_type
         case 'AR'
-            parameter_headers = {'p'};
             expected_num_params = 1;
-
         case 'ARX'
-            parameter_headers = {'na', 'nb', 'nk'};
             expected_num_params = 3;
-
         case {'N4SID', 'SSEST'}
-            parameter_headers = {'State_Order_n', 'Differencing_d'};
             expected_num_params = 2;
-
         otherwise
             error('CFG:UnknownModel', 'Unsupported MODEL_TYPE: %s', model_type);
     end
 end
 
-function [Rt_pred, aicc, wis_alpha, Rt_lower, Rt_upper] = fit_selected_model( ...
-    model_type, selected_model, Rt_past, U_past, sirs_state, sirs_cfg, exo_mode, sim_seed, ...
-    num_exo, horizon, wis_alphas)
-%FIT_SELECTED_MODEL Fit and forecast the selected global hyperparameter configuration.
-    switch model_type
-        case 'AR'
-            [Rt_pred, aicc, wis_alpha, Rt_lower, Rt_upper] = ...
-                fit_arima(Rt_past, selected_model(1), 0, 0, horizon, wis_alphas);
+function results = local_build_legacy_results(forecast_results, selected_configuration)
+%LOCAL_BUILD_LEGACY_RESULTS Mirror forecast results into the legacy layout.
+%   Preserves the field names consumed by the current partA_04 evaluator so
+%   that downstream evaluation continues to run without modification.
+    selected_row = reshape(double(selected_configuration), 1, []);
+    num_results = numel(forecast_results);
 
-        case 'ARX'
-            nb_vec = repmat(selected_model(2), 1, num_exo);
-            nk_vec = repmat(selected_model(3), 1, num_exo);
-            [Rt_pred, aicc, wis_alpha, Rt_lower, Rt_upper] = ...
-                fit_arimax(Rt_past, U_past, [], selected_model(1), 0, 0, ...
-                nb_vec, nk_vec, horizon, wis_alphas, ...
-                sirs_state, sirs_cfg, exo_mode, sim_seed);
+    results = repmat(struct( ...
+        'window_day', [], ...
+        'window_day_idx', [], ...
+        'forecast_median', [], ...
+        'forecast_interval_alphas', [], ...
+        'forecast_lower', [], ...
+        'forecast_upper', [], ...
+        'best_model', [], ...
+        'aic_landscape', [], ...
+        'truth_Rt_window', [], ...
+        'time_horizon', []), max(num_results, 0), 1);
 
-        case 'N4SID'
-            [Rt_pred, aicc, wis_alpha, Rt_lower, Rt_upper] = ...
-                fit_n4sid(Rt_past, U_past, [], selected_model(1), selected_model(2), ...
-                horizon, wis_alphas, sirs_state, sirs_cfg, exo_mode, sim_seed);
-
-        case 'SSEST'
-            [Rt_pred, aicc, wis_alpha, Rt_lower, Rt_upper] = ...
-                fit_ssest(Rt_past, U_past, [], selected_model(1), selected_model(2), ...
-                horizon, wis_alphas, sirs_state, sirs_cfg, exo_mode, sim_seed);
-
-        otherwise
-            error('CFG:UnknownModel', 'Unsupported MODEL_TYPE: %s', model_type);
+    for k = 1:num_results
+        entry = forecast_results(k);
+        results(k).window_day               = entry.forecast_origin;
+        results(k).window_day_idx           = entry.window_day_idx;
+        results(k).forecast_median          = entry.Rt_pred;
+        results(k).forecast_interval_alphas = entry.interval_alphas;
+        results(k).forecast_lower           = entry.lower_bounds;
+        results(k).forecast_upper           = entry.upper_bounds;
+        results(k).best_model               = selected_row;
+        results(k).aic_landscape            = [selected_row, entry.aicc];
+        results(k).truth_Rt_window          = entry.Rt_true_future;
+        results(k).time_horizon             = entry.t_future;
     end
 end
