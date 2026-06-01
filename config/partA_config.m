@@ -167,6 +167,7 @@ function cfg = partA_config()
     cfg.output.data_dir     = fullfile(repoRoot, "data", "partA");
     cfg.output.root_dir     = fullfile(repoRoot, "results", "partA");
     cfg.output.model_selection_dir = fullfile(cfg.output.root_dir, "model_selection");
+    % Compatibility alias for Part B/C consumers; no results/partA/tuning folder is used.
     cfg.output.tuning_dir   = cfg.output.model_selection_dir;
     cfg.output.forecast_dir = fullfile(cfg.output.root_dir, "forecasts");
     cfg.output.score_dir    = fullfile(cfg.output.root_dir, "evaluation");

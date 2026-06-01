@@ -18,7 +18,7 @@ The implementation is divided into three major phases as outlined in the project
 * ``data/``: Contains generated SIRS truth under ``data/partA/``, generated SEIR truth under ``data/partB/``, and WHO COVID-19 raw inputs under ``data/partC/raw/`` with processed real-data artifacts under ``data/partC/processed/``.
 * ``results/``: Stores generated outputs, with Part A artifacts under ``results/partA/`` including ``model_selection/``, ``forecasts/``, ``evaluation/``, ``figures/``, ``tables/``, and ``logs/``; Part B and Part C artifacts include forecasts, scores, figures, logs, and local-refinement outputs under ``results/partC/refinement/``.
 * ``scripts/``: Contains high-level execution scripts, with Part A scripts under ``scripts/partA/``, Part B scripts under ``scripts/partB/``, and Part C frozen real-data plus local-refinement scripts under ``scripts/partC/``.
-* ``src/``: Core functional modules, separated into ``scenarios/`` (analytic $R_t$ signals), ``epidemic/`` (ground-truth simulation and the reusable one-day SIRS stepper), ``forecasting/`` (expanding-window orchestration and dataset assembly), ``model_selection/`` (Part A candidate generation, scoring, and selection), ``models/`` (forecasting algorithms grouped into ``ar/``, ``arx/``, ``n4sid/``, and ``ssest/`` subfolders alongside the ARIMA/ARIMAX wrappers and the ``genData`` simulators), ``intervals/`` (closed-loop residual-bootstrap and Monte Carlo predictive intervals, split into shared helpers, ``ar_arx/``, and ``statespace/``), and ``plots/`` (visualization helpers).
+* ``src/``: Core functional modules, separated into ``epidemiology/scenarios/`` (analytic $R_t$ signals), ``epidemiology/dynamics/`` (ground-truth simulation and reusable SIRS stepping), ``forecasting/`` (expanding-window orchestration and dataset assembly), ``model_selection/`` (Part A candidate generation, scoring, and selection), ``evaluation/`` (Part A forecast metrics and summaries), ``visualization/`` (reusable figure helpers), ``models/`` (forecasting algorithms grouped into ``ar/``, ``arx/``, ``n4sid/``, and ``ssest/`` subfolders alongside the ARIMA/ARIMAX wrappers and the ``genData`` simulators), and ``intervals/`` (closed-loop residual-bootstrap and Monte Carlo predictive intervals, split into shared helpers, ``ar_arx/``, and ``statespace/``).
 
 ## Active Files Summary
 
@@ -35,8 +35,8 @@ The implementation is divided into three major phases as outlined in the project
 * ``scripts/partA/partA_01_generate_synthetic_truth.m``: Simulates the SIRS epidemic model to generate and save one synthetic ground-truth ``.mat`` artifact for each Part A scenario.
 * ``scripts/partA/partA_02_select_global_model_configurations.m``: Selects one global model configuration per model family and exogenous-input setting using cross-scenario WIS and the active ``cfg.run`` configuration.
 * ``scripts/partA/partA_03_run_forecasts.m``: Acts as a unified switchboard to execute expanding-window probabilistic forecasts using the selected global hyperparameter configuration, causal effective-``R_t`` SIRS covariate projection, and the active ``cfg.run`` configuration.
-* ``scripts/partA/partA_04_evaluate_forecasts.m``: Aggregates all forecast artifacts, computes per-window Weighted Interval Score (WIS) metrics (penalizing invalid windows with ``Inf``), and produces the comparative Part A statistical summaries.
-* ``scripts/partA/partA_05_generate_figures.m``: Reserved entry point for generating Part A presentation figures from saved evaluation artifacts (currently an empty placeholder).
+* ``scripts/partA/partA_04_evaluate_forecasts.m``: Aggregates all forecast artifacts, computes WIS, WIS components, RMSE, MAE, coverage, calibration, and interval-width metrics, saves the evaluation ``.mat`` artifact under ``results/partA/evaluation/``, and writes table outputs under ``results/partA/tables/``.
+* ``scripts/partA/partA_05_generate_figures.m``: Loads saved truth, model-selection, forecast, evaluation, and table artifacts, then writes final Part A figures under ``results/partA/figures/``.
 * ``scripts/partB/partB_01_generate_truth.m``: Generates SEIR ground-truth trajectories for the same four analytic $R_t$ scenarios used in Part A.
 * ``scripts/partB/partB_02_run_fixed_forecasts.m``: Runs fixed Part A-selected AR/ARX configurations against SEIR truth using SIRS-style future covariate projection.
 * ``scripts/partB/partB_03_evaluate_models.m``: Computes Part B WIS summaries, SIRS-vs-SEIR state-projection errors, and Part B evaluation figures.
@@ -47,10 +47,10 @@ The implementation is divided into three major phases as outlined in the project
 
 ### Source Code (``src/``)
 
-**Scenarios (``src/scenarios/``)**
+**Epidemiology scenarios (``src/epidemiology/scenarios/``)**
 * ``generate_rt_signal.m``: Generates configured Part A analytic effective reproduction-number trajectories, with seasonal, sigmoid, and multi-wave formulas kept as local helpers.
 
-**Epidemic simulation (``src/epidemic/``)**
+**Epidemiology dynamics (``src/epidemiology/dynamics/``)**
 * ``simulate_ground_truth_epidemic.m``: Simulates effective-``R_t``-driven SIRS ground truth directly with URDME and assembles reusable truth structures.
 * ``initialize_sirs_stepper.m``: Prepares a reusable one-day URDME SIRS stepper.
 * ``advance_sirs_stepper.m``: Advances the SIRS state one day using the reusable URDME stepper.
@@ -67,6 +67,15 @@ The implementation is divided into three major phases as outlined in the project
 * ``evaluate_candidate.m``: Scores one Part A model configuration across scenarios.
 * ``aggregate_candidate_scores.m``: Evaluates and aggregates the Part A candidate scores.
 * ``select_best_configuration.m``: Selects the candidate with the lowest global mean WIS.
+
+**Evaluation (``src/evaluation/``)**
+* ``compute_wis.m``: Computes raw-scale pointwise weighted interval scores.
+* ``compute_wis_components.m``: Decomposes WIS into median, dispersion, underprediction, and overprediction components.
+* ``compute_rmse.m``: Computes median point-forecast RMSE.
+* ``compute_mae.m``: Computes median point-forecast MAE.
+* ``compute_coverage.m``: Computes empirical predictive-interval coverage.
+* ``compute_interval_width.m``: Computes predictive-interval widths.
+* ``summarize_forecast_scores.m``: Builds scenario, horizon, model, exogenous-mode, calibration, and WIS-component summary tables.
 
 **Forecasting models (``src/models/``)**
 * ``fit_arima.m``: Fits an ARIMA(p,d,q) model to historical ``R_t`` data and forecasts through a standardized wrapper.
@@ -93,7 +102,12 @@ The implementation is divided into three major phases as outlined in the project
 * ``statespace/simulate_statespace_closed_loop_bootstrap_paths.m``: Shared innovations-form closed-loop simulator for N4SID/SSEST trajectories.
 * ``statespace/simulate_statespace_intervals.m``: N4SID/SSEST family entry where the state-space estimator is the only family-specific step.
 
-**Visualization (``src/plots/``)**
-* ``plot_model_performance.m``: Visualizes the comparative WIS distributions across various model configurations and scenarios.
-* ``plot_rt_forecast_comparison.m``: Generates a unified visualization comparing the expanding-window forecast medians and predictive intervals against the ground truth.
-* ``plot_rt_scenarios.m``: Generates a tiled summary figure displaying the predefined synthetic reproduction number profiles.
+**Visualization (``src/visualization/``)**
+* ``build_plot_spec.m``: Builds reusable plot specification structures.
+* ``export_figure.m``: Centralizes figure export behavior.
+* ``plot_rt_scenarios.m``: Draws scenario effective-reproduction-number trajectories.
+* ``plot_forecast_comparison.m``: Draws fixed-lead forecast medians and predictive intervals against truth.
+* ``plot_model_performance.m``: Draws model-level WIS distributions; it retains a legacy ``cfg`` call path for Part B/C compatibility.
+* ``plot_wis_by_horizon.m``: Draws WIS summaries by forecast horizon.
+* ``plot_coverage_summary.m``: Draws empirical coverage against nominal interval coverage.
+* ``plot_rt_forecast_comparison.m``: Legacy compatibility wrapper for older Part B/C scripts.

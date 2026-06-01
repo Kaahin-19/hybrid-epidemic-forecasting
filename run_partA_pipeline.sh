@@ -22,6 +22,7 @@ Description:
          - scripts/partA/partA_02_select_global_model_configurations.m
          - scripts/partA/partA_03_run_forecasts.m
     3. scripts/partA/partA_04_evaluate_forecasts.m
+    4. scripts/partA/partA_05_generate_figures.m
 
   Each invocation creates a timestamped run folder under:
     results/partA/logs/<run_id>/
@@ -489,6 +490,10 @@ done
 run_matlab_scripts "Evaluating accumulated forecast artifacts" \
   "evaluation" "-" "-" "$RUN_LOG_DIR/partA_04_evaluate_forecasts.log" \
   "scripts/partA/partA_04_evaluate_forecasts.m"
+
+run_matlab_scripts "Generating presentation figures" \
+  "figures" "-" "-" "$RUN_LOG_DIR/partA_05_generate_figures.log" \
+  "scripts/partA/partA_05_generate_figures.m"
 
 log_status "Part A pipeline completed successfully."
 log_status "Run logs saved to: ${RUN_LOG_DIR}"
