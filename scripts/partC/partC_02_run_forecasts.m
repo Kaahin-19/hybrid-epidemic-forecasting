@@ -15,7 +15,7 @@
 %       3. Artifact and figure persistence, including diagnostic capped
 %          forecast figures for readability.
 %
-%   See also PARTC_CONFIG, FIT_ARIMA, FIT_ARIMAX.
+%   See also PARTC_CONFIG, FIT_AR_MODEL, FIT_ARX_MODEL.
 
 % A. M. Kaahin 2026-05-18
 

@@ -18,7 +18,7 @@ The implementation is divided into three major phases as outlined in the project
 * ``data/``: Contains generated SIRS truth under ``data/partA/``, generated SEIR truth under ``data/partB/``, and WHO COVID-19 raw inputs under ``data/partC/raw/`` with processed real-data artifacts under ``data/partC/processed/``.
 * ``results/``: Stores generated outputs, with Part A artifacts under ``results/partA/`` including ``model_selection/``, ``forecasts/``, ``evaluation/``, ``figures/``, ``tables/``, and ``logs/``; Part B and Part C artifacts include forecasts, scores, figures, logs, and local-refinement outputs under ``results/partC/refinement/``.
 * ``scripts/``: Contains high-level execution scripts, with Part A scripts under ``scripts/partA/``, Part B scripts under ``scripts/partB/``, and Part C frozen real-data plus local-refinement scripts under ``scripts/partC/``.
-* ``src/``: Core functional modules, separated into ``scenarios/`` (analytic $R_t$ signals), ``epidemic/`` (ground-truth simulation), ``models/`` (forecasting algorithms and legacy simulators), and ``plots/`` (visualization helpers).
+* ``src/``: Core functional modules, separated into ``scenarios/`` (analytic $R_t$ signals), ``epidemic/`` (ground-truth simulation and the reusable one-day SIRS stepper), ``forecasting/`` (expanding-window orchestration and dataset assembly), ``model_selection/`` (Part A candidate generation, scoring, and selection), ``models/`` (forecasting algorithms grouped into ``ar/``, ``arx/``, ``n4sid/``, and ``ssest/`` subfolders alongside the ARIMA/ARIMAX wrappers and the ``genData`` simulators), and ``plots/`` (visualization helpers).
 
 ## Active Files Summary
 
@@ -35,7 +35,8 @@ The implementation is divided into three major phases as outlined in the project
 * ``scripts/partA/partA_01_generate_synthetic_truth.m``: Simulates the SIRS epidemic model to generate and save one synthetic ground-truth ``.mat`` artifact for each Part A scenario.
 * ``scripts/partA/partA_02_select_global_model_configurations.m``: Selects one global model configuration per model family and exogenous-input setting using cross-scenario WIS and the active ``cfg.run`` configuration.
 * ``scripts/partA/partA_03_run_forecasts.m``: Acts as a unified switchboard to execute expanding-window probabilistic forecasts using the selected global hyperparameter configuration, causal effective-``R_t`` SIRS covariate projection, and the active ``cfg.run`` configuration.
-* ``scripts/partA/partA_04_evaluate_models.m``: Aggregates the forecast results, calculates WIS metrics, and produces final statistical summaries.
+* ``scripts/partA/partA_04_evaluate_forecasts.m``: Aggregates all forecast artifacts, computes per-window Weighted Interval Score (WIS) metrics (penalizing invalid windows with ``Inf``), and produces the comparative Part A statistical summaries.
+* ``scripts/partA/partA_05_generate_figures.m``: Reserved entry point for generating Part A presentation figures from saved evaluation artifacts (currently an empty placeholder).
 * ``scripts/partB/partB_01_generate_truth.m``: Generates SEIR ground-truth trajectories for the same four analytic $R_t$ scenarios used in Part A.
 * ``scripts/partB/partB_02_run_fixed_forecasts.m``: Runs fixed Part A-selected AR/ARX configurations against SEIR truth using SIRS-style future covariate projection.
 * ``scripts/partB/partB_03_evaluate_models.m``: Computes Part B WIS summaries, SIRS-vs-SEIR state-projection errors, and Part B evaluation figures.
@@ -45,14 +46,44 @@ The implementation is divided into three major phases as outlined in the project
 * ``scripts/partC/partC_04_local_refinement.m``: Runs held-out local AR/ARX recalibration, all-window diagnostics, holdout WIS comparison, refined forecast figures, and projected infection-proxy diagnostics.
 
 ### Source Code (``src/``)
-* ``src/models/fit_arima.m``: Fits an autoregressive model to a historical reproduction number time series through a standardized ARIMA wrapper.
-* ``src/models/fit_arimax.m``: Fits an autoregressive model with exogenous inputs to historical data through a standardized ARIMAX wrapper.
-* ``src/models/fit_n4sid_model.m``: Fits a discrete-time state-space model utilizing the Subspace State-Space System Identification (N4SID) algorithm.
-* ``src/models/fit_ssest_model.m``: Fits an optimized discrete-time state-space model using iterative Prediction Error Minimization (PEM).
-* ``src/models/genData_SIRS.m``: Simulates SIRS trajectories from desired effective-``R_t`` inputs, computing the state-consistent internal transmission rates required by URDME.
-* ``src/models/genData_SEIR.m``: Simulates deterministic SEIR trajectories for Part B robustness testing.
-* ``src/scenarios/generate_rt_signal.m``: Generates configured Part A analytic effective reproduction-number trajectories, with seasonal, sigmoid, and multi-wave formulas kept as local helpers.
-* ``src/epidemic/simulate_ground_truth_epidemic.m``: Simulates effective-``R_t``-driven SIRS ground truth directly with URDME and assembles reusable truth structures.
-* ``src/plots/plot_model_performance.m``: Visualizes the comparative WIS distributions across various model configurations and scenarios.
-* ``src/plots/plot_rt_forecast_comparison.m``: Generates a unified visualization comparing the expanding-window forecast medians and predictive intervals against the ground truth.
-* ``src/plots/plot_rt_scenarios.m``: Generates a tiled summary figure displaying the predefined synthetic reproduction number profiles.
+
+**Scenarios (``src/scenarios/``)**
+* ``generate_rt_signal.m``: Generates configured Part A analytic effective reproduction-number trajectories, with seasonal, sigmoid, and multi-wave formulas kept as local helpers.
+
+**Epidemic simulation (``src/epidemic/``)**
+* ``simulate_ground_truth_epidemic.m``: Simulates effective-``R_t``-driven SIRS ground truth directly with URDME and assembles reusable truth structures.
+* ``initialize_sirs_stepper.m``: Prepares a reusable one-day URDME SIRS stepper.
+* ``advance_sirs_stepper.m``: Advances the SIRS state one day using the reusable URDME stepper.
+* ``advance_epidemic_state.m``: Advances one effective-``R_t``-driven epidemic state for closed-loop covariate projection.
+
+**Forecasting orchestration (``src/forecasting/``)**
+* ``build_forecasting_dataset.m``: Assembles the Part A expanding-window forecast inputs.
+* ``prepare_window_data.m``: Builds a single expanding-window forecast input entry.
+* ``run_expanding_window_forecast.m``: Runs all window forecasts for one scenario.
+* ``run_model_forecast.m``: Fits and forecasts one selected configuration for a single window.
+
+**Model selection (``src/model_selection/``)**
+* ``generate_candidate_grid.m``: Constructs the Part A model-configuration candidates.
+* ``evaluate_candidate.m``: Scores one Part A model configuration across scenarios.
+* ``aggregate_candidate_scores.m``: Evaluates and aggregates the Part A candidate scores.
+* ``select_best_configuration.m``: Selects the candidate with the lowest global mean WIS.
+
+**Forecasting models (``src/models/``)**
+* ``fit_arima.m``: Fits an ARIMA(p,d,q) model to historical ``R_t`` data and forecasts through a standardized wrapper.
+* ``fit_arimax.m``: Fits an ARIMAX model to historical ``R_t`` and exogenous data and forecasts through a standardized wrapper.
+* ``genData_SIRS.m``: Simulates SIRS trajectories from desired effective-``R_t`` inputs, computing the state-consistent internal transmission rates required by URDME.
+* ``genData_SEIR.m``: Simulates deterministic SEIR trajectories for Part B robustness testing.
+* ``ar/fit_ar_model.m``: Fits an output-only AR model to historical effective ``R_t``.
+* ``ar/forecast_ar_model.m``: Forecasts future effective ``R_t`` from a fitted AR model.
+* ``arx/fit_arx_model.m``: Fits an ARX model once for Part A model selection.
+* ``arx/forecast_arx_closed_loop.m``: Forecasts ARX recursively with epidemic feedback.
+* ``arx/recursive_arx_step.m``: Computes one recursive ARX prediction from coefficients.
+* ``arx/extract_arx_coefficients.m``: Extracts the recursive ARX polynomial coefficients.
+* ``arx/extract_exogenous_from_state.m``: Converts an epidemic state to ARX covariates.
+* ``n4sid/fit_n4sid_model.m``: Fits a discrete-time state-space model via the Subspace State-Space System Identification (N4SID) algorithm and forecasts.
+* ``ssest/fit_ssest_model.m``: Fits an optimized discrete-time state-space model using iterative Prediction Error Minimization (PEM) and forecasts.
+
+**Visualization (``src/plots/``)**
+* ``plot_model_performance.m``: Visualizes the comparative WIS distributions across various model configurations and scenarios.
+* ``plot_rt_forecast_comparison.m``: Generates a unified visualization comparing the expanding-window forecast medians and predictive intervals against the ground truth.
+* ``plot_rt_scenarios.m``: Generates a tiled summary figure displaying the predefined synthetic reproduction number profiles.

@@ -27,7 +27,7 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_ari
 %       lower_bounds   - Matrix of lower predictive interval bounds.
 %       upper_bounds   - Matrix of upper predictive interval bounds.
 %
-%   See also FIT_ARIMAX, FIT_N4SID_MODEL, FIT_SSEST_MODEL, PARTA_03_RUN_FORECASTS.
+%   See also FIT_ARX_MODEL, FIT_N4SID_MODEL, FIT_SSEST_MODEL, PARTA_03_RUN_FORECASTS.
 
 % A. M. Kaahin 2026-02-19
 % Modified: 2026-05-04

@@ -12,7 +12,7 @@
 %       2. Forecast loop over SEIR truth files and fixed AR/ARX models
 %       3. Artifact and figure persistence
 %
-%   See also PARTB_CONFIG, FIT_ARIMA, FIT_ARIMAX.
+%   See also PARTB_CONFIG, FIT_AR_MODEL, FIT_ARX_MODEL.
 
 % A. M. Kaahin 2026-05-18
 
