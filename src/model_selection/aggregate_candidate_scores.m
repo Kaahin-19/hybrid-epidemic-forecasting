@@ -24,6 +24,7 @@ function [candidate_scores, scenario_mean_wis, global_mean_wis] = ...
 %   See also EVALUATE_CANDIDATE, SELECT_BEST_CONFIGURATION.
 %
 % A. M. Kaahin 2026-05-31
+% Modified: 2026-06-02
 
 %% 1. Candidate Scoring
 num_candidates = size(candidate_grid, 1);
@@ -39,7 +40,18 @@ afterEach(progress_queue, @(~) local_report_candidate_progress( ...
 
 model_type = evaluation_options.model_type;
 
-parfor idx = 1:num_candidates
+if num_candidates == 0
+    scenario_mean_wis = candidate_scores;
+    return;
+end
+
+first_scores = evaluate_candidate( ...
+    model_type, candidate_grid(1, :), scenario_data, evaluation_options);
+candidate_scores(1, :) = first_scores;
+global_mean_wis(1) = mean(first_scores);
+send(progress_queue, 1);
+
+parfor idx = 2:num_candidates
     scenario_scores = evaluate_candidate( ...
         model_type, candidate_grid(idx, :), ...
         scenario_data, evaluation_options);
