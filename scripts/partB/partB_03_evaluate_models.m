@@ -153,7 +153,7 @@ for i = 1:numel(case_ids)
     if ~exist(case_dir, 'dir'), mkdir(case_dir); end
     case_artifact = fullfile(case_dir, ...
         sprintf('partB_%s_evaluation_results.mat', char(this_case)));
-    source_case_id = this_case; %#ok<NASGU>
+    source_case_id = this_case; 
     save(case_artifact, 'experiment_id', 'experiment_name', 'source_case_id', ...
         'case_metrics', 'case_summary_tables', 'cfg_snapshot');
     fprintf('Case evaluation artifact saved to: %s\n', case_artifact);
