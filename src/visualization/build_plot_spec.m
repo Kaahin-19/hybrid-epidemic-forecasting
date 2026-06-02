@@ -39,6 +39,13 @@ function plot_spec = build_plot_spec(varargin)
     plot_spec.plot_alphas = [];
     plot_spec.scenario_labels = strings(0, 1);
     plot_spec.resolution = 300;
+    plot_spec.font_size = [];
+    plot_spec.axis_label_font_size = [];
+    plot_spec.tick_label_font_size = [];
+    plot_spec.panel_labels = strings(0, 1);
+    plot_spec.panel_label_style = struct();
+    plot_spec.shared_x_label = "";
+    plot_spec.shared_y_label = "";
 
     %% 2. Merge Inputs
     arg_idx = 1;

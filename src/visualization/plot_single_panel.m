@@ -66,6 +66,7 @@ function [fig, ax, handles] = plot_single_panel(varargin)
         return;
     end
 
+    local_apply_fonts(ax, plot_spec);
     local_apply_labels(ax, plot_spec);
     local_apply_limits(ax, plot_spec);
     local_apply_grid(ax, plot_spec);
@@ -377,16 +378,34 @@ function merged = local_merge_struct(base, override)
     end
 end
 
+function local_apply_fonts(ax, plot_spec)
+%LOCAL_APPLY_FONTS Apply base and tick-label font sizes to an axes.
+    base_size = local_spec_field(plot_spec, 'font_size', 9);
+    tick_size = local_spec_field(plot_spec, 'tick_label_font_size', base_size);
+    set(ax, 'FontSize', double(tick_size), ...
+        'LabelFontSizeMultiplier', 1.0, 'TitleFontSizeMultiplier', 1.0);
+end
+
 function local_apply_labels(ax, plot_spec)
 %LOCAL_APPLY_LABELS Apply optional title and axis labels.
+    label_size = local_axis_label_font_size(plot_spec);
     title_text = local_spec_field(plot_spec, 'title', "");
     if strlength(title_text) > 0
-        title(ax, title_text, 'Interpreter', local_text_interpreter(title_text));
+        title(ax, title_text, 'Interpreter', local_text_interpreter(title_text), ...
+            'FontWeight', 'normal', 'FontSize', double(label_size));
     end
     x_label = local_spec_field(plot_spec, 'x_label', "");
     y_label = local_spec_field(plot_spec, 'y_label', "");
-    xlabel(ax, x_label, 'Interpreter', local_text_interpreter(x_label));
-    ylabel(ax, y_label, 'Interpreter', local_text_interpreter(y_label));
+    xlabel(ax, x_label, 'Interpreter', local_text_interpreter(x_label), ...
+        'FontSize', double(label_size));
+    ylabel(ax, y_label, 'Interpreter', local_text_interpreter(y_label), ...
+        'FontSize', double(label_size));
+end
+
+function label_size = local_axis_label_font_size(plot_spec)
+%LOCAL_AXIS_LABEL_FONT_SIZE Resolve the axis-label font size.
+    label_size = local_spec_field(plot_spec, 'axis_label_font_size', ...
+        local_spec_field(plot_spec, 'font_size', 10));
 end
 
 function local_apply_limits(ax, plot_spec)
@@ -444,7 +463,33 @@ function local_apply_legend(ax, plot_spec, legend_handles, legend_ranks)
     end
 
     location = local_legend_field(legend_spec, 'location', "best");
-    legend(ax, legend_handles, 'Location', char(location));
+    lgd = legend(ax, legend_handles, 'Location', char(location));
+
+    orientation = local_legend_field(legend_spec, 'orientation', "");
+    if strlength(orientation) > 0
+        lgd.Orientation = char(orientation);
+    end
+    if isstruct(legend_spec) && isfield(legend_spec, 'box') && ...
+            ~isempty(legend_spec.box)
+        lgd.Box = local_on_off(legend_spec.box);
+    end
+    lgd.FontSize = double(local_spec_field(plot_spec, 'tick_label_font_size', ...
+        local_spec_field(plot_spec, 'font_size', 9)));
+end
+
+function value = local_on_off(flag)
+%LOCAL_ON_OFF Convert a logical or string flag to an 'on'/'off' value.
+    if ischar(flag) || isstring(flag)
+        if any(strcmpi(string(flag), ["off", "false", "none", "no"]))
+            value = 'off';
+        else
+            value = 'on';
+        end
+    elseif logical(flag)
+        value = 'on';
+    else
+        value = 'off';
+    end
 end
 
 function visible = local_legend_visible(legend_spec)

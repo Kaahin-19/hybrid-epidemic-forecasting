@@ -44,9 +44,13 @@ function [fig, layout, axes_handles] = plot_multi_panel_figure(panel_data, plot_
     layout = tiledlayout(fig, num_rows, num_cols, ...
         'Padding', 'compact', 'TileSpacing', 'compact');
 
+    label_size = local_spec_field(plot_spec, 'axis_label_font_size', ...
+        local_spec_field(plot_spec, 'font_size', 10));
+
     title_text = local_spec_field(plot_spec, 'title', "");
     if strlength(title_text) > 0
-        title(layout, title_text, 'Interpreter', local_text_interpreter(title_text));
+        title(layout, title_text, 'Interpreter', local_text_interpreter(title_text), ...
+            'FontWeight', 'normal', 'FontSize', double(label_size));
     end
 
     %% 2. Panel Drawing
@@ -56,6 +60,23 @@ function [fig, layout, axes_handles] = plot_multi_panel_figure(panel_data, plot_
         axes_handles(i) = ax;
         panel_spec = local_panel_plot_spec(panel_data(i), plot_spec, i);
         plot_single_panel(ax, panel_data(i), panel_spec);
+    end
+
+    %% 3. Shared Axis Labels
+    local_apply_shared_labels(layout, plot_spec, label_size);
+end
+
+function local_apply_shared_labels(layout, plot_spec, label_size)
+%LOCAL_APPLY_SHARED_LABELS Draw shared x/y labels on the tiled layout.
+    shared_x = string(local_spec_field(plot_spec, 'shared_x_label', ""));
+    shared_y = string(local_spec_field(plot_spec, 'shared_y_label', ""));
+    if strlength(shared_x) > 0
+        xlabel(layout, shared_x, 'Interpreter', local_text_interpreter(shared_x), ...
+            'FontSize', double(label_size));
+    end
+    if strlength(shared_y) > 0
+        ylabel(layout, shared_y, 'Interpreter', local_text_interpreter(shared_y), ...
+            'FontSize', double(label_size));
     end
 end
 
@@ -86,6 +107,15 @@ function panel_spec = local_panel_plot_spec(panel_data, plot_spec, idx)
     panel_spec = plot_spec;
     panel_spec.title = local_panel_title(panel_data, plot_spec, idx);
     panel_spec.panel_label = local_panel_label(panel_data, plot_spec, idx);
+
+    % Shared labels are drawn once on the layout, so suppress the per-panel
+    % copies to avoid repeating long axis labels on every tile.
+    if strlength(string(local_spec_field(plot_spec, 'shared_x_label', ""))) > 0
+        panel_spec.x_label = "";
+    end
+    if strlength(string(local_spec_field(plot_spec, 'shared_y_label', ""))) > 0
+        panel_spec.y_label = "";
+    end
 
     if isfield(panel_data, 'plot_spec') && isstruct(panel_data.plot_spec)
         panel_spec = local_merge_struct(panel_spec, panel_data.plot_spec);
