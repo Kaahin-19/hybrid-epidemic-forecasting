@@ -26,7 +26,7 @@ function truth = simulate_ground_truth_epidemic(model_type, tspan, Rt_true, mode
 %   See also RPARSE, URDME, PARTA_01_GENERATE_SYNTHETIC_TRUTH.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-02
+% Modified: 2026-06-03
 
     %% 1. Shared Input Validation
     model_type = upper(string(model_type));
@@ -67,9 +67,10 @@ function truth = local_simulate_sirs(tspan, Rt_true, model_params, sim_options)
 
         interval_compile = compile_requested && (k == 1);
         interval_tspan = [0, tspan(k + 1) - tspan(k)];
+        interval_seed = local_interval_seed(options.seed, k, options.solver);
         interval_umod = local_advance_sirs_interval( ...
             interval_tspan, U(:, k), beta_curve(k), params, ...
-            options.solver, interval_compile, options.seed, build_dir);
+            options.solver, interval_compile, interval_seed, build_dir);
 
         U(:, k + 1) = local_sanitize_state(interval_umod.U(:, end), params.pop_size);
     end
@@ -78,6 +79,7 @@ function truth = local_simulate_sirs(tspan, Rt_true, model_params, sim_options)
 
     truth = struct();
     truth.model_type = "SIRS";
+    truth.truth_model = "SIRS";
     truth.solver = string(options.solver);
     truth.seed = options.seed;
     truth.tspan = tspan;
@@ -123,9 +125,10 @@ function truth = local_simulate_seir(tspan, Rt_true, model_params, sim_options)
 
         interval_compile = compile_requested && (k == 1);
         interval_tspan = [0, tspan(k + 1) - tspan(k)];
+        interval_seed = local_interval_seed(options.seed, k, options.solver);
         interval_umod = local_advance_seir_interval( ...
             interval_tspan, U(:, k), beta_curve(k), params, ...
-            options.solver, interval_compile, options.seed, build_dir);
+            options.solver, interval_compile, interval_seed, build_dir);
 
         U(:, k + 1) = local_sanitize_seir_state(interval_umod.U(:, end), ...
             params.pop_size);
@@ -135,6 +138,7 @@ function truth = local_simulate_seir(tspan, Rt_true, model_params, sim_options)
 
     truth = struct();
     truth.model_type = "SEIR";
+    truth.truth_model = "SEIR";
     truth.solver = string(options.solver);
     truth.seed = options.seed;
     truth.tspan = tspan;
@@ -505,6 +509,15 @@ function beta = local_beta_from_effective_rt(Rt_value, susceptible, params)
         error('EPIDEMIC:InvalidBeta', ...
             'Computed internal transmission rate must be finite and positive.');
     end
+end
+
+function seed = local_interval_seed(base_seed, interval_idx, solver)
+%LOCAL_INTERVAL_SEED Vary stochastic interval seeds while preserving UDS runs.
+    seed = double(base_seed);
+    if strcmp(char(string(solver)), 'ssa')
+        seed = seed + interval_idx - 1;
+    end
+    seed = mod(floor(seed), 2^32);
 end
 
 function state = local_sanitize_state(raw_state, pop_size)

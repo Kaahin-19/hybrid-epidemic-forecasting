@@ -1,70 +1,63 @@
-%PARTB_03_EVALUATE_MODELS Evaluate structural-mismatch forecasts.
+%PARTB_03_EVALUATE_MODELS Evaluate Part B robustness-ladder forecasts.
 %
 %   Description:
-%       Loads Part B structural-mismatch forecast artifacts, computes the same
-%       Rt forecast metrics used by Part A, summarizes performance for the
-%       fixed AR/None and ARX/I cases, and saves evaluation artifacts plus
-%       tables. Figure generation is intentionally delegated to Part B 04.
+%       Loads Part B forecast artifacts across all active robustness cases,
+%       computes the same Rt metrics used by Part A, summarizes performance
+%       by case/scenario/replicate/model/horizon, and writes case-specific
+%       plus cross-case evaluation artifacts and tables. Figure generation is
+%       intentionally delegated to Part B 04.
 %
 %   Workflow:
-%       1. Load structural-mismatch forecast artifacts.
-%       2. Compute WIS, RMSE, MAE, coverage, and interval-width metrics.
-%       3. Summarize scores using the reusable Part A evaluation helper.
-%       4. Save evaluation .mat artifacts and tables.
+%       1. Load forecast artifacts from all active case directories.
+%       2. Compute WIS, RMSE, MAE, coverage, calibration, and interval width.
+%       3. Build case-level and cross-case robustness summaries.
+%       4. Save evaluation .mat artifacts and table files.
 %
 %   See also PARTB_CONFIG, COMPUTE_WIS, SUMMARIZE_FORECAST_SCORES, ...
 %            PARTB_04_GENERATE_FIGURES.
 %
 % A. M. Kaahin 2026-05-18
-% Modified: 2026-06-02
+% Modified: 2026-06-03
 
 %% 1. Initialization
 clear; close all; clc;
 
-fprintf('=== Part B Structural-Mismatch Forecast Evaluation ===\n');
+fprintf('=== Part B Robustness-Ladder Forecast Evaluation ===\n');
 
 cfg = partB_config();
-forecast_dir = cfg.output.forecast_dir;
-evaluation_dir = cfg.output.score_dir;
+evaluation_dir = cfg.output.evaluation_dir;
 table_dir = cfg.output.table_dir;
 
 if ~exist(evaluation_dir, 'dir'), mkdir(evaluation_dir); end
 if ~exist(table_dir, 'dir'), mkdir(table_dir); end
 
-forecast_files = dir(fullfile(forecast_dir, ...
-    sprintf('%s_forecast_*.mat', char(cfg.experiment_id))));
-forecast_files = local_sort_dir_by_name(forecast_files);
-if isempty(forecast_files)
+forecast_paths = local_forecast_artifact_paths(cfg);
+if isempty(forecast_paths)
     error('EVAL:NoForecastArtifacts', ...
-        'No structural-mismatch forecast artifacts found under %s.', forecast_dir);
+        'No Part B forecast artifacts found under %s.', cfg.output.root_dir);
 end
 
-fprintf('Found %d forecast artifacts in %s\n', numel(forecast_files), forecast_dir);
+fprintf('Found %d forecast artifacts.\n', numel(forecast_paths));
 
 %% 2. Forecast Evaluation
-window_blocks = cell(numel(forecast_files), 1);
-pointwise_blocks = cell(numel(forecast_files), 1);
-interval_blocks = cell(numel(forecast_files), 1);
-selection_blocks = cell(numel(forecast_files), 1);
-source_forecast_artifacts = strings(numel(forecast_files), 1);
+window_blocks = cell(numel(forecast_paths), 1);
+pointwise_blocks = cell(numel(forecast_paths), 1);
+interval_blocks = cell(numel(forecast_paths), 1);
+selection_blocks = cell(numel(forecast_paths), 1);
+source_forecast_artifacts = strings(numel(forecast_paths), 1);
 skipped_forecast_artifacts = strings(0, 1);
 
-for i = 1:numel(forecast_files)
-    artifact_path = fullfile(forecast_files(i).folder, forecast_files(i).name);
-    source_forecast_artifacts(i) = string(artifact_path);
+for i = 1:numel(forecast_paths)
+    artifact_path = forecast_paths(i);
+    source_forecast_artifacts(i) = artifact_path;
     loaded = load(artifact_path);
-    local_validate_forecast_artifact(loaded, artifact_path, cfg);
+    local_validate_forecast_artifact(loaded, artifact_path);
 
-    scenario_id = string(loaded.scenario_id);
-    scenario_name = string(loaded.scenario_name);
-    model_type = string(loaded.model_type);
-    exo_mode = string(loaded.exo_mode);
     forecast_results = loaded.forecast_results;
-
     selection_blocks{i} = local_selection_summary_row(loaded, artifact_path);
 
     if isempty(forecast_results)
-        skipped_forecast_artifacts(end + 1, 1) = string(artifact_path); %#ok<SAGROW>
+        skipped_forecast_artifacts(end + 1, 1) = artifact_path; %#ok<SAGROW>
         warning('EVAL:EmptyForecastArtifact', ...
             'Skipping artifact with no forecast results: %s', artifact_path);
         continue;
@@ -77,8 +70,7 @@ for i = 1:numel(forecast_files)
     for k = 1:numel(forecast_results)
         window_entry = local_normalize_forecast_window(forecast_results(k));
         [window_rows{k}, pointwise_rows{k}, interval_rows{k}] = ...
-            local_evaluate_window(window_entry, scenario_id, scenario_name, ...
-            model_type, exo_mode, artifact_path);
+            local_evaluate_window(window_entry, loaded, artifact_path);
     end
 
     window_rows = window_rows(~cellfun('isempty', window_rows));
@@ -90,92 +82,144 @@ for i = 1:numel(forecast_files)
     if ~isempty(interval_rows), interval_blocks{i} = vertcat(interval_rows{:}); end
 end
 
-window_scores = local_vertcat_or_empty(window_blocks, local_empty_window_scores());
-pointwise_scores = local_vertcat_or_empty(pointwise_blocks, local_empty_pointwise_scores());
-interval_scores = local_vertcat_or_empty(interval_blocks, local_empty_interval_scores());
-selection_summary = unique(local_vertcat_or_empty(selection_blocks, ...
-    local_empty_selection_summary()), 'rows');
+window_scores = local_vertcat_or_empty(window_blocks);
+pointwise_scores = local_vertcat_or_empty(pointwise_blocks);
+interval_scores = local_vertcat_or_empty(interval_blocks);
+selection_summary = unique(local_vertcat_or_empty(selection_blocks), 'rows');
 
 if isempty(window_scores) || height(window_scores) == 0
     error('EVAL:NoUsableForecastArtifacts', ...
-        'No usable forecast windows were found under %s.', forecast_dir);
+        'No usable Part B forecast windows were found.');
 end
 
-summary_tables = summarize_forecast_scores(window_scores, ...
-    pointwise_scores, interval_scores);
+summary_tables = local_summary_tables(window_scores, pointwise_scores, interval_scores);
+summary_tables.generic_partA_style = summarize_forecast_scores( ...
+    window_scores, pointwise_scores, interval_scores);
+
+[degradation_summary, partA_baseline_summary, degradation_status] = ...
+    local_degradation_summary(cfg, summary_tables.case_model_summary);
+summary_tables.degradation_summary = degradation_summary;
+summary_tables.partA_baseline_summary = partA_baseline_summary;
+
 metrics = struct( ...
     'window_scores', window_scores, ...
     'pointwise_scores', pointwise_scores, ...
     'interval_scores', interval_scores);
 
-scenario_id = unique(window_scores.Scenario, 'stable');
-scenario_name = unique(window_scores.ScenarioName, 'stable');
-model_type = unique(window_scores.Model, 'stable');
-exo_mode = unique(window_scores.ExoMode, 'stable');
-
 fprintf('Evaluated %d forecast windows and %d pointwise horizon rows.\n', ...
     height(window_scores), height(pointwise_scores));
 
-%% 3. Save Evaluation Artifact
+%% 3. Save Cross-Case Evaluation Artifact
 experiment_id = string(cfg.experiment_id);
 experiment_name = string(cfg.experiment_name);
-truth_model = string(cfg.truth_model);
+case_id = unique(window_scores.CaseID, 'stable');
+case_name = unique(window_scores.CaseName, 'stable');
+truth_model = unique(window_scores.TruthModel, 'stable');
+solver = unique(window_scores.Solver, 'stable');
 forecast_assumption = string(cfg.forecast_assumption);
+model_type = unique(window_scores.Model, 'stable');
+exo_mode = unique(window_scores.ExoMode, 'stable');
 cfg_snapshot = local_cfg_snapshot(cfg);
 
 evaluation_artifact = fullfile(evaluation_dir, ...
-    sprintf('%s_evaluation_results.mat', char(cfg.experiment_id)));
+    'partB_robustness_ladder_evaluation_results.mat');
 
 save(evaluation_artifact, ...
-    'experiment_id', 'experiment_name', 'truth_model', 'forecast_assumption', ...
-    'scenario_id', 'scenario_name', 'model_type', 'exo_mode', ...
-    'metrics', 'summary_tables', 'window_scores', 'pointwise_scores', ...
-    'interval_scores', 'selection_summary', 'source_forecast_artifacts', ...
-    'skipped_forecast_artifacts', 'cfg_snapshot');
+    'experiment_id', 'experiment_name', 'case_id', 'case_name', ...
+    'truth_model', 'solver', 'forecast_assumption', 'model_type', ...
+    'exo_mode', 'metrics', 'summary_tables', 'window_scores', ...
+    'pointwise_scores', 'interval_scores', 'selection_summary', ...
+    'degradation_summary', 'partA_baseline_summary', 'degradation_status', ...
+    'source_forecast_artifacts', 'skipped_forecast_artifacts', 'cfg_snapshot');
 
-fprintf('Evaluation artifact saved to: %s\n', evaluation_artifact);
+fprintf('Cross-case evaluation artifact saved to: %s\n', evaluation_artifact);
 
-%% 4. Save Tables
-table_outputs = local_write_tables(table_dir, cfg, metrics, ...
-    summary_tables, selection_summary);
+%% 4. Save Case-Specific Evaluation Artifacts
+case_ids = unique(window_scores.CaseID, 'stable');
+for i = 1:numel(case_ids)
+    this_case = case_ids(i);
+    case_idx = window_scores.CaseID == this_case;
+    point_idx = pointwise_scores.CaseID == this_case;
+    interval_idx = interval_scores.CaseID == this_case;
 
-fprintf('Saved %d table files under %s\n', numel(table_outputs), table_dir);
-fprintf('=== Part B Structural-Mismatch Forecast Evaluation Complete ===\n\n');
+    case_metrics = struct( ...
+        'window_scores', window_scores(case_idx, :), ...
+        'pointwise_scores', pointwise_scores(point_idx, :), ...
+        'interval_scores', interval_scores(interval_idx, :));
+    case_summary_tables = local_summary_tables(case_metrics.window_scores, ...
+        case_metrics.pointwise_scores, case_metrics.interval_scores);
 
-%% 5. Local Functions
-function local_validate_forecast_artifact(loaded, artifact_path, cfg)
+    case_dir = local_case_evaluation_dir(cfg, this_case);
+    if ~exist(case_dir, 'dir'), mkdir(case_dir); end
+    case_artifact = fullfile(case_dir, ...
+        sprintf('partB_%s_evaluation_results.mat', char(this_case)));
+    source_case_id = this_case; %#ok<NASGU>
+    save(case_artifact, 'experiment_id', 'experiment_name', 'source_case_id', ...
+        'case_metrics', 'case_summary_tables', 'cfg_snapshot');
+    fprintf('Case evaluation artifact saved to: %s\n', case_artifact);
+end
+
+%% 5. Save Tables
+cross_table_outputs = local_write_cross_tables(table_dir, metrics, ...
+    summary_tables, selection_summary, degradation_status);
+case_table_outputs = local_write_case_tables(cfg, metrics);
+
+fprintf('Saved %d cross-case table files under %s\n', ...
+    numel(cross_table_outputs), table_dir);
+fprintf('Saved %d case-specific table files.\n', numel(case_table_outputs));
+fprintf('=== Part B Robustness-Ladder Forecast Evaluation Complete ===\n\n');
+
+%% 6. Local Functions
+function paths = local_forecast_artifact_paths(cfg)
+%LOCAL_FORECAST_ARTIFACT_PATHS Return active forecast artifacts.
+    cases = local_active_cases(cfg);
+    paths = strings(0, 1);
+    for i = 1:numel(cases)
+        forecast_dir = fullfile(cfg.output.root_dir, char(cases(i).case_id), ...
+            "forecasts");
+        files = dir(fullfile(forecast_dir, sprintf('partB_%s_forecast_*.mat', ...
+            char(cases(i).case_id))));
+        files = local_sort_dir_by_name(files);
+        for j = 1:numel(files)
+            paths(end + 1, 1) = string(fullfile(files(j).folder, files(j).name)); %#ok<AGROW>
+        end
+    end
+end
+
+function cases = local_active_cases(cfg)
+%LOCAL_ACTIVE_CASES Apply optional smoke-test case limiting.
+    cases = cfg.robustness_cases;
+    if cfg.smoke_test.enabled
+        cases = cases(1:min(numel(cases), cfg.smoke_test.num_cases));
+    end
+end
+
+function local_validate_forecast_artifact(loaded, artifact_path)
 %LOCAL_VALIDATE_FORECAST_ARTIFACT Verify required forecast fields.
-    required_fields = {'experiment_id', 'experiment_name', 'truth_model', ...
-        'forecast_assumption', 'scenario_id', 'scenario_name', 'model_type', ...
+    required_fields = {'case_id', 'case_name', 'truth_model', 'solver', ...
+        'forecast_assumption', 'structural_mismatch_enabled', ...
+        'observation_noise_enabled', 'process_noise_enabled', ...
+        'replicate_id', 'scenario_id', 'scenario_name', 'model_type', ...
         'exo_mode', 'selected_configuration', 'forecast_results'};
     if ~all(isfield(loaded, required_fields))
         error('EVAL:InvalidForecastArtifact', ...
             'Forecast artifact is missing required fields: %s.', artifact_path);
-    end
-
-    if string(loaded.experiment_id) ~= string(cfg.experiment_id)
-        error('EVAL:ExperimentMismatch', ...
-            'Forecast artifact belongs to another experiment: %s.', artifact_path);
     end
 end
 
 function row = local_selection_summary_row(loaded, artifact_path)
 %LOCAL_SELECTION_SUMMARY_ROW Summarize fixed selected configuration use.
     selected_configuration_text = string(mat2str(double(loaded.selected_configuration)));
-    source = "";
-    if isfield(loaded, 'selected_configuration_source')
-        source = string(loaded.selected_configuration_source);
-    end
-    selection_artifact = "";
-    if isfield(loaded, 'selected_configuration_artifact')
-        selection_artifact = string(loaded.selected_configuration_artifact);
-    end
+    source = local_loaded_string(loaded, 'selected_configuration_source', "");
+    selection_artifact = local_loaded_string(loaded, 'selected_configuration_artifact', "");
 
-    row = table(string(loaded.model_type), string(loaded.exo_mode), ...
+    row = table(string(loaded.case_id), string(loaded.case_name), ...
+        string(loaded.model_type), string(loaded.exo_mode), ...
         selected_configuration_text, source, selection_artifact, ...
         string(artifact_path), ...
-        'VariableNames', {'Model', 'ExoMode', 'SelectedConfiguration', ...
-        'Source', 'SelectionArtifact', 'ForecastArtifact'});
+        'VariableNames', {'CaseID', 'CaseName', 'Model', 'ExoMode', ...
+        'SelectedConfiguration', 'Source', 'SelectionArtifact', ...
+        'ForecastArtifact'});
 end
 
 function window_entry = local_normalize_forecast_window(raw_entry)
@@ -200,7 +244,7 @@ function window_entry = local_normalize_forecast_window(raw_entry)
 end
 
 function [window_row, pointwise_rows, interval_rows] = local_evaluate_window( ...
-    window_entry, scenario_id, scenario_name, model_type, exo_mode, artifact_path)
+    window_entry, loaded, artifact_path)
 %LOCAL_EVALUATE_WINDOW Compute all score rows for one forecast window.
     truth_Rt = double(window_entry.truth_Rt(:));
     pred_Rt = double(window_entry.pred_Rt(:));
@@ -250,28 +294,16 @@ function [window_row, pointwise_rows, interval_rows] = local_evaluate_window( ..
         mean_interval_width = nan;
     end
 
-    window_row = table( ...
-        string(scenario_id), string(scenario_name), string(model_type), ...
-        string(exo_mode), string(artifact_path), string(result_source), ...
-        window_entry.window_day, window_entry.window_day_idx, window_wis, ...
-        window_wis, window_rmse, window_mae, mean_wis_median_component, ...
+    metadata = local_score_metadata(loaded, artifact_path, result_source);
+    window_row = local_window_row(metadata, window_entry, window_wis, ...
+        window_rmse, window_mae, mean_wis_median_component, ...
         mean_wis_dispersion_component, mean_wis_under_component, ...
         mean_wis_over_component, mean_coverage, mean_calibration_bias, ...
-        mean_absolute_calibration_error, mean_interval_width, is_valid, ...
-        string(window_entry.interval_method), string(window_entry.interval_status), ...
-        string(window_entry.recorded_status), window_entry.aicc, ...
-        'VariableNames', {'Scenario', 'ScenarioName', 'Model', 'ExoMode', ...
-        'ForecastArtifact', 'ResultSource', 'WindowDay', 'WindowDayIdx', ...
-        'WindowWIS', 'WindowRawScaleWIS', 'WindowRMSE', 'WindowMAE', ...
-        'MeanWISMedianComponent', 'MeanWISDispersionComponent', ...
-        'MeanWISUnderpredictionComponent', 'MeanWISOverpredictionComponent', ...
-        'MeanCoverage', 'MeanCalibrationBias', ...
-        'MeanAbsoluteCalibrationError', 'MeanIntervalWidth', 'IsValid', ...
-        'IntervalMethod', 'IntervalStatus', 'RecordedStatus', 'AICC'});
+        mean_absolute_calibration_error, mean_interval_width, is_valid);
 
     if horizon == 0
-        pointwise_rows = local_empty_pointwise_scores();
-        interval_rows = local_empty_interval_scores();
+        pointwise_rows = table();
+        interval_rows = table();
         return;
     end
 
@@ -283,13 +315,78 @@ function [window_row, pointwise_rows, interval_rows] = local_evaluate_window( ..
     absolute_calibration_mean = local_row_mean_finite(abs(calibration_error));
     width_mean = local_row_mean_finite(interval_width);
 
-    pointwise_rows = table( ...
-        repmat(string(scenario_id), horizon, 1), ...
-        repmat(string(scenario_name), horizon, 1), ...
-        repmat(string(model_type), horizon, 1), ...
-        repmat(string(exo_mode), horizon, 1), ...
-        repmat(string(artifact_path), horizon, 1), ...
-        repmat(string(result_source), horizon, 1), ...
+    pointwise_rows = local_pointwise_rows(metadata, window_entry, horizon_idx, ...
+        forecast_day, truth_Rt, pred_Rt, error_values, pointwise_wis, ...
+        wis_components, coverage_mean, calibration_bias_mean, ...
+        absolute_calibration_mean, width_mean);
+
+    interval_rows = local_interval_rows(metadata, window_entry, horizon_idx, ...
+        forecast_day, truth_Rt, alphas, lower_Rt, upper_Rt, coverage, ...
+        interval_width, wis_components);
+end
+
+function metadata = local_score_metadata(loaded, artifact_path, result_source)
+%LOCAL_SCORE_METADATA Create common score-row metadata.
+    metadata = struct();
+    metadata.CaseID = string(loaded.case_id);
+    metadata.CaseName = string(loaded.case_name);
+    metadata.TruthModel = string(loaded.truth_model);
+    metadata.Solver = string(loaded.solver);
+    metadata.StructuralMismatch = logical(loaded.structural_mismatch_enabled);
+    metadata.ObservationNoise = logical(loaded.observation_noise_enabled);
+    metadata.ProcessNoise = logical(loaded.process_noise_enabled);
+    metadata.ReplicateID = double(loaded.replicate_id);
+    metadata.Scenario = string(loaded.scenario_id);
+    metadata.ScenarioName = string(loaded.scenario_name);
+    metadata.Model = string(loaded.model_type);
+    metadata.ExoMode = string(loaded.exo_mode);
+    metadata.ForecastArtifact = string(artifact_path);
+    metadata.ResultSource = string(result_source);
+end
+
+function row = local_window_row(m, window_entry, window_wis, window_rmse, ...
+    window_mae, median_component, dispersion_component, under_component, ...
+    over_component, mean_coverage, mean_calibration_bias, ...
+    mean_absolute_calibration_error, mean_interval_width, is_valid)
+%LOCAL_WINDOW_ROW Build one window-level score row.
+    row = table(m.CaseID, m.CaseName, m.TruthModel, m.Solver, ...
+        m.StructuralMismatch, m.ObservationNoise, m.ProcessNoise, ...
+        m.ReplicateID, m.Scenario, m.ScenarioName, m.Model, m.ExoMode, ...
+        m.ForecastArtifact, m.ResultSource, window_entry.window_day, ...
+        window_entry.window_day_idx, window_wis, window_wis, window_rmse, ...
+        window_mae, median_component, dispersion_component, under_component, ...
+        over_component, mean_coverage, mean_calibration_bias, ...
+        mean_absolute_calibration_error, mean_interval_width, is_valid, ...
+        string(window_entry.interval_method), string(window_entry.interval_status), ...
+        string(window_entry.recorded_status), window_entry.aicc, ...
+        'VariableNames', {'CaseID', 'CaseName', 'TruthModel', 'Solver', ...
+        'StructuralMismatch', 'ObservationNoise', 'ProcessNoise', ...
+        'ReplicateID', 'Scenario', 'ScenarioName', 'Model', 'ExoMode', ...
+        'ForecastArtifact', 'ResultSource', 'WindowDay', 'WindowDayIdx', ...
+        'WindowWIS', 'WindowRawScaleWIS', 'WindowRMSE', 'WindowMAE', ...
+        'MeanWISMedianComponent', 'MeanWISDispersionComponent', ...
+        'MeanWISUnderpredictionComponent', 'MeanWISOverpredictionComponent', ...
+        'MeanCoverage', 'MeanCalibrationBias', ...
+        'MeanAbsoluteCalibrationError', 'MeanIntervalWidth', 'IsValid', ...
+        'IntervalMethod', 'IntervalStatus', 'RecordedStatus', 'AICC'});
+end
+
+function rows = local_pointwise_rows(m, window_entry, horizon_idx, forecast_day, ...
+    truth_Rt, pred_Rt, error_values, pointwise_wis, wis_components, ...
+    coverage_mean, calibration_bias_mean, absolute_calibration_mean, width_mean)
+%LOCAL_POINTWISE_ROWS Build horizon-level score rows for one window.
+    horizon = numel(horizon_idx);
+    rows = table( ...
+        repmat(m.CaseID, horizon, 1), repmat(m.CaseName, horizon, 1), ...
+        repmat(m.TruthModel, horizon, 1), repmat(m.Solver, horizon, 1), ...
+        repmat(m.StructuralMismatch, horizon, 1), ...
+        repmat(m.ObservationNoise, horizon, 1), ...
+        repmat(m.ProcessNoise, horizon, 1), ...
+        repmat(m.ReplicateID, horizon, 1), ...
+        repmat(m.Scenario, horizon, 1), repmat(m.ScenarioName, horizon, 1), ...
+        repmat(m.Model, horizon, 1), repmat(m.ExoMode, horizon, 1), ...
+        repmat(m.ForecastArtifact, horizon, 1), ...
+        repmat(m.ResultSource, horizon, 1), ...
         repmat(window_entry.window_day, horizon, 1), ...
         repmat(window_entry.window_day_idx, horizon, 1), ...
         horizon_idx, forecast_day, truth_Rt, pred_Rt, error_values, ...
@@ -297,10 +394,11 @@ function [window_row, pointwise_rows, interval_rows] = local_evaluate_window( ..
         pointwise_wis, wis_components.median, wis_components.dispersion, ...
         wis_components.underprediction, wis_components.overprediction, ...
         coverage_mean, calibration_bias_mean, absolute_calibration_mean, ...
-        width_mean, ...
-        repmat(string(window_entry.interval_method), horizon, 1), ...
+        width_mean, repmat(string(window_entry.interval_method), horizon, 1), ...
         repmat(string(window_entry.interval_status), horizon, 1), ...
-        'VariableNames', {'Scenario', 'ScenarioName', 'Model', 'ExoMode', ...
+        'VariableNames', {'CaseID', 'CaseName', 'TruthModel', 'Solver', ...
+        'StructuralMismatch', 'ObservationNoise', 'ProcessNoise', ...
+        'ReplicateID', 'Scenario', 'ScenarioName', 'Model', 'ExoMode', ...
         'ForecastArtifact', 'ResultSource', 'WindowDay', 'WindowDayIdx', ...
         'HorizonIdx', 'ForecastDay', 'Truth_Rt', 'Median_Forecast', ...
         'Error', 'SquaredError', 'AbsoluteError', 'WIS', 'RawScaleWIS', ...
@@ -309,37 +407,35 @@ function [window_row, pointwise_rows, interval_rows] = local_evaluate_window( ..
         'CoverageMean', 'CalibrationBiasMean', ...
         'AbsoluteCalibrationErrorMean', 'IntervalWidthMean', ...
         'IntervalMethod', 'IntervalStatus'});
-
-    interval_rows = local_interval_rows(window_entry, scenario_id, scenario_name, ...
-        model_type, exo_mode, artifact_path, result_source, horizon_idx, ...
-        forecast_day, truth_Rt, alphas, lower_Rt, upper_Rt, coverage, ...
-        interval_width, wis_components);
 end
 
-function interval_rows = local_interval_rows(window_entry, scenario_id, scenario_name, ...
-    model_type, exo_mode, artifact_path, result_source, horizon_idx, ...
-    forecast_day, truth_Rt, alphas, lower_Rt, upper_Rt, coverage, ...
-    interval_width, wis_components)
+function rows = local_interval_rows(m, window_entry, horizon_idx, forecast_day, ...
+    truth_Rt, alphas, lower_Rt, upper_Rt, coverage, interval_width, wis_components)
 %LOCAL_INTERVAL_ROWS Build long-format interval score rows.
     horizon = numel(horizon_idx);
     num_alphas = numel(alphas);
     if horizon == 0 || num_alphas == 0
-        interval_rows = local_empty_interval_scores();
+        rows = table();
         return;
     end
 
     num_rows = horizon * num_alphas;
-    interval_rows = table( ...
+    rows = table( ...
         strings(num_rows, 1), strings(num_rows, 1), strings(num_rows, 1), ...
+        strings(num_rows, 1), false(num_rows, 1), false(num_rows, 1), ...
+        false(num_rows, 1), zeros(num_rows, 1), strings(num_rows, 1), ...
         strings(num_rows, 1), strings(num_rows, 1), strings(num_rows, 1), ...
+        strings(num_rows, 1), strings(num_rows, 1), zeros(num_rows, 1), ...
         zeros(num_rows, 1), zeros(num_rows, 1), zeros(num_rows, 1), ...
         zeros(num_rows, 1), zeros(num_rows, 1), zeros(num_rows, 1), ...
         zeros(num_rows, 1), zeros(num_rows, 1), zeros(num_rows, 1), ...
-        zeros(num_rows, 1), strings(num_rows, 1), strings(num_rows, 1), ...
+        strings(num_rows, 1), strings(num_rows, 1), zeros(num_rows, 1), ...
         zeros(num_rows, 1), zeros(num_rows, 1), zeros(num_rows, 1), ...
         zeros(num_rows, 1), zeros(num_rows, 1), zeros(num_rows, 1), ...
-        zeros(num_rows, 1), zeros(num_rows, 1), ...
-        'VariableNames', {'Scenario', 'ScenarioName', 'Model', 'ExoMode', ...
+        zeros(num_rows, 1), ...
+        'VariableNames', {'CaseID', 'CaseName', 'TruthModel', 'Solver', ...
+        'StructuralMismatch', 'ObservationNoise', 'ProcessNoise', ...
+        'ReplicateID', 'Scenario', 'ScenarioName', 'Model', 'ExoMode', ...
         'ForecastArtifact', 'ResultSource', 'WindowDay', 'WindowDayIdx', ...
         'HorizonIdx', 'ForecastDay', 'Truth_Rt', 'Alpha', 'NominalCoverage', ...
         'LowerBound', 'UpperBound', 'Coverage', 'IntervalMethod', ...
@@ -352,36 +448,339 @@ function interval_rows = local_interval_rows(window_entry, scenario_id, scenario
     for j = 1:num_alphas
         idx = row_idx + (1:horizon);
         coverage_error = coverage(:, j) - (1 - alphas(j));
-        interval_rows.Scenario(idx) = string(scenario_id);
-        interval_rows.ScenarioName(idx) = string(scenario_name);
-        interval_rows.Model(idx) = string(model_type);
-        interval_rows.ExoMode(idx) = string(exo_mode);
-        interval_rows.ForecastArtifact(idx) = string(artifact_path);
-        interval_rows.ResultSource(idx) = string(result_source);
-        interval_rows.WindowDay(idx) = window_entry.window_day;
-        interval_rows.WindowDayIdx(idx) = window_entry.window_day_idx;
-        interval_rows.HorizonIdx(idx) = horizon_idx;
-        interval_rows.ForecastDay(idx) = forecast_day;
-        interval_rows.Truth_Rt(idx) = truth_Rt;
-        interval_rows.Alpha(idx) = alphas(j);
-        interval_rows.NominalCoverage(idx) = 1 - alphas(j);
-        interval_rows.LowerBound(idx) = lower_Rt(:, j);
-        interval_rows.UpperBound(idx) = upper_Rt(:, j);
-        interval_rows.Coverage(idx) = coverage(:, j);
-        interval_rows.IntervalMethod(idx) = string(window_entry.interval_method);
-        interval_rows.IntervalStatus(idx) = string(window_entry.interval_status);
-        interval_rows.IntervalWidth(idx) = interval_width(:, j);
-        interval_rows.CoverageError(idx) = coverage_error;
-        interval_rows.AbsoluteCoverageError(idx) = abs(coverage_error);
-        interval_rows.IntervalScore(idx) = wis_components.interval_score(:, j);
-        interval_rows.WISIntervalComponent(idx) = wis_components.interval_component(:, j);
-        interval_rows.WISSharpnessComponent(idx) = wis_components.sharpness_by_interval(:, j);
-        interval_rows.WISUnderpredictionComponent(idx) = ...
+        rows.CaseID(idx) = m.CaseID;
+        rows.CaseName(idx) = m.CaseName;
+        rows.TruthModel(idx) = m.TruthModel;
+        rows.Solver(idx) = m.Solver;
+        rows.StructuralMismatch(idx) = m.StructuralMismatch;
+        rows.ObservationNoise(idx) = m.ObservationNoise;
+        rows.ProcessNoise(idx) = m.ProcessNoise;
+        rows.ReplicateID(idx) = m.ReplicateID;
+        rows.Scenario(idx) = m.Scenario;
+        rows.ScenarioName(idx) = m.ScenarioName;
+        rows.Model(idx) = m.Model;
+        rows.ExoMode(idx) = m.ExoMode;
+        rows.ForecastArtifact(idx) = m.ForecastArtifact;
+        rows.ResultSource(idx) = m.ResultSource;
+        rows.WindowDay(idx) = window_entry.window_day;
+        rows.WindowDayIdx(idx) = window_entry.window_day_idx;
+        rows.HorizonIdx(idx) = horizon_idx;
+        rows.ForecastDay(idx) = forecast_day;
+        rows.Truth_Rt(idx) = truth_Rt;
+        rows.Alpha(idx) = alphas(j);
+        rows.NominalCoverage(idx) = 1 - alphas(j);
+        rows.LowerBound(idx) = lower_Rt(:, j);
+        rows.UpperBound(idx) = upper_Rt(:, j);
+        rows.Coverage(idx) = coverage(:, j);
+        rows.IntervalMethod(idx) = string(window_entry.interval_method);
+        rows.IntervalStatus(idx) = string(window_entry.interval_status);
+        rows.IntervalWidth(idx) = interval_width(:, j);
+        rows.CoverageError(idx) = coverage_error;
+        rows.AbsoluteCoverageError(idx) = abs(coverage_error);
+        rows.IntervalScore(idx) = wis_components.interval_score(:, j);
+        rows.WISIntervalComponent(idx) = wis_components.interval_component(:, j);
+        rows.WISSharpnessComponent(idx) = wis_components.sharpness_by_interval(:, j);
+        rows.WISUnderpredictionComponent(idx) = ...
             wis_components.underprediction_by_interval(:, j);
-        interval_rows.WISOverpredictionComponent(idx) = ...
+        rows.WISOverpredictionComponent(idx) = ...
             wis_components.overprediction_by_interval(:, j);
         row_idx = row_idx + horizon;
     end
+end
+
+function summary_tables = local_summary_tables(window_scores, pointwise_scores, interval_scores)
+%LOCAL_SUMMARY_TABLES Build cross-case Part B summaries.
+    summary_tables = struct();
+    summary_tables.case_model_summary = local_summarize_window_scores( ...
+        window_scores, {'CaseID', 'CaseName', 'TruthModel', 'Solver', ...
+        'StructuralMismatch', 'ObservationNoise', 'ProcessNoise', 'Model', 'ExoMode'});
+    summary_tables.case_horizon_summary = local_summarize_pointwise_scores( ...
+        pointwise_scores, {'CaseID', 'CaseName', 'TruthModel', 'Solver', ...
+        'StructuralMismatch', 'ObservationNoise', 'ProcessNoise', 'Model', ...
+        'ExoMode', 'HorizonIdx'});
+    summary_tables.case_scenario_summary = local_summarize_window_scores( ...
+        window_scores, {'CaseID', 'CaseName', 'TruthModel', 'Solver', ...
+        'StructuralMismatch', 'ObservationNoise', 'ProcessNoise', 'Scenario', ...
+        'ScenarioName', 'Model', 'ExoMode'});
+    summary_tables.case_interval_summary = local_summarize_interval_scores( ...
+        interval_scores, {'CaseID', 'CaseName', 'TruthModel', 'Solver', ...
+        'StructuralMismatch', 'ObservationNoise', 'ProcessNoise', 'Model', ...
+        'ExoMode', 'Alpha'});
+    summary_tables.case_calibration_summary = summary_tables.case_interval_summary;
+    summary_tables.case_wis_component_summary = local_summarize_pointwise_scores( ...
+        pointwise_scores, {'CaseID', 'CaseName', 'TruthModel', 'Solver', ...
+        'StructuralMismatch', 'ObservationNoise', 'ProcessNoise', 'Model', 'ExoMode'});
+    summary_tables.case_replicate_summary = local_summarize_window_scores( ...
+        window_scores, {'CaseID', 'CaseName', 'TruthModel', 'Solver', ...
+        'StructuralMismatch', 'ObservationNoise', 'ProcessNoise', ...
+        'ReplicateID', 'Model', 'ExoMode'});
+end
+
+function summary = local_summarize_window_scores(scores, group_vars)
+%LOCAL_SUMMARIZE_WINDOW_SCORES Aggregate window-level metrics.
+    if isempty(scores) || height(scores) == 0
+        summary = table();
+        return;
+    end
+    [G, keys] = findgroups(scores(:, group_vars));
+    summary = keys;
+    summary.NumWindows = splitapply(@numel, scores.WindowWIS, G);
+    summary.NumValidWindows = splitapply(@(x) sum(logical(x)), scores.IsValid, G);
+    summary.MeanWIS = splitapply(@local_mean_finite, scores.WindowWIS, G);
+    summary.MedianWIS = splitapply(@local_median_finite, scores.WindowWIS, G);
+    summary.StdWIS = splitapply(@local_std_finite, scores.WindowWIS, G);
+    summary.MeanRMSE = splitapply(@local_mean_finite, scores.WindowRMSE, G);
+    summary.MeanMAE = splitapply(@local_mean_finite, scores.WindowMAE, G);
+    summary.MeanCoverage = splitapply(@local_mean_finite, scores.MeanCoverage, G);
+    summary.MeanCalibrationBias = splitapply(@local_mean_finite, ...
+        scores.MeanCalibrationBias, G);
+    summary.MeanAbsoluteCalibrationError = splitapply(@local_mean_finite, ...
+        scores.MeanAbsoluteCalibrationError, G);
+    summary.MeanIntervalWidth = splitapply(@local_mean_finite, ...
+        scores.MeanIntervalWidth, G);
+    summary.MeanWISMedianComponent = splitapply(@local_mean_finite, ...
+        scores.MeanWISMedianComponent, G);
+    summary.MeanWISDispersionComponent = splitapply(@local_mean_finite, ...
+        scores.MeanWISDispersionComponent, G);
+    summary.MeanWISUnderpredictionComponent = splitapply(@local_mean_finite, ...
+        scores.MeanWISUnderpredictionComponent, G);
+    summary.MeanWISOverpredictionComponent = splitapply(@local_mean_finite, ...
+        scores.MeanWISOverpredictionComponent, G);
+end
+
+function summary = local_summarize_pointwise_scores(scores, group_vars)
+%LOCAL_SUMMARIZE_POINTWISE_SCORES Aggregate horizon-level metrics.
+    if isempty(scores) || height(scores) == 0
+        summary = table();
+        return;
+    end
+    [G, keys] = findgroups(scores(:, group_vars));
+    summary = keys;
+    summary.NumPoints = splitapply(@numel, scores.WIS, G);
+    summary.MeanWIS = splitapply(@local_mean_finite, scores.WIS, G);
+    summary.MedianWIS = splitapply(@local_median_finite, scores.WIS, G);
+    summary.StdWIS = splitapply(@local_std_finite, scores.WIS, G);
+    summary.RMSE = sqrt(splitapply(@local_mean_finite, scores.SquaredError, G));
+    summary.MAE = splitapply(@local_mean_finite, scores.AbsoluteError, G);
+    summary.MeanCoverage = splitapply(@local_mean_finite, scores.CoverageMean, G);
+    summary.MeanCalibrationBias = splitapply(@local_mean_finite, ...
+        scores.CalibrationBiasMean, G);
+    summary.MeanAbsoluteCalibrationError = splitapply(@local_mean_finite, ...
+        scores.AbsoluteCalibrationErrorMean, G);
+    summary.MeanIntervalWidth = splitapply(@local_mean_finite, ...
+        scores.IntervalWidthMean, G);
+    summary.MeanWISMedianComponent = splitapply(@local_mean_finite, ...
+        scores.WISMedianComponent, G);
+    summary.MeanWISDispersionComponent = splitapply(@local_mean_finite, ...
+        scores.WISDispersionComponent, G);
+    summary.MeanWISUnderpredictionComponent = splitapply(@local_mean_finite, ...
+        scores.WISUnderpredictionComponent, G);
+    summary.MeanWISOverpredictionComponent = splitapply(@local_mean_finite, ...
+        scores.WISOverpredictionComponent, G);
+end
+
+function summary = local_summarize_interval_scores(scores, group_vars)
+%LOCAL_SUMMARIZE_INTERVAL_SCORES Aggregate interval-level metrics.
+    if isempty(scores) || height(scores) == 0
+        summary = table();
+        return;
+    end
+    [G, keys] = findgroups(scores(:, group_vars));
+    summary = keys;
+    summary.NumIntervalPoints = splitapply(@numel, scores.Coverage, G);
+    summary.NominalCoverage = splitapply(@local_mean_finite, scores.NominalCoverage, G);
+    summary.MeanCoverage = splitapply(@local_mean_finite, scores.Coverage, G);
+    summary.CoverageBias = summary.MeanCoverage - summary.NominalCoverage;
+    summary.AbsoluteCalibrationError = abs(summary.CoverageBias);
+    summary.MeanIntervalWidth = splitapply(@local_mean_finite, ...
+        scores.IntervalWidth, G);
+    summary.MeanIntervalScore = splitapply(@local_mean_finite, ...
+        scores.IntervalScore, G);
+    summary.MeanWISIntervalComponent = splitapply(@local_mean_finite, ...
+        scores.WISIntervalComponent, G);
+    summary.MeanWISSharpnessComponent = splitapply(@local_mean_finite, ...
+        scores.WISSharpnessComponent, G);
+    summary.MeanWISUnderpredictionComponent = splitapply(@local_mean_finite, ...
+        scores.WISUnderpredictionComponent, G);
+    summary.MeanWISOverpredictionComponent = splitapply(@local_mean_finite, ...
+        scores.WISOverpredictionComponent, G);
+end
+
+function [degradation, baseline, status] = local_degradation_summary(cfg, case_model_summary)
+%LOCAL_DEGRADATION_SUMMARY Compare Part B cases against Part A when available.
+    [baseline, status] = local_load_partA_baseline(cfg);
+    if isempty(baseline) || height(baseline) == 0 || isempty(case_model_summary)
+        degradation = table();
+        warning('EVAL:NoPartABaseline', ...
+            'Part A evaluation artifact unavailable or incomplete; degradation summaries skipped.');
+        return;
+    end
+
+    degradation = case_model_summary;
+    n = height(degradation);
+    degradation.PartAMeanWIS = nan(n, 1);
+    degradation.PartAMeanRMSE = nan(n, 1);
+    degradation.PartAMeanCoverage = nan(n, 1);
+    degradation.PartAMeanIntervalWidth = nan(n, 1);
+
+    for i = 1:n
+        idx = baseline.Model == degradation.Model(i) & ...
+            baseline.ExoMode == degradation.ExoMode(i);
+        if ~any(idx)
+            continue;
+        end
+        first_idx = find(idx, 1);
+        degradation.PartAMeanWIS(i) = baseline.PartAMeanWIS(first_idx);
+        degradation.PartAMeanRMSE(i) = baseline.PartAMeanRMSE(first_idx);
+        degradation.PartAMeanCoverage(i) = baseline.PartAMeanCoverage(first_idx);
+        degradation.PartAMeanIntervalWidth(i) = ...
+            baseline.PartAMeanIntervalWidth(first_idx);
+    end
+
+    degradation.DeltaMeanWIS = degradation.MeanWIS - degradation.PartAMeanWIS;
+    degradation.RelativeMeanWIS = degradation.MeanWIS ./ degradation.PartAMeanWIS;
+    degradation.DeltaRMSE = degradation.MeanRMSE - degradation.PartAMeanRMSE;
+    degradation.DeltaCoverage = degradation.MeanCoverage - degradation.PartAMeanCoverage;
+    degradation.DeltaIntervalWidth = degradation.MeanIntervalWidth - ...
+        degradation.PartAMeanIntervalWidth;
+end
+
+function [baseline, status] = local_load_partA_baseline(cfg)
+%LOCAL_LOAD_PARTA_BASELINE Load Part A model summary when available.
+    artifact_path = fullfile(cfg.output.partA_evaluation_dir, ...
+        'partA_04_evaluation_results.mat');
+    status = struct('available', false, 'artifact_path', string(artifact_path), ...
+        'message', "");
+    baseline = table();
+
+    if exist(artifact_path, 'file') ~= 2
+        status.message = "missing_partA_evaluation_artifact";
+        return;
+    end
+
+    loaded = load(artifact_path);
+    if ~isfield(loaded, 'summaries') || ...
+            ~isfield(loaded.summaries, 'model_summary')
+        status.message = "missing_partA_model_summary";
+        return;
+    end
+
+    model_summary = loaded.summaries.model_summary;
+    required = {'Model', 'ExoMode', 'MeanWIS'};
+    if ~all(ismember(required, model_summary.Properties.VariableNames))
+        status.message = "invalid_partA_model_summary";
+        return;
+    end
+
+    baseline = table(string(model_summary.Model), string(model_summary.ExoMode), ...
+        double(model_summary.MeanWIS), ...
+        local_table_numeric(model_summary, 'MeanRMSE'), ...
+        local_table_numeric(model_summary, 'MeanCoverage'), ...
+        local_table_numeric(model_summary, 'MeanIntervalWidth'), ...
+        'VariableNames', {'Model', 'ExoMode', 'PartAMeanWIS', ...
+        'PartAMeanRMSE', 'PartAMeanCoverage', 'PartAMeanIntervalWidth'});
+    status.available = true;
+    status.message = "loaded";
+end
+
+function values = local_table_numeric(table_data, var_name)
+%LOCAL_TABLE_NUMERIC Read a numeric table variable or NaNs.
+    if ismember(var_name, table_data.Properties.VariableNames)
+        values = double(table_data.(var_name));
+    else
+        values = nan(height(table_data), 1);
+    end
+end
+
+function outputs = local_write_cross_tables(table_dir, metrics, summary_tables, ...
+    selection_summary, degradation_status)
+%LOCAL_WRITE_CROSS_TABLES Persist cross-case tables.
+    if ~exist(table_dir, 'dir'), mkdir(table_dir); end
+    prefix = 'partB_robustness_ladder';
+    outputs = strings(0, 1);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_window_scores.csv', prefix), metrics.window_scores);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_pointwise_scores.csv', prefix), metrics.pointwise_scores);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_interval_scores.csv', prefix), metrics.interval_scores);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_case_model_summary.csv', prefix), summary_tables.case_model_summary);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_case_horizon_summary.csv', prefix), summary_tables.case_horizon_summary);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_case_scenario_summary.csv', prefix), summary_tables.case_scenario_summary);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_case_interval_summary.csv', prefix), summary_tables.case_interval_summary);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_case_calibration_summary.csv', prefix), summary_tables.case_calibration_summary);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_case_wis_component_summary.csv', prefix), ...
+        summary_tables.case_wis_component_summary);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_case_replicate_summary.csv', prefix), summary_tables.case_replicate_summary);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_degradation_summary.csv', prefix), summary_tables.degradation_summary);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_partA_baseline_summary.csv', prefix), summary_tables.partA_baseline_summary);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_selection_summary.csv', prefix), selection_summary);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_degradation_status.csv', prefix), struct2table(degradation_status));
+end
+
+function outputs = local_write_case_tables(cfg, metrics)
+%LOCAL_WRITE_CASE_TABLES Persist case-specific tables under case folders.
+    case_ids = unique(metrics.window_scores.CaseID, 'stable');
+    outputs = strings(0, 1);
+    for i = 1:numel(case_ids)
+        this_case = case_ids(i);
+        table_dir = fullfile(cfg.output.root_dir, char(this_case), "tables");
+        if ~exist(table_dir, 'dir'), mkdir(table_dir); end
+
+        w_idx = metrics.window_scores.CaseID == this_case;
+        p_idx = metrics.pointwise_scores.CaseID == this_case;
+        int_idx = metrics.interval_scores.CaseID == this_case;
+
+        case_metrics = struct( ...
+            'window_scores', metrics.window_scores(w_idx, :), ...
+            'pointwise_scores', metrics.pointwise_scores(p_idx, :), ...
+            'interval_scores', metrics.interval_scores(int_idx, :));
+        case_summary = local_summary_tables(case_metrics.window_scores, ...
+            case_metrics.pointwise_scores, case_metrics.interval_scores);
+        prefix = sprintf('partB_%s', char(this_case));
+
+        outputs(end + 1, 1) = local_write_table(table_dir, ...
+            sprintf('%s_window_scores.csv', prefix), case_metrics.window_scores); %#ok<AGROW>
+        outputs(end + 1, 1) = local_write_table(table_dir, ...
+            sprintf('%s_pointwise_scores.csv', prefix), case_metrics.pointwise_scores); %#ok<AGROW>
+        outputs(end + 1, 1) = local_write_table(table_dir, ...
+            sprintf('%s_interval_scores.csv', prefix), case_metrics.interval_scores); %#ok<AGROW>
+        outputs(end + 1, 1) = local_write_table(table_dir, ...
+            sprintf('%s_case_model_summary.csv', prefix), case_summary.case_model_summary); %#ok<AGROW>
+        outputs(end + 1, 1) = local_write_table(table_dir, ...
+            sprintf('%s_case_horizon_summary.csv', prefix), case_summary.case_horizon_summary); %#ok<AGROW>
+    end
+end
+
+function output_path = local_write_table(table_dir, filename, table_data)
+%LOCAL_WRITE_TABLE Write one CSV table.
+    output_path = fullfile(table_dir, filename);
+    writetable(table_data, output_path);
+    fprintf('Table saved to: %s\n', output_path);
+end
+
+function cfg_snapshot = local_cfg_snapshot(cfg)
+%LOCAL_CFG_SNAPSHOT Store relevant evaluation configuration.
+    cfg_snapshot = struct();
+    cfg_snapshot.experiment_id = cfg.experiment_id;
+    cfg_snapshot.experiment_name = cfg.experiment_name;
+    cfg_snapshot.forecast = cfg.forecast;
+    cfg_snapshot.output = cfg.output;
+    cfg_snapshot.intervals = cfg.intervals;
+    cfg_snapshot.fixed_forecast_cases = cfg.fixed_forecast_cases;
+    cfg_snapshot.robustness_cases = cfg.robustness_cases;
+    cfg_snapshot.smoke_test = cfg.smoke_test;
 end
 
 function is_valid = local_is_valid_forecast(truth_Rt, pred_Rt, lower_Rt, upper_Rt, alphas)
@@ -407,77 +806,11 @@ function forecast_day = local_forecast_day(window_entry, horizon)
     end
 end
 
-function table_outputs = local_write_tables(table_dir, cfg, metrics, ...
-    summary_tables, selection_summary)
-%LOCAL_WRITE_TABLES Persist Part B structural-mismatch CSV tables.
-    prefix = char(cfg.experiment_id);
-    table_outputs = strings(0, 1);
-    table_outputs(end + 1, 1) = local_write_table(table_dir, ...
-        sprintf('%s_window_scores.csv', prefix), metrics.window_scores);
-    table_outputs(end + 1, 1) = local_write_table(table_dir, ...
-        sprintf('%s_pointwise_scores.csv', prefix), metrics.pointwise_scores);
-    table_outputs(end + 1, 1) = local_write_table(table_dir, ...
-        sprintf('%s_interval_scores.csv', prefix), metrics.interval_scores);
-    table_outputs(end + 1, 1) = local_write_table(table_dir, ...
-        sprintf('%s_scenario_summary.csv', prefix), summary_tables.scenario_summary);
-    table_outputs(end + 1, 1) = local_write_table(table_dir, ...
-        sprintf('%s_scenario_performance_summary.csv', prefix), ...
-        summary_tables.scenario_performance_summary);
-    table_outputs(end + 1, 1) = local_write_table(table_dir, ...
-        sprintf('%s_horizon_summary.csv', prefix), summary_tables.horizon_summary);
-    table_outputs(end + 1, 1) = local_write_table(table_dir, ...
-        sprintf('%s_model_summary.csv', prefix), summary_tables.model_summary);
-    table_outputs(end + 1, 1) = local_write_table(table_dir, ...
-        sprintf('%s_interval_summary.csv', prefix), summary_tables.interval_summary);
-    table_outputs(end + 1, 1) = local_write_table(table_dir, ...
-        sprintf('%s_calibration_summary.csv', prefix), summary_tables.calibration_summary);
-    table_outputs(end + 1, 1) = local_write_table(table_dir, ...
-        sprintf('%s_wis_component_summary.csv', prefix), ...
-        summary_tables.wis_component_summary);
-    table_outputs(end + 1, 1) = local_write_table(table_dir, ...
-        sprintf('%s_selection_summary.csv', prefix), selection_summary);
-    table_outputs(end + 1, 1) = local_write_table(table_dir, ...
-        sprintf('%s_evaluation_settings.csv', prefix), local_settings_table(cfg));
-end
-
-function output_path = local_write_table(table_dir, filename, table_data)
-%LOCAL_WRITE_TABLE Write one CSV table.
-    output_path = fullfile(table_dir, filename);
-    writetable(table_data, output_path);
-    fprintf('Table saved to: %s\n', output_path);
-end
-
-function settings = local_settings_table(cfg)
-%LOCAL_SETTINGS_TABLE Create evaluation settings table.
-    settings = table( ...
-        string(cfg.experiment_id), string(cfg.truth_model), ...
-        string(cfg.forecast_assumption), cfg.forecast.horizon, ...
-        cfg.forecast.min_window, cfg.forecast.step_size, ...
-        string(strjoin(compose('%.4g', double(cfg.forecast.wis_alphas)), ',')), ...
-        cfg.smoke_test.enabled, ...
-        'VariableNames', {'ExperimentID', 'TruthModel', 'ForecastAssumption', ...
-        'ForecastHorizon', 'MinWindow', 'StepSize', 'WISAlphas', 'SmokeTest'});
-end
-
-function cfg_snapshot = local_cfg_snapshot(cfg)
-%LOCAL_CFG_SNAPSHOT Store relevant evaluation configuration.
-    cfg_snapshot = struct();
-    cfg_snapshot.experiment_id = cfg.experiment_id;
-    cfg_snapshot.experiment_name = cfg.experiment_name;
-    cfg_snapshot.truth_model = cfg.truth_model;
-    cfg_snapshot.forecast_assumption = cfg.forecast_assumption;
-    cfg_snapshot.forecast = cfg.forecast;
-    cfg_snapshot.output = cfg.output;
-    cfg_snapshot.intervals = cfg.intervals;
-    cfg_snapshot.fixed_forecast_cases = cfg.fixed_forecast_cases;
-    cfg_snapshot.smoke_test = cfg.smoke_test;
-end
-
-function table_data = local_vertcat_or_empty(blocks, empty_table)
+function table_data = local_vertcat_or_empty(blocks)
 %LOCAL_VERTCAT_OR_EMPTY Vertically concatenate nonempty table blocks.
     blocks = blocks(~cellfun('isempty', blocks));
     if isempty(blocks)
-        table_data = empty_table;
+        table_data = table();
     else
         table_data = vertcat(blocks{:});
     end
@@ -512,6 +845,14 @@ end
 
 function value = local_get_string_field(s, field_name, default_value)
 %LOCAL_GET_STRING_FIELD Read a string-compatible field with fallback.
+    value = string(default_value);
+    if isfield(s, field_name) && ~isempty(s.(field_name))
+        value = string(s.(field_name));
+    end
+end
+
+function value = local_loaded_string(s, field_name, default_value)
+%LOCAL_LOADED_STRING Read a top-level string field with fallback.
     value = string(default_value);
     if isfield(s, field_name) && ~isempty(s.(field_name))
         value = string(s.(field_name));
@@ -557,67 +898,31 @@ function value = local_mean_finite(values)
     end
 end
 
-function table_data = local_empty_window_scores()
-%LOCAL_EMPTY_WINDOW_SCORES Create an empty per-window table.
-    table_data = table(strings(0, 1), strings(0, 1), strings(0, 1), ...
-        strings(0, 1), strings(0, 1), strings(0, 1), zeros(0, 1), ...
-        zeros(0, 1), zeros(0, 1), zeros(0, 1), zeros(0, 1), zeros(0, 1), ...
-        zeros(0, 1), zeros(0, 1), zeros(0, 1), zeros(0, 1), zeros(0, 1), ...
-        zeros(0, 1), zeros(0, 1), zeros(0, 1), false(0, 1), ...
-        strings(0, 1), strings(0, 1), strings(0, 1), zeros(0, 1), ...
-        'VariableNames', {'Scenario', 'ScenarioName', 'Model', 'ExoMode', ...
-        'ForecastArtifact', 'ResultSource', 'WindowDay', 'WindowDayIdx', ...
-        'WindowWIS', 'WindowRawScaleWIS', 'WindowRMSE', 'WindowMAE', ...
-        'MeanWISMedianComponent', 'MeanWISDispersionComponent', ...
-        'MeanWISUnderpredictionComponent', 'MeanWISOverpredictionComponent', ...
-        'MeanCoverage', 'MeanCalibrationBias', ...
-        'MeanAbsoluteCalibrationError', 'MeanIntervalWidth', 'IsValid', ...
-        'IntervalMethod', 'IntervalStatus', 'RecordedStatus', 'AICC'});
+function value = local_median_finite(values)
+%LOCAL_MEDIAN_FINITE Median over finite numeric values only.
+    values = double(values(:));
+    values = values(isfinite(values));
+    if isempty(values)
+        value = nan;
+    else
+        value = median(values);
+    end
 end
 
-function table_data = local_empty_pointwise_scores()
-%LOCAL_EMPTY_POINTWISE_SCORES Create an empty pointwise score table.
-    table_data = table(strings(0, 1), strings(0, 1), strings(0, 1), ...
-        strings(0, 1), strings(0, 1), strings(0, 1), zeros(0, 1), ...
-        zeros(0, 1), zeros(0, 1), zeros(0, 1), zeros(0, 1), zeros(0, 1), ...
-        zeros(0, 1), zeros(0, 1), zeros(0, 1), zeros(0, 1), zeros(0, 1), ...
-        zeros(0, 1), zeros(0, 1), zeros(0, 1), zeros(0, 1), zeros(0, 1), ...
-        zeros(0, 1), zeros(0, 1), zeros(0, 1), strings(0, 1), strings(0, 1), ...
-        'VariableNames', {'Scenario', 'ScenarioName', 'Model', 'ExoMode', ...
-        'ForecastArtifact', 'ResultSource', 'WindowDay', 'WindowDayIdx', ...
-        'HorizonIdx', 'ForecastDay', 'Truth_Rt', 'Median_Forecast', ...
-        'Error', 'SquaredError', 'AbsoluteError', 'WIS', 'RawScaleWIS', ...
-        'WISMedianComponent', 'WISDispersionComponent', ...
-        'WISUnderpredictionComponent', 'WISOverpredictionComponent', ...
-        'CoverageMean', 'CalibrationBiasMean', ...
-        'AbsoluteCalibrationErrorMean', 'IntervalWidthMean', ...
-        'IntervalMethod', 'IntervalStatus'});
+function value = local_std_finite(values)
+%LOCAL_STD_FINITE Standard deviation over finite numeric values only.
+    values = double(values(:));
+    values = values(isfinite(values));
+    if numel(values) <= 1
+        value = nan;
+    else
+        value = std(values);
+    end
 end
 
-function table_data = local_empty_interval_scores()
-%LOCAL_EMPTY_INTERVAL_SCORES Create an empty long-format interval table.
-    table_data = table(strings(0, 1), strings(0, 1), strings(0, 1), ...
-        strings(0, 1), strings(0, 1), strings(0, 1), zeros(0, 1), ...
-        zeros(0, 1), zeros(0, 1), zeros(0, 1), zeros(0, 1), zeros(0, 1), ...
-        zeros(0, 1), zeros(0, 1), zeros(0, 1), zeros(0, 1), strings(0, 1), ...
-        strings(0, 1), zeros(0, 1), zeros(0, 1), zeros(0, 1), zeros(0, 1), ...
-        zeros(0, 1), zeros(0, 1), zeros(0, 1), zeros(0, 1), ...
-        'VariableNames', {'Scenario', 'ScenarioName', 'Model', 'ExoMode', ...
-        'ForecastArtifact', 'ResultSource', 'WindowDay', 'WindowDayIdx', ...
-        'HorizonIdx', 'ForecastDay', 'Truth_Rt', 'Alpha', 'NominalCoverage', ...
-        'LowerBound', 'UpperBound', 'Coverage', 'IntervalMethod', ...
-        'IntervalStatus', 'IntervalWidth', 'CoverageError', ...
-        'AbsoluteCoverageError', 'IntervalScore', 'WISIntervalComponent', ...
-        'WISSharpnessComponent', 'WISUnderpredictionComponent', ...
-        'WISOverpredictionComponent'});
-end
-
-function table_data = local_empty_selection_summary()
-%LOCAL_EMPTY_SELECTION_SUMMARY Create an empty fixed-selection summary table.
-    table_data = table(strings(0, 1), strings(0, 1), strings(0, 1), ...
-        strings(0, 1), strings(0, 1), strings(0, 1), ...
-        'VariableNames', {'Model', 'ExoMode', 'SelectedConfiguration', ...
-        'Source', 'SelectionArtifact', 'ForecastArtifact'});
+function dir_path = local_case_evaluation_dir(cfg, case_id)
+%LOCAL_CASE_EVALUATION_DIR Return one case-specific evaluation directory.
+    dir_path = fullfile(cfg.output.root_dir, char(case_id), "evaluation");
 end
 
 function files = local_sort_dir_by_name(files)
