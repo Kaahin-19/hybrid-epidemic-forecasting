@@ -24,6 +24,7 @@ function cfg = partB_config()
 %   See also PARTA_CONFIG, PARTB_01_GENERATE_TRUTH.
 
 % A. M. Kaahin 2026-05-18
+% Modified: 2026-06-02
 
     cfg = partA_config();
 
@@ -50,9 +51,11 @@ function cfg = partB_config()
     thisDir  = fileparts(mfilename('fullpath'));
     repoRoot = fileparts(thisDir);
 
-    cfg.output.partA_tuning_dir = cfg.output.tuning_dir;
     if isfield(cfg.output, 'tuning_dir')
+        cfg.output.partA_tuning_dir = cfg.output.tuning_dir;
         cfg.output = rmfield(cfg.output, 'tuning_dir');
+    else
+        cfg.output.partA_tuning_dir = cfg.output.model_selection_dir;
     end
 
     cfg.output.data_dir     = fullfile(repoRoot, "data", "partB");

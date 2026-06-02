@@ -20,7 +20,7 @@
 %            PARTA_02_SELECT_GLOBAL_MODEL_CONFIGURATIONS, PARTA_04_EVALUATE_FORECASTS.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-06-01
+% Modified: 2026-06-02
 
 %% 1. Initialization
 clear; close all; clc;
@@ -84,17 +84,13 @@ for i = 1:numel(scenario_data)
     end
 
     %% 4. Persist Forecast Artifact
-    % Legacy mirror so the existing partA_04 evaluator runs unmodified.
-    results = local_build_legacy_results(forecast_results, selected_configuration); %#ok<NASGU>
-
     file_prefix = sprintf('partA_03_forecast_%s_%s_%s', scenario_id, MODEL_TYPE, EXO_MODE);
     outName = fullfile(saveDir, [file_prefix, '.mat']);
 
     save(outName, ...
         'model_type', 'exo_mode', ...
         'scenario_id', 'scenario_name', ...
-        'selected_configuration', 'forecast_results', 'cfg_snapshot', ...
-        'results');
+        'selected_configuration', 'forecast_results', 'cfg_snapshot');
     fprintf('Forecast artifact saved to: %s\n', outName);
 end
 
@@ -143,10 +139,10 @@ function local_validate_selection_artifact(selection, artifact_path, ...
             'Model-selection artifact is missing required fields: %s.', artifact_path);
     end
 
-    if ~isfield(selection, 'selected_configuration') && ~isfield(selection, 'selected_model')
+    if ~isfield(selection, 'selected_configuration')
         error('FORECAST:InvalidSelectionArtifact', ...
-            ['Model-selection artifact is missing selected_configuration ', ...
-            'or selected_model: %s.'], artifact_path);
+            'Model-selection artifact is missing selected_configuration: %s.', ...
+            artifact_path);
     end
 
     if ~strcmp(string(selection.model_type), string(model_type))
@@ -191,12 +187,8 @@ function local_validate_selection_artifact(selection, artifact_path, ...
 end
 
 function selected_configuration = local_extract_selected_configuration(selection)
-%LOCAL_EXTRACT_SELECTED_CONFIGURATION Prefer canonical selected configuration field.
-    if isfield(selection, 'selected_configuration')
-        selected_configuration = reshape(double(selection.selected_configuration), 1, []);
-    else
-        selected_configuration = reshape(double(selection.selected_model), 1, []);
-    end
+%LOCAL_EXTRACT_SELECTED_CONFIGURATION Read the canonical selected configuration.
+    selected_configuration = reshape(double(selection.selected_configuration), 1, []);
 end
 
 function expected_num_params = local_expected_param_count(model_type)
@@ -210,39 +202,5 @@ function expected_num_params = local_expected_param_count(model_type)
             expected_num_params = 2;
         otherwise
             error('CFG:UnknownModel', 'Unsupported MODEL_TYPE: %s', model_type);
-    end
-end
-
-function results = local_build_legacy_results(forecast_results, selected_configuration)
-%LOCAL_BUILD_LEGACY_RESULTS Mirror forecast results into the legacy layout.
-%   Preserves the field names consumed by the current partA_04 evaluator so
-%   that downstream evaluation continues to run without modification.
-    selected_row = reshape(double(selected_configuration), 1, []);
-    num_results = numel(forecast_results);
-
-    results = repmat(struct( ...
-        'window_day', [], ...
-        'window_day_idx', [], ...
-        'forecast_median', [], ...
-        'forecast_interval_alphas', [], ...
-        'forecast_lower', [], ...
-        'forecast_upper', [], ...
-        'best_model', [], ...
-        'aic_landscape', [], ...
-        'truth_Rt_window', [], ...
-        'time_horizon', []), max(num_results, 0), 1);
-
-    for k = 1:num_results
-        entry = forecast_results(k);
-        results(k).window_day               = entry.forecast_origin;
-        results(k).window_day_idx           = entry.window_day_idx;
-        results(k).forecast_median          = entry.Rt_pred;
-        results(k).forecast_interval_alphas = entry.interval_alphas;
-        results(k).forecast_lower           = entry.lower_bounds;
-        results(k).forecast_upper           = entry.upper_bounds;
-        results(k).best_model               = selected_row;
-        results(k).aic_landscape            = [selected_row, entry.aicc];
-        results(k).truth_Rt_window          = entry.Rt_true_future;
-        results(k).time_horizon             = entry.t_future;
     end
 end

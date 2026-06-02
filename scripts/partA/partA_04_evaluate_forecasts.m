@@ -9,7 +9,7 @@
 %
 %   Workflow:
 %       1. Load forecast and model-selection artifacts.
-%       2. Normalize canonical and legacy forecast-result structures.
+%       2. Load canonical forecast-result structures.
 %       3. Compute WIS, WIS components, RMSE, MAE, calibration, coverage,
 %          and interval-width scores.
 %       4. Save evaluation .mat artifacts and table files.
@@ -18,7 +18,7 @@
 %            PARTA_05_GENERATE_FIGURES.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-06-01
+% Modified: 2026-06-02
 
 %% 1. Initialization
 clear; close all; clc;
@@ -75,8 +75,7 @@ for i = 1:numel(forecast_files)
     interval_rows = cell(numel(forecast_results), 1);
 
     for k = 1:numel(forecast_results)
-        window_entry = local_normalize_forecast_window( ...
-            forecast_results(k), result_source);
+        window_entry = local_normalize_forecast_window(forecast_results(k));
         [window_rows{k}, pointwise_rows{k}, interval_rows{k}] = ...
             local_evaluate_window(window_entry, scenario_id, scenario_name, ...
             model_type, exo_mode, artifact_path, result_source);
@@ -177,16 +176,13 @@ function [selection_summary, missing_selection_artifacts] = local_load_selection
 end
 
 function [forecast_results, result_source] = local_get_forecast_results(loaded)
-%LOCAL_GET_FORECAST_RESULTS Prefer canonical forecast_results, fallback legacy.
+%LOCAL_GET_FORECAST_RESULTS Load canonical forecast results.
     forecast_results = [];
     result_source = "";
 
     if isfield(loaded, 'forecast_results') && ~isempty(loaded.forecast_results)
         forecast_results = loaded.forecast_results;
         result_source = "forecast_results";
-    elseif isfield(loaded, 'results') && ~isempty(loaded.results)
-        forecast_results = loaded.results;
-        result_source = "legacy_results";
     end
 end
 
@@ -252,40 +248,23 @@ function scenario_name = local_scenario_name_from_config(cfg, scenario_id)
     end
 end
 
-function window_entry = local_normalize_forecast_window(raw_entry, result_source)
-%LOCAL_NORMALIZE_FORECAST_WINDOW Normalize canonical or legacy forecast fields.
+function window_entry = local_normalize_forecast_window(raw_entry)
+%LOCAL_NORMALIZE_FORECAST_WINDOW Normalize canonical forecast fields.
     window_entry = struct();
-    window_entry.result_source = string(result_source);
-
-    if strcmp(result_source, "forecast_results")
-        window_entry.truth_Rt = local_get_numeric_vector(raw_entry, 'Rt_true_future');
-        window_entry.pred_Rt = local_get_numeric_vector(raw_entry, 'Rt_pred');
-        window_entry.lower_Rt = local_get_numeric_matrix(raw_entry, 'lower_bounds');
-        window_entry.upper_Rt = local_get_numeric_matrix(raw_entry, 'upper_bounds');
-        window_entry.alphas = local_get_numeric_vector(raw_entry, 'interval_alphas');
-        window_entry.window_day = local_get_numeric_scalar(raw_entry, 'forecast_origin');
-        window_entry.window_day_idx = local_get_numeric_scalar(raw_entry, 'window_day_idx');
-        window_entry.forecast_day = local_get_numeric_vector(raw_entry, 't_future');
-        window_entry.horizon_indices = local_get_numeric_vector(raw_entry, 'horizon_indices');
-        window_entry.aicc = local_get_numeric_scalar(raw_entry, 'aicc');
-        window_entry.interval_method = local_get_string_field(raw_entry, 'interval_method', "");
-        window_entry.interval_status = local_get_string_field(raw_entry, 'interval_status', "");
-        window_entry.recorded_status = local_get_string_field(raw_entry, 'status', "");
-    else
-        window_entry.truth_Rt = local_get_numeric_vector(raw_entry, 'truth_Rt_window');
-        window_entry.pred_Rt = local_get_numeric_vector(raw_entry, 'forecast_median');
-        window_entry.lower_Rt = local_get_numeric_matrix(raw_entry, 'forecast_lower');
-        window_entry.upper_Rt = local_get_numeric_matrix(raw_entry, 'forecast_upper');
-        window_entry.alphas = local_get_numeric_vector(raw_entry, 'forecast_interval_alphas');
-        window_entry.window_day = local_get_numeric_scalar(raw_entry, 'window_day');
-        window_entry.window_day_idx = nan;
-        window_entry.forecast_day = local_get_numeric_vector(raw_entry, 'time_horizon');
-        window_entry.horizon_indices = local_get_numeric_vector(raw_entry, 'time_horizon');
-        window_entry.aicc = nan;
-        window_entry.interval_method = "legacy_artifact";
-        window_entry.interval_status = "legacy_artifact";
-        window_entry.recorded_status = "";
-    end
+    window_entry.result_source = "forecast_results";
+    window_entry.truth_Rt = local_get_numeric_vector(raw_entry, 'Rt_true_future');
+    window_entry.pred_Rt = local_get_numeric_vector(raw_entry, 'Rt_pred');
+    window_entry.lower_Rt = local_get_numeric_matrix(raw_entry, 'lower_bounds');
+    window_entry.upper_Rt = local_get_numeric_matrix(raw_entry, 'upper_bounds');
+    window_entry.alphas = local_get_numeric_vector(raw_entry, 'interval_alphas');
+    window_entry.window_day = local_get_numeric_scalar(raw_entry, 'forecast_origin');
+    window_entry.window_day_idx = local_get_numeric_scalar(raw_entry, 'window_day_idx');
+    window_entry.forecast_day = local_get_numeric_vector(raw_entry, 't_future');
+    window_entry.horizon_indices = local_get_numeric_vector(raw_entry, 'horizon_indices');
+    window_entry.aicc = local_get_numeric_scalar(raw_entry, 'aicc');
+    window_entry.interval_method = local_get_string_field(raw_entry, 'interval_method', "");
+    window_entry.interval_status = local_get_string_field(raw_entry, 'interval_status', "");
+    window_entry.recorded_status = local_get_string_field(raw_entry, 'status', "");
 end
 
 function [window_row, pointwise_rows, interval_rows] = local_evaluate_window( ...
@@ -628,8 +607,6 @@ function value = local_selected_configuration_text(s)
 %LOCAL_SELECTED_CONFIGURATION_TEXT Format selected configuration for tables.
     if isfield(s, 'selected_configuration') && ~isempty(s.selected_configuration)
         value = string(mat2str(double(s.selected_configuration)));
-    elseif isfield(s, 'selected_model') && ~isempty(s.selected_model)
-        value = string(mat2str(double(s.selected_model)));
     else
         value = "";
     end

@@ -105,9 +105,7 @@ The implementation is divided into three major phases as outlined in the project
 **Visualization (``src/visualization/``)**
 * ``build_plot_spec.m``: Builds reusable plot specification structures.
 * ``export_figure.m``: Centralizes figure export behavior.
-* ``plot_rt_scenarios.m``: Draws scenario effective-reproduction-number trajectories.
-* ``plot_forecast_comparison.m``: Draws fixed-lead forecast medians and predictive intervals against truth.
-* ``plot_model_performance.m``: Draws model-level WIS distributions; it retains a legacy ``cfg`` call path for Part B/C compatibility.
-* ``plot_wis_by_horizon.m``: Draws WIS summaries by forecast horizon.
-* ``plot_coverage_summary.m``: Draws empirical coverage against nominal interval coverage.
-* ``plot_rt_forecast_comparison.m``: Legacy compatibility wrapper for older Part B/C scripts.
+* ``plot_single_panel.m``: Draws one generic panel from caller-supplied series, labels, limits, legend entries, and styles.
+* ``plot_multi_panel_figure.m``: Arranges generic panel definitions in a tiled figure and delegates each tile to ``plot_single_panel.m``.
+* ``plot_model_performance.m``: Draws model-level WIS distributions for Part B/C score registries.
+* ``plot_rt_forecast_comparison.m``: Draws fixed-lead ``R_t`` forecast comparisons for Part B/C scripts; Part A figures use ``plot_single_panel.m`` directly.

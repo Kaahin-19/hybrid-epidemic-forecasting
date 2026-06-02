@@ -18,6 +18,7 @@
 %            FIT_ARX_MODEL, FORECAST_ARX_CLOSED_LOOP.
 %
 % A. M. Kaahin 2026-06-01
+% Modified: 2026-06-02
 
 %% 1. Initialization
 clear; close all; clc;
@@ -406,7 +407,7 @@ function checks = local_search_validation(repo_root)
         contains(partA03, 'fit_arima') || contains(partA03, 'fit_arimax');
     checks.partA03_writes_csv_or_figures = ...
         contains(partA03, 'writetable') || ...
-        ~isempty(regexp(partA03, '\<plot_rt_forecast_comparison\s*\(', 'once'));
+        ~isempty(regexp(partA03, '\<plot_[A-Za-z0-9_]*\s*\(', 'once'));
     checks.run_model_forecast_uses_new_ar = ...
         contains(run_model_forecast, 'fit_ar_model') && ...
         contains(run_model_forecast, 'forecast_ar_model');

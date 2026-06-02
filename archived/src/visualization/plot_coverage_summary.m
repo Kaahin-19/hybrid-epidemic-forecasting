@@ -5,9 +5,9 @@ function fig = plot_coverage_summary(interval_summary, plot_spec)
 %       fig = plot_coverage_summary(interval_summary, plot_spec)
 %
 %   Description:
-%       Draws empirical interval coverage against nominal coverage levels.
-%       Titles, labels, legend wording, and axis limits are supplied by
-%       plot_spec.
+%       Converts empirical coverage summaries into generic line-series panel
+%       data and delegates rendering to plot_single_panel. Titles, labels,
+%       legend wording, and axis limits are supplied by plot_spec.
 %
 %   Inputs:
 %       interval_summary - Summary table with Alpha/NominalCoverage and
@@ -17,27 +17,28 @@ function fig = plot_coverage_summary(interval_summary, plot_spec)
 %   Outputs:
 %       fig - Figure handle.
 %
-%   See also BUILD_PLOT_SPEC, EXPORT_FIGURE.
+%   See also PLOT_SINGLE_PANEL, BUILD_PLOT_SPEC, EXPORT_FIGURE.
 %
 % A. M. Kaahin 2026-06-01
+% Modified: 2026-06-02
 
-    %% 1. Figure Setup
+    %% 1. Input Handling
     if nargin < 2 || isempty(plot_spec)
         plot_spec = build_plot_spec();
     end
 
-    fig = figure('Name', char(local_spec_field(plot_spec, 'figure_name', ...
-        "Coverage summary")), ...
-        'Visible', char(local_spec_field(plot_spec, 'visible', "off")));
-    local_apply_figure_size(fig, plot_spec);
+    %% 2. Generic Panel Assembly
+    panel_data = local_coverage_panel_data(interval_summary, plot_spec);
 
-    ax = axes(fig);
-    hold(ax, 'on');
+    %% 3. Rendering
+    fig = plot_single_panel(panel_data, plot_spec);
+end
 
-    %% 2. Plotting
+function panel_data = local_coverage_panel_data(interval_summary, plot_spec)
+%LOCAL_COVERAGE_PANEL_DATA Convert coverage summaries into line series.
+    panel_data = struct('series', []);
     if isempty(interval_summary) || height(interval_summary) == 0 || ...
             ~ismember('MeanCoverage', interval_summary.Properties.VariableNames)
-        local_no_data_message(ax, plot_spec);
         return;
     end
 
@@ -46,6 +47,7 @@ function fig = plot_coverage_summary(interval_summary, plot_spec)
     groups = unique(group_ids, 'stable');
     legend_labels = local_legend_labels(plot_spec, groups);
 
+    series = local_empty_series(0);
     for i = 1:numel(groups)
         idx = group_ids == groups(i);
         x_values = double(nominal_coverage(idx));
@@ -60,27 +62,38 @@ function fig = plot_coverage_summary(interval_summary, plot_spec)
         [x_values, order] = sort(x_values);
         y_values = y_values(order);
 
-        plot(ax, x_values, y_values, '-o', 'LineWidth', 1.3, ...
-            'MarkerSize', 3.2, 'DisplayName', char(legend_labels(i)));
+        next_series = local_empty_series(1);
+        next_series.type = "line";
+        next_series.x = x_values;
+        next_series.y = y_values;
+        next_series.label = legend_labels(i);
+        next_series.style = struct('LineStyle', '-', 'LineWidth', 1.3, ...
+            'Marker', 'o', 'MarkerSize', 3.2);
+        next_series.legend_rank = i;
+        series(end + 1, 1) = next_series; %#ok<AGROW>
     end
 
     valid_nominal = nominal_coverage(isfinite(nominal_coverage));
     if ~isempty(valid_nominal)
-        x_ref = [min(valid_nominal), max(valid_nominal)];
-        reference_label = local_reference_label(plot_spec);
-        plot(ax, x_ref, x_ref, 'k--', 'LineWidth', 1.0, ...
-            'DisplayName', char(reference_label));
+        reference_series = local_empty_series(1);
+        reference_series.type = "line";
+        reference_series.x = [min(valid_nominal), max(valid_nominal)];
+        reference_series.y = reference_series.x;
+        reference_series.label = local_reference_label(plot_spec);
+        reference_series.style = struct('Color', [0, 0, 0], ...
+            'LineStyle', '--', 'LineWidth', 1.0);
+        reference_series.legend_rank = numel(series) + 1;
+        series(end + 1, 1) = reference_series; %#ok<AGROW>
     end
 
-    if isempty(ax.Children)
-        local_no_data_message(ax, plot_spec);
-        return;
-    end
+    panel_data.series = series;
+end
 
-    local_apply_labels(ax, plot_spec);
-    local_apply_limits(ax, plot_spec);
-    grid(ax, 'on');
-    local_apply_legend(ax, plot_spec);
+function series = local_empty_series(n)
+%LOCAL_EMPTY_SERIES Create generic panel-series placeholders.
+    series = repmat(struct('type', "line", 'x', [], 'y', [], ...
+        'lower', [], 'upper', [], 'label', "", 'style', struct(), ...
+        'legend_visible', true, 'legend_rank', 1), n, 1);
 end
 
 function nominal_coverage = local_nominal_coverage(interval_summary)
@@ -129,70 +142,11 @@ function label = local_reference_label(plot_spec)
     end
 end
 
-function local_apply_labels(ax, plot_spec)
-%LOCAL_APPLY_LABELS Apply optional title and axis labels.
-    title_text = local_spec_field(plot_spec, 'title', "");
-    if strlength(title_text) > 0
-        title(ax, title_text, 'Interpreter', local_text_interpreter(title_text));
-    end
-    x_label = local_spec_field(plot_spec, 'x_label', "");
-    y_label = local_spec_field(plot_spec, 'y_label', "");
-    xlabel(ax, x_label, 'Interpreter', local_text_interpreter(x_label));
-    ylabel(ax, y_label, 'Interpreter', local_text_interpreter(y_label));
-end
-
-function local_apply_legend(ax, plot_spec)
-%LOCAL_APPLY_LEGEND Apply optional legend location.
-    legend_spec = local_spec_field(plot_spec, 'legend', struct());
-    location = "best";
-    if isstruct(legend_spec) && isfield(legend_spec, 'location')
-        location = string(legend_spec.location);
-    end
-    legend(ax, 'Location', char(location));
-end
-
-function local_no_data_message(ax, plot_spec)
-%LOCAL_NO_DATA_MESSAGE Draw an empty-data placeholder.
-    axis(ax, 'off');
-    title_text = local_spec_field(plot_spec, 'title', "");
-    if strlength(title_text) > 0, title(ax, title_text); end
-    text(ax, 0.5, 0.5, local_spec_field(plot_spec, 'no_data_text', "No finite data"), ...
-        'HorizontalAlignment', 'center');
-end
-
 function value = local_spec_field(plot_spec, field_name, default_value)
 %LOCAL_SPEC_FIELD Read a plot-spec field with fallback.
     if isfield(plot_spec, field_name) && ~isempty(plot_spec.(field_name))
         value = plot_spec.(field_name);
     else
         value = default_value;
-    end
-end
-
-function local_apply_figure_size(fig, plot_spec)
-%LOCAL_APPLY_FIGURE_SIZE Apply centimeter figure dimensions.
-    size_cm = local_spec_field(plot_spec, 'size_cm', []);
-    if isempty(size_cm) || numel(size_cm) ~= 2
-        return;
-    end
-    fig.Units = 'centimeters';
-    fig.Position(3:4) = double(size_cm);
-end
-
-function local_apply_limits(ax, plot_spec)
-%LOCAL_APPLY_LIMITS Apply optional axis limits.
-    x_limits = local_spec_field(plot_spec, 'x_limits', []);
-    y_limits = local_spec_field(plot_spec, 'y_limits', []);
-    if ~isempty(x_limits), xlim(ax, double(x_limits)); end
-    if ~isempty(y_limits), ylim(ax, double(y_limits)); end
-end
-
-function interpreter = local_text_interpreter(text_value)
-%LOCAL_TEXT_INTERPRETER Select text interpreter from label content.
-    text_value = string(text_value);
-    if any(contains(text_value, "$")) || any(contains(text_value, "\"))
-        interpreter = 'latex';
-    else
-        interpreter = 'none';
     end
 end

@@ -28,7 +28,7 @@ function cfg = partA_config()
 %            PARTA_03_RUN_FORECASTS, PARTA_04_EVALUATE_FORECASTS.
 
 % A. M. Kaahin 2026-02-18
-% Modified: 2026-06-01
+% Modified: 2026-06-02
 
     cfg = struct();
 
@@ -167,8 +167,6 @@ function cfg = partA_config()
     cfg.output.data_dir     = fullfile(repoRoot, "data", "partA");
     cfg.output.root_dir     = fullfile(repoRoot, "results", "partA");
     cfg.output.model_selection_dir = fullfile(cfg.output.root_dir, "model_selection");
-    % Compatibility alias for Part B/C consumers; no results/partA/tuning folder is used.
-    cfg.output.tuning_dir   = cfg.output.model_selection_dir;
     cfg.output.forecast_dir = fullfile(cfg.output.root_dir, "forecasts");
     cfg.output.score_dir    = fullfile(cfg.output.root_dir, "evaluation");
     cfg.output.fig_dir      = fullfile(cfg.output.root_dir, "figures");

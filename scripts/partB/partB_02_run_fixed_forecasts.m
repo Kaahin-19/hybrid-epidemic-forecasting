@@ -15,6 +15,7 @@
 %   See also PARTB_CONFIG, FIT_AR_MODEL, FIT_ARX_MODEL.
 
 % A. M. Kaahin 2026-05-18
+% Modified: 2026-06-02
 
 %% 1. Initialization
 clear; close all; clc;
@@ -119,13 +120,13 @@ function model_cfg = local_load_one_config(cfg, model_type, exo_mode, ...
     end
 
     tuning = load(tuning_path);
-    required_fields = {'model_type', 'exo_mode', 'selected_model'};
+    required_fields = {'model_type', 'exo_mode', 'selected_configuration'};
     if ~all(isfield(tuning, required_fields))
         error('FORECAST:InvalidPartATuningArtifact', ...
             'Part A tuning artifact is missing required fields: %s.', tuning_path);
     end
 
-    selected_model = reshape(double(tuning.selected_model), 1, []);
+    selected_model = reshape(double(tuning.selected_configuration), 1, []);
     expected_model = reshape(double(expected_model), 1, []);
 
     if ~strcmp(string(tuning.model_type), string(model_type)) || ...
@@ -136,7 +137,7 @@ function model_cfg = local_load_one_config(cfg, model_type, exo_mode, ...
 
     if ~isequal(selected_model, expected_model)
         error('FORECAST:UnexpectedPartASelection', ...
-            ['Part A selected_model mismatch for %s/%s. Expected %s, ' ...
+            ['Part A selected_configuration mismatch for %s/%s. Expected %s, ' ...
             'found %s. Part B is fixed by design.'], ...
             model_type, exo_mode, mat2str(expected_model), mat2str(selected_model));
     end

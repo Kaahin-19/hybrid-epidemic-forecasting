@@ -16,6 +16,7 @@
 %            AGGREGATE_CANDIDATE_SCORES, SELECT_BEST_CONFIGURATION.
 %
 % A. M. Kaahin 2026-05-31
+% Modified: 2026-06-02
 
 %% 1. Initialization
 clear; close all; clc;
@@ -43,7 +44,7 @@ if ~exist(selectionDir, 'dir')
 end
 
 %% 2. Candidate and Scenario Setup
-[candidate_grid, parameter_names] = generate_candidate_grid(cfg, MODEL_TYPE);
+candidate_grid = generate_candidate_grid(cfg, MODEL_TYPE);
 num_candidates = size(candidate_grid, 1);
 
 fprintf('Stage: Preparing scenario-window inputs for %d scenarios\n', length(fileList));
@@ -83,8 +84,6 @@ fprintf('Stage: Candidate evaluation complete\n');
 %% 4. Artifact Generation
 model_type = MODEL_TYPE;
 exo_mode = EXO_MODE;
-selected_model = selected_configuration;
-candidate_models = candidate_grid;
 wis_alphas = cfg.forecast.wis_alphas;
 aggregation_mode = 'equal_scenario_mean_wis';
 failure_policy = 'inf_on_invalid';
@@ -107,7 +106,6 @@ save(artifact_path, ...
     'scenario_mean_wis', 'global_mean_wis', ...
     'selected_configuration', 'selected_index', ...
     'scenario_ids', 'window_counts', 'cfg_snapshot', ...
-    'selected_model', 'candidate_models', 'parameter_names', ...
     'wis_alphas', 'aggregation_mode', 'failure_policy', 'best_global_wis');
 
 fprintf('Selected global model configuration: %s\n', mat2str(selected_configuration));
