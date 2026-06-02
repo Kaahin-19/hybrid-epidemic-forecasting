@@ -22,7 +22,7 @@ function stepper = initialize_sirs_stepper(model_params, sim_options)
 %   See also ADVANCE_SIRS_STEPPER, FORECAST_ARX_CLOSED_LOOP.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-01
+% Modified: 2026-06-02
 
     %% 1. Input Validation
     params = local_validate_sirs_params(model_params);
@@ -175,10 +175,27 @@ function value = local_nonnegative_scalar(value, label)
 end
 
 function build_dir = local_urdme_build_dir()
-%LOCAL_URDME_BUILD_DIR Return the repository-local URDME build directory.
+%LOCAL_URDME_BUILD_DIR Return the URDME build directory for this process.
     source_dir = fileparts(mfilename('fullpath'));
     repo_root = local_find_repo_root(source_dir);
     build_dir = fullfile(repo_root, 'build', 'urdme');
+
+    worker_tag = local_worker_tag();
+    if ~isempty(worker_tag)
+        build_dir = fullfile(build_dir, worker_tag);
+    end
+end
+
+function tag = local_worker_tag()
+%LOCAL_WORKER_TAG Per-worker isolation tag; empty on the serial client.
+    tag = '';
+    if exist('getCurrentTask', 'file') == 0
+        return;
+    end
+    if isempty(getCurrentTask())
+        return;
+    end
+    tag = sprintf('worker_%d', feature('getpid'));
 end
 
 function repo_root = local_find_repo_root(start_dir)
