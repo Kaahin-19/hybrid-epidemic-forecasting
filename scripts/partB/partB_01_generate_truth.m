@@ -1,108 +1,162 @@
-%PARTB_01_GENERATE_TRUTH Generate and persist deterministic SEIR truth data.
+%PARTB_01_GENERATE_TRUTH Generate structural-mismatch SEIR truth data.
 %
 %   Description:
-%       Executes deterministic SEIR simulation for all Part A analytic Rt
-%       scenarios under the Part B robustness design. The desired effective
-%       reproduction-number trajectory is converted to a state-consistent
-%       internal transmission curve by genData_SEIR.
+%       Executes the Part B structural-mismatch truth stage. The script uses
+%       the same four analytic effective-Rt scenarios as Part A, generates
+%       ground-truth trajectories from an SEIR compartment model, and saves
+%       one MATLAB artifact per scenario for fixed Part A forecast testing.
 %
 %   Workflow:
-%       1. Initialization
-%       2. Simulation and persistence loop
-%       3. Completion check
+%       1. Load configuration and ensure the structural-mismatch data folder.
+%       2. Generate each configured effective-Rt signal.
+%       3. Simulate and save one deterministic SEIR truth artifact per scenario.
 %
-%   See also PARTB_CONFIG, GENDATA_SEIR.
-
+%   See also PARTB_CONFIG, GENERATE_RT_SIGNAL, SIMULATE_GROUND_TRUTH_EPIDEMIC.
+%
 % A. M. Kaahin 2026-05-18
+% Modified: 2026-06-02
 
 %% 1. Initialization
 clear; close all; clc;
 
-fprintf('=== Part B SEIR Truth Generation ===\n');
+fprintf('=== Part B Structural-Mismatch SEIR Truth Generation ===\n');
 
 cfg = partB_config();
-t   = cfg.time.tspan;
+tspan = cfg.time.tspan;
+data_dir = cfg.output.data_dir;
 
-if ~exist(cfg.output.data_dir, 'dir')
-    mkdir(cfg.output.data_dir);
+if ~exist(data_dir, 'dir')
+    mkdir(data_dir);
 end
 
+scenarios = local_active_scenarios(cfg);
+
 %% 2. Simulation and Persistence Loop
-fprintf('Saving trajectories to: %s\n', cfg.output.data_dir);
-failed_scenarios = strings(0, 1);
+fprintf('Experiment: %s\n', cfg.experiment_id);
+fprintf('Saving trajectories to: %s\n', data_dir);
+failed_mask = false(numel(scenarios), 1);
 
-for i = 1:numel(cfg.scenarios)
-    slot = cfg.scenarios(i);
-    fprintf('  - Processing %s (%s)... ', slot.id, slot.name);
-
-    params      = cfg.seir;
-    Rt_true     = generate_rt_signal(t, slot);
-    params.solver = 'uds';
-
-    if isfield(slot.params, 'I0')
-        params.I0 = slot.params.I0;
-        params.E0 = round((params.gamma / params.sigma) * params.I0);
-    end
-
-    if isfield(slot.params, 'R0_init')
-        params.R0_init = slot.params.R0_init;
-    end
-
-    sim_params = params;
-    sim_params.Rt = Rt_true;
+for i = 1:numel(scenarios)
+    scenario = scenarios(i);
+    fprintf('  - Processing %s (%s)... ', scenario.id, scenario.name);
 
     try
-        [umod, beta_curve] = genData_SEIR(t, sim_params, cfg.sim.seed);
+        Rt_true = generate_rt_signal(tspan, scenario);
+        model_params = local_model_params_for_scenario(cfg, scenario);
+        sim_options = local_sim_options_from_cfg(cfg);
+        truth = simulate_ground_truth_epidemic( ...
+            cfg.truth_model, tspan, Rt_true, model_params, sim_options);
+
+        local_validate_truth_state(truth, scenario.id);
+
+        artifact = struct();
+        artifact.experiment_id = string(cfg.experiment_id);
+        artifact.experiment_name = string(cfg.experiment_name);
+        artifact.truth_model = string(cfg.truth_model);
+        artifact.forecast_assumption = string(cfg.forecast_assumption);
+        artifact.scenario_id = string(scenario.id);
+        artifact.scenario_name = string(scenario.name);
+        artifact.Rt_true = truth.Rt_true;
+        artifact.S_true = truth.S_true;
+        artifact.E_true = truth.E_true;
+        artifact.I_true = truth.I_true;
+        artifact.R_true = truth.R_true;
+        artifact.tspan = truth.tspan;
+        artifact.seir_parameters = model_params;
+        artifact.cfg_snapshot = local_cfg_snapshot(cfg, scenario, ...
+            model_params, sim_options);
+        artifact.truth = truth;
+        artifact.beta_curve = truth.beta_curve;
+        artifact.sim_options = sim_options;
+
+        out_path = fullfile(data_dir, sprintf('%s_truth_%s.mat', ...
+            char(cfg.experiment_id), char(scenario.id)));
+        save(out_path, '-struct', 'artifact');
     catch ME
         fprintf('FAILED.\n');
-        warning('SIM:Failure', 'Simulation failed for %s: %s', slot.id, ME.message);
-        failed_scenarios(end + 1, 1) = string(slot.id);
+        warning('SIM:Failure', 'SEIR simulation failed for %s: %s', ...
+            scenario.id, ME.message);
+        failed_mask(i) = true;
         continue;
     end
-
-    S_true = umod.U(1, :);
-    E_true = umod.U(2, :);
-    I_true = umod.U(3, :);
-    R_true = umod.U(4, :);
-    tspan  = t;
-
-    params.beta = beta_curve;
-    umod.private.epiid.dynrates = params;
-
-    local_validate_truth_state(S_true, E_true, I_true, R_true, ...
-        Rt_true, beta_curve, params.pop_size, slot.id);
-
-    outPath = fullfile(cfg.output.data_dir, ...
-        sprintf('partB_01_truth_%s.mat', slot.id));
-    save(outPath, 'umod', 'Rt_true', 'S_true', 'E_true', 'I_true', ...
-        'R_true', 'tspan', 'params', 'cfg', 'beta_curve');
 
     fprintf('Saved\n');
 end
 
 %% 3. Completion Check
-if ~isempty(failed_scenarios)
+if any(failed_mask)
+    failed_scenarios = arrayfun(@(s) string(s.id), scenarios(failed_mask));
     error('SIM:ScenarioFailures', ...
-        'SEIR truth generation failed for scenarios: %s.', ...
+        'Structural-mismatch SEIR truth generation failed for scenarios: %s.', ...
         char(strjoin(failed_scenarios, ', ')));
 end
 
-fprintf('=== Part B SEIR Truth Generation Complete ===\n\n');
+fprintf('=== Part B Structural-Mismatch SEIR Truth Generation Complete ===\n\n');
 
 %% 4. Local Functions
-function local_validate_truth_state(S_true, E_true, I_true, R_true, ...
-    Rt_true, beta_curve, pop_size, scenario_id)
+function scenarios = local_active_scenarios(cfg)
+%LOCAL_ACTIVE_SCENARIOS Apply optional smoke-test scenario limiting.
+    scenarios = cfg.scenarios;
+    if cfg.smoke_test.enabled
+        n = min(numel(scenarios), cfg.smoke_test.num_scenarios);
+        scenarios = scenarios(1:n);
+        fprintf('Smoke test enabled: using %d scenario(s).\n', n);
+    end
+end
+
+function model_params = local_model_params_for_scenario(cfg, scenario)
+%LOCAL_MODEL_PARAMS_FOR_SCENARIO Apply scenario-specific SEIR overrides.
+    model_params = cfg.seir;
+
+    if isfield(scenario.params, 'I0')
+        model_params.I0 = scenario.params.I0;
+        model_params.E0 = round((model_params.gamma / model_params.sigma) * ...
+            model_params.I0);
+    end
+
+    if isfield(scenario.params, 'R0_init')
+        model_params.R0_init = scenario.params.R0_init;
+    end
+end
+
+function sim_options = local_sim_options_from_cfg(cfg)
+%LOCAL_SIM_OPTIONS_FROM_CFG Build SEIR truth simulation options.
+    sim_options = cfg.truth;
+    sim_options.seed = cfg.sim.seed;
+end
+
+function local_validate_truth_state(truth, scenario_id)
 %LOCAL_VALIDATE_TRUTH_STATE Verify SEIR truth integrity before persistence.
-    population_error = max(abs((S_true + E_true + I_true + R_true) - pop_size));
+    pop_size = truth.model_params.pop_size;
+    population_error = max(abs((truth.S_true + truth.E_true + ...
+        truth.I_true + truth.R_true) - pop_size));
     if population_error > max(1e-6 * pop_size, 1e-6)
         error('SIM:PopulationConservation', ...
             'SEIR population conservation failed for %s.', scenario_id);
     end
 
-    values = [S_true(:); E_true(:); I_true(:); R_true(:); ...
-        Rt_true(:); beta_curve(:)];
+    values = [truth.S_true(:); truth.E_true(:); truth.I_true(:); ...
+        truth.R_true(:); truth.Rt_true(:); truth.beta_curve(:)];
     if any(~isfinite(values)) || any(values < 0)
         error('SIM:InvalidTruthState', ...
             'SEIR truth generation produced invalid values for %s.', scenario_id);
     end
+end
+
+function cfg_snapshot = local_cfg_snapshot(cfg, scenario, model_params, sim_options)
+%LOCAL_CFG_SNAPSHOT Capture the scientific inputs used for one artifact.
+    cfg_snapshot = struct();
+    cfg_snapshot.experiment_id = cfg.experiment_id;
+    cfg_snapshot.experiment_name = cfg.experiment_name;
+    cfg_snapshot.truth_model = cfg.truth_model;
+    cfg_snapshot.forecast_assumption = cfg.forecast_assumption;
+    cfg_snapshot.time = cfg.time;
+    cfg_snapshot.Rt = cfg.Rt;
+    cfg_snapshot.scenario = scenario;
+    cfg_snapshot.truth = cfg.truth;
+    cfg_snapshot.seir = cfg.seir;
+    cfg_snapshot.model_params = model_params;
+    cfg_snapshot.sim_options = sim_options;
+    cfg_snapshot.sim = cfg.sim;
+    cfg_snapshot.smoke_test = cfg.smoke_test;
 end

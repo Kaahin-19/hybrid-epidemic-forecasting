@@ -1,0 +1,2 @@
+ExperimentID,TruthModel,ForecastAssumption,ForecastHorizon,MinWindow,StepSize,WISAlphas,SmokeTest
+partB_structural_mismatch,SEIR,Fixed Part A-selected SIRS forecasting configuration,14,49,7,"0.05,0.1,0.2,0.5",0

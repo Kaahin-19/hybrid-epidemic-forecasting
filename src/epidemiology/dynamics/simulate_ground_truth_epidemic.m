@@ -8,26 +8,25 @@ function truth = simulate_ground_truth_epidemic(model_type, tspan, Rt_true, mode
 %   Description:
 %       Simulates ground-truth epidemic trajectories directly with URDME
 %       while preserving the project convention that Rt_true is an effective
-%       reproduction-number trajectory. For SIRS, each interval computes the
-%       internal mass-action transmission rate from the current susceptible
-%       state before advancing the URDME model over that interval.
+%       reproduction-number trajectory. For SIRS and SEIR, each interval
+%       computes the internal mass-action transmission rate from the current
+%       susceptible state before advancing the URDME model over that interval.
 %
 %   Inputs:
-%       model_type   - Compartment model identifier. Attempt 2 implements
-%                      "SIRS"; "SEIR" is reserved for a later Part B stage.
+%       model_type   - Compartment model identifier: "SIRS" or "SEIR".
 %       tspan        - Strictly increasing simulation time vector.
 %       Rt_true      - Effective reproduction-number trajectory on tspan.
 %       model_params - Model parameter structure.
 %       sim_options  - Simulation options containing solver, compile, seed.
 %
 %   Outputs:
-%       truth - Structure containing SIRS states, Rt_true, beta_curve,
+%       truth - Structure containing model states, Rt_true, beta_curve,
 %               model metadata, solver, seed, and simulation options.
 %
 %   See also RPARSE, URDME, PARTA_01_GENERATE_SYNTHETIC_TRUTH.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-01
+% Modified: 2026-06-02
 
     %% 1. Shared Input Validation
     model_type = upper(string(model_type));
@@ -43,8 +42,7 @@ function truth = simulate_ground_truth_epidemic(model_type, tspan, Rt_true, mode
         case "SIRS"
             truth = local_simulate_sirs(tspan, Rt_true, model_params, sim_options);
         case "SEIR"
-            error('EPIDEMIC:UnsupportedModel', ...
-                'SEIR ground-truth simulation is reserved for a later refactor attempt.');
+            truth = local_simulate_seir(tspan, Rt_true, model_params, sim_options);
         otherwise
             error('EPIDEMIC:UnsupportedModel', ...
                 'Unsupported ground-truth model type: %s.', model_type);
@@ -105,6 +103,127 @@ function truth = local_simulate_sirs(tspan, Rt_true, model_params, sim_options)
         metadata.waning_immunity = true;
     end
     truth.metadata = metadata;
+end
+
+function truth = local_simulate_seir(tspan, Rt_true, model_params, sim_options)
+%LOCAL_SIMULATE_SEIR Simulate effective-Rt-driven SEIR truth directly in URDME.
+    params = local_validate_seir_params(model_params);
+    options = local_validate_sim_options(sim_options);
+
+    initial_state = local_initial_seir_state(params);
+    U = zeros(4, numel(tspan));
+    U(:, 1) = local_sanitize_seir_state(initial_state, params.pop_size);
+    beta_curve = nan(1, numel(tspan));
+
+    build_dir = local_urdme_build_dir();
+    compile_requested = logical(options.compile);
+
+    for k = 1:(numel(tspan) - 1)
+        beta_curve(k) = local_beta_from_effective_rt(Rt_true(k), U(1, k), params);
+
+        interval_compile = compile_requested && (k == 1);
+        interval_tspan = [0, tspan(k + 1) - tspan(k)];
+        interval_umod = local_advance_seir_interval( ...
+            interval_tspan, U(:, k), beta_curve(k), params, ...
+            options.solver, interval_compile, options.seed, build_dir);
+
+        U(:, k + 1) = local_sanitize_seir_state(interval_umod.U(:, end), ...
+            params.pop_size);
+    end
+
+    beta_curve(end) = local_beta_from_effective_rt(Rt_true(end), U(1, end), params);
+
+    truth = struct();
+    truth.model_type = "SEIR";
+    truth.solver = string(options.solver);
+    truth.seed = options.seed;
+    truth.tspan = tspan;
+    truth.Rt_true = Rt_true;
+    truth.S_true = U(1, :);
+    truth.E_true = U(2, :);
+    truth.I_true = U(3, :);
+    truth.R_true = U(4, :);
+    truth.states = U;
+    truth.beta_curve = beta_curve;
+    truth.model_params = params;
+    truth.sim_options = options;
+    metadata = struct();
+    metadata.state_order = ["S", "E", "I", "R"];
+    metadata.effective_rt_definition = "Rt(k) = beta(k) / gamma * S(k) / N";
+    metadata.beta_formula = "beta_k = Rt_true(k) * gamma * N / S_k";
+    metadata.num_intervals = numel(tspan) - 1;
+    metadata.initial_state = U(:, 1);
+    metadata.latent_period_days = 1 / params.sigma;
+    truth.metadata = metadata;
+end
+
+function umod = local_advance_seir_interval(tspan, state0, beta_value, params, ...
+    solver, compile_requested, seed, build_dir)
+%LOCAL_ADVANCE_SEIR_INTERVAL Advance one SEIR interval with fixed beta.
+    caller_rng_state = rng;
+    rng_cleanup = onCleanup(@() rng(caller_rng_state));
+    original_workdir = pwd;
+    workdir_cleanup = onCleanup(@() cd(original_workdir));
+
+    if exist(build_dir, 'dir') ~= 7
+        mkdir(build_dir);
+    end
+
+    if ~any(strcmp(strsplit(path, pathsep), build_dir))
+        addpath(build_dir);
+    end
+
+    cd(build_dir);
+    rng(seed);
+
+    model_name = 'SEIR';
+    species = {'S', 'E', 'I', 'R'};
+    reactions = {'S > beta*S*I/vol > E', ...
+                 'E > sigmaE*E > I', ...
+                 'I > gammaI*I > R'};
+
+    rates.beta = 'ldata_time';
+    rates.sigmaE = 'gdata';
+    rates.gammaI = 'gdata';
+
+    umod = rparse([], reactions, species, rates, model_name);
+
+    umod.vol = params.pop_size;
+    num_species = size(umod.N, 1);
+    umod.D = sparse(num_species, num_species);
+    umod.sd = 1;
+    umod.tspan = tspan;
+
+    umod.u0 = zeros(num_species, 1);
+    umod.u0(1:4) = reshape(double(state0), 4, 1);
+
+    rate_values.sigmaE = params.sigma;
+    rate_values.gammaI = params.gamma;
+    gdata = struct2cell(rate_values);
+    gdata = cat(1, gdata{:});
+
+    beta_driver = repmat(beta_value, 1, numel(tspan));
+    compile_flag = local_resolve_compile_flag(solver, model_name, compile_requested);
+
+    umod = urdme(umod, 'solve', 0, 'compile', compile_flag, 'solver', solver, ...
+        'modelname', model_name, ...
+        'gdata', gdata, ...
+        'ldata_time', reshape(beta_driver, [1, numel(umod.vol), numel(umod.tspan)]), ...
+        'data_time', umod.tspan);
+
+    if strcmp(solver, 'uds')
+        umod.mexexec = str2func('mexuds');
+    else
+        umod.mexexec = str2func(umod.mexname);
+    end
+
+    umod.solve = 1;
+    umod.parse = 1;
+    umod.compile = 0;
+    umod.seed = seed;
+    umod = urdme(umod);
+
+    clear workdir_cleanup rng_cleanup
 end
 
 function umod = local_advance_sirs_interval(tspan, state0, beta_value, params, ...
@@ -243,6 +362,39 @@ function params = local_validate_sirs_params(model_params)
     end
 end
 
+function params = local_validate_seir_params(model_params)
+%LOCAL_VALIDATE_SEIR_PARAMS Validate SEIR model parameters.
+    if ~isstruct(model_params)
+        error('EPIDEMIC:InvalidModelParams', ...
+            'model_params must be a structure for SEIR simulation.');
+    end
+
+    params = model_params;
+    required_fields = ["gamma", "sigma", "pop_size"];
+    for i = 1:numel(required_fields)
+        field_name = required_fields(i);
+        if ~isfield(params, field_name)
+            error('EPIDEMIC:MissingModelParam', ...
+                'SEIR model_params.%s is required.', field_name);
+        end
+    end
+
+    params.gamma = local_validate_positive_scalar(params.gamma, "model_params.gamma");
+    params.sigma = local_validate_positive_scalar(params.sigma, "model_params.sigma");
+    params.pop_size = local_validate_positive_scalar(params.pop_size, "model_params.pop_size");
+
+    params.I0 = local_optional_nonnegative_scalar(params, 'I0', 500);
+    params.E0 = local_optional_nonnegative_scalar(params, ...
+        'E0', round((params.gamma / params.sigma) * params.I0));
+    params.R0_init = local_optional_nonnegative_scalar(params, 'R0_init', 0);
+
+    if params.E0 + params.I0 + params.R0_init >= params.pop_size
+        error('EPIDEMIC:InvalidInitialConditions', ...
+            ['Initial exposed plus infected plus recovered population must be ' ...
+            'less than pop_size.']);
+    end
+end
+
 function options = local_validate_sim_options(sim_options)
 %LOCAL_VALIDATE_SIM_OPTIONS Validate URDME simulation options.
     if ~isstruct(sim_options)
@@ -256,7 +408,7 @@ function options = local_validate_sim_options(sim_options)
     solver = lower(char(string(sim_options.solver)));
     if ~any(strcmp(solver, {'ssa', 'uds'}))
         error('EPIDEMIC:InvalidSolver', ...
-            'SIRS ground truth supports solver modes "ssa" and "uds".');
+            'Ground truth supports solver modes "ssa" and "uds".');
     end
 
     if ~isfield(sim_options, 'seed')
@@ -288,6 +440,20 @@ function initial_state = local_initial_sirs_state(params)
 %LOCAL_INITIAL_SIRS_STATE Build and validate the initial SIRS state.
     initial_state = [ ...
         params.pop_size - params.I0 - params.R0_init; ...
+        params.I0; ...
+        params.R0_init];
+
+    if initial_state(1) <= 0
+        error('EPIDEMIC:InvalidInitialConditions', ...
+            'Initial susceptible population must be positive.');
+    end
+end
+
+function initial_state = local_initial_seir_state(params)
+%LOCAL_INITIAL_SEIR_STATE Build and validate the initial SEIR state.
+    initial_state = [ ...
+        params.pop_size - params.E0 - params.I0 - params.R0_init; ...
+        params.E0; ...
         params.I0; ...
         params.R0_init];
 
@@ -358,6 +524,28 @@ function state = local_sanitize_state(raw_state, pop_size)
     if total <= 0
         error('EPIDEMIC:InvalidState', ...
             'SIRS simulation produced an empty population state.');
+    end
+
+    state = state * (pop_size / total);
+end
+
+function state = local_sanitize_seir_state(raw_state, pop_size)
+%LOCAL_SANITIZE_SEIR_STATE Clean SEIR values while preserving population.
+    state = reshape(double(raw_state), [], 1);
+    if numel(state) ~= 4 || any(~isfinite(state))
+        error('EPIDEMIC:InvalidState', ...
+            'SEIR state must contain four finite compartment values.');
+    end
+
+    tolerance = max(1e-7 * pop_size, 1e-9);
+    state(abs(state) < tolerance) = 0;
+    state = max(state, 0);
+    state(1) = max(state(1), max(1, 1e-6 * pop_size));
+
+    total = sum(state);
+    if total <= 0
+        error('EPIDEMIC:InvalidState', ...
+            'SEIR simulation produced an empty population state.');
     end
 
     state = state * (pop_size / total);
