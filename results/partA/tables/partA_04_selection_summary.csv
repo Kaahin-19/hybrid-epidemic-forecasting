@@ -1,6 +1,6 @@
 Model,ExoMode,SelectedConfiguration,SelectedIndex,BestGlobalWIS,SelectionArtifact
 ARX,I,[2 1 2],4,0.024671346163104,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_ARX_I.mat
-AR,None,2,2,0.017947735545009,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_AR_None.mat
+AR,None,9,9,0.00522297518196812,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_AR_None.mat
 N4SID,I,[2 0],2,0.0526442834033732,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_N4SID_I.mat
 N4SID,None,[1 0],1,0.0689853016371302,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_N4SID_None.mat
 SSEST,I,[1 0],1,0.0675383662241182,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_SSEST_I.mat
