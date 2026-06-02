@@ -41,6 +41,7 @@ function [fig, ax, handles] = plot_single_panel(varargin)
         fig = ancestor(ax, 'figure');
     end
     hold(ax, 'on');
+    local_apply_color_order(ax, plot_spec);
 
     %% 3. Series Drawing
     series = local_panel_series(panel_data);
@@ -70,8 +71,25 @@ function [fig, ax, handles] = plot_single_panel(varargin)
     local_apply_labels(ax, plot_spec);
     local_apply_limits(ax, plot_spec);
     local_apply_grid(ax, plot_spec);
+    local_apply_tick_rotation(ax, plot_spec);
     local_apply_panel_label(ax, plot_spec);
     local_apply_legend(ax, plot_spec, legend_handles, legend_ranks);
+end
+
+function local_apply_color_order(ax, plot_spec)
+%LOCAL_APPLY_COLOR_ORDER Apply an optional axes colour order before drawing.
+    color_order = local_spec_field(plot_spec, 'color_order', []);
+    if ~isempty(color_order)
+        set(ax, 'ColorOrder', double(color_order));
+    end
+end
+
+function local_apply_tick_rotation(ax, plot_spec)
+%LOCAL_APPLY_TICK_ROTATION Apply an optional x-tick-label rotation.
+    rotation = local_spec_field(plot_spec, 'x_tick_rotation', []);
+    if ~isempty(rotation)
+        ax.XTickLabelRotation = double(rotation);
+    end
 end
 
 function [ax, panel_data, plot_spec] = local_parse_inputs(varargin)
@@ -379,20 +397,30 @@ function merged = local_merge_struct(base, override)
 end
 
 function local_apply_fonts(ax, plot_spec)
-%LOCAL_APPLY_FONTS Apply base and tick-label font sizes to an axes.
+%LOCAL_APPLY_FONTS Apply base font name and tick-label font sizes to an axes.
     base_size = local_spec_field(plot_spec, 'font_size', 9);
     tick_size = local_spec_field(plot_spec, 'tick_label_font_size', base_size);
-    set(ax, 'FontSize', double(tick_size), ...
+    set(ax, 'FontName', local_font_name(plot_spec), 'FontSize', double(tick_size), ...
         'LabelFontSizeMultiplier', 1.0, 'TitleFontSizeMultiplier', 1.0);
+end
+
+function font_name = local_font_name(plot_spec)
+%LOCAL_FONT_NAME Resolve a consistent figure font name.
+    font_name = string(local_spec_field(plot_spec, 'font_name', "Helvetica"));
+    if strlength(font_name) == 0
+        font_name = "Helvetica";
+    end
+    font_name = char(font_name);
 end
 
 function local_apply_labels(ax, plot_spec)
 %LOCAL_APPLY_LABELS Apply optional title and axis labels.
     label_size = local_axis_label_font_size(plot_spec);
+    title_size = local_spec_field(plot_spec, 'title_font_size', label_size);
     title_text = local_spec_field(plot_spec, 'title', "");
     if strlength(title_text) > 0
         title(ax, title_text, 'Interpreter', local_text_interpreter(title_text), ...
-            'FontWeight', 'normal', 'FontSize', double(label_size));
+            'FontWeight', 'normal', 'FontSize', double(title_size));
     end
     x_label = local_spec_field(plot_spec, 'x_label', "");
     y_label = local_spec_field(plot_spec, 'y_label', "");
@@ -444,6 +472,7 @@ function local_apply_panel_label(ax, plot_spec)
     font_weight = local_style_field(label_style, 'FontWeight', 'bold');
     text(ax, 0.02, 0.95, panel_label, 'Units', 'normalized', ...
         'VerticalAlignment', 'top', 'HorizontalAlignment', 'left', ...
+        'FontName', local_font_name(plot_spec), ...
         'FontSize', font_size, 'FontWeight', font_weight, ...
         'Interpreter', local_text_interpreter(panel_label));
 end
@@ -473,8 +502,18 @@ function local_apply_legend(ax, plot_spec, legend_handles, legend_ranks)
             ~isempty(legend_spec.box)
         lgd.Box = local_on_off(legend_spec.box);
     end
-    lgd.FontSize = double(local_spec_field(plot_spec, 'tick_label_font_size', ...
-        local_spec_field(plot_spec, 'font_size', 9)));
+    if isstruct(legend_spec) && isfield(legend_spec, 'num_columns') && ...
+            ~isempty(legend_spec.num_columns)
+        lgd.NumColumns = double(legend_spec.num_columns);
+    end
+    if isstruct(legend_spec) && isfield(legend_spec, 'font_size') && ...
+            ~isempty(legend_spec.font_size)
+        lgd.FontSize = double(legend_spec.font_size);
+    else
+        lgd.FontSize = double(local_spec_field(plot_spec, 'tick_label_font_size', ...
+            local_spec_field(plot_spec, 'font_size', 9)));
+    end
+    lgd.FontName = local_font_name(plot_spec);
 end
 
 function value = local_on_off(flag)

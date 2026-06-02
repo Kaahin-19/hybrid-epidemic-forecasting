@@ -32,3 +32,6 @@ src/models/genData.m
 # Report scratch and archived exports
 report/archive/
 report/stages/
+
+# Third-party IEEE publication generator assets
+third_party/IEEE_publication_generator/*

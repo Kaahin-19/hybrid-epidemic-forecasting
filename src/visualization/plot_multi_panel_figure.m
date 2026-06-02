@@ -68,15 +68,20 @@ end
 
 function local_apply_shared_labels(layout, plot_spec, label_size)
 %LOCAL_APPLY_SHARED_LABELS Draw shared x/y labels on the tiled layout.
+    font_name = string(local_spec_field(plot_spec, 'font_name', "Helvetica"));
+    if strlength(font_name) == 0
+        font_name = "Helvetica";
+    end
+    font_name = char(font_name);
     shared_x = string(local_spec_field(plot_spec, 'shared_x_label', ""));
     shared_y = string(local_spec_field(plot_spec, 'shared_y_label', ""));
     if strlength(shared_x) > 0
         xlabel(layout, shared_x, 'Interpreter', local_text_interpreter(shared_x), ...
-            'FontSize', double(label_size));
+            'FontSize', double(label_size), 'FontName', font_name);
     end
     if strlength(shared_y) > 0
         ylabel(layout, shared_y, 'Interpreter', local_text_interpreter(shared_y), ...
-            'FontSize', double(label_size));
+            'FontSize', double(label_size), 'FontName', font_name);
     end
 end
 
