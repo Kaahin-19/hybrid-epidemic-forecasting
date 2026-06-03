@@ -28,7 +28,7 @@ function cfg = partA_config()
 %            PARTA_03_RUN_FORECASTS, PARTA_04_EVALUATE_FORECASTS.
 
 % A. M. Kaahin 2026-02-18
-% Modified: 2026-06-02
+% Modified: 2026-06-04
 
     cfg = struct();
 
@@ -45,7 +45,8 @@ function cfg = partA_config()
         "id", "", ...
         "name", "", ...
         "signal_type", "", ...
-        "params", struct() ...
+        "params", struct(), ...
+        "init", struct() ...
     ), 1, 4);
 
     T_end      = cfg.time.T_end;
@@ -69,10 +70,10 @@ function cfg = partA_config()
     cfg.scenarios(2).params    = struct( ...
         "high", 1.8, ...
         "low",  0.7, ...
-        "t0",   T_end / 3, ... 
-        "k",    0.5, ...
-        "I0",   5000 ...
+        "t0",   T_end / 3, ...
+        "k",    0.5 ...
     );
+    cfg.scenarios(2).init      = struct("I0", 5000);
 
     % Slot A3
     cfg.scenarios(3).id        = "A3";
@@ -104,10 +105,10 @@ function cfg = partA_config()
         "mu3",      3 * wave_space, ...
         "A3",       1.045, ... 
         "mu4",      4 * wave_space, ...
-        "A4",       1.100, ... 
-        "denom",    wave_denom, ...
-        "R0_init",  40000 ...
+        "A4",       1.100, ...
+        "denom",    wave_denom ...
     );
+    cfg.scenarios(4).init      = struct("R0_init", 40000);
 
     %% 4. Simulation Parameters (SIRS)
     cfg.sirs.gamma    = 1/7;
@@ -115,6 +116,15 @@ function cfg = partA_config()
     cfg.sirs.pop_size = 100000;
     cfg.sirs.I0       = 500;
     cfg.sirs.R0_init  = 0;
+
+    for s = 1:numel(cfg.scenarios)
+        model_params = cfg.sirs;
+        overrides = cfg.scenarios(s).init;
+        for field = string(fieldnames(overrides))'
+            model_params.(field) = overrides.(field);
+        end
+        cfg.scenarios(s).model_params = model_params;
+    end
 
     %% 5. Ground-Truth Simulation
     cfg.truth.model_type = "SIRS";
@@ -143,13 +153,6 @@ function cfg = partA_config()
     cfg.forecast.plot_lead_time = 7;
 
     %% 9. Predictive Interval Settings
-    % Part A 02 and Part A 03 estimate the same closed-loop predictive
-    % uncertainty target with different computational budgets. Part A 02 uses
-    % a lightweight closed-loop residual bootstrap during model selection;
-    % Part A 03 uses a fuller closed-loop Monte Carlo procedure for the final
-    % selected forecasts. selection_num_draws and final_num_draws are kept
-    % conservative so model selection and final forecasting remain runnable;
-    % raising them improves interval resolution at higher runtime cost.
     cfg.intervals.enabled = true;
     cfg.intervals.seed = 1234;
     cfg.intervals.selection_method = "closed_loop_residual_bootstrap";

@@ -15,14 +15,15 @@
 %   See also PARTA_CONFIG, GENERATE_RT_SIGNAL, SIMULATE_GROUND_TRUTH_EPIDEMIC.
 %
 % A. M. Kaahin 2026-05-31
+% Modified: 2026-06-04
 
 %% 1. Initialization
 clear; close all; clc;
 
 fprintf('=== Part A Synthetic Truth Generation ===\n');
 
-cfg = partA_config();
-tspan = cfg.time.tspan;
+cfg     = partA_config();
+tspan   = cfg.time.tspan;
 dataDir = cfg.output.data_dir;
 
 if ~exist(dataDir, 'dir')
@@ -38,25 +39,34 @@ for i = 1:numel(cfg.scenarios)
     fprintf('  - Processing %s (%s)... ', scenario.id, scenario.name);
 
     try
-        Rt_true = generate_rt_signal(tspan, scenario);
-        model_params = local_model_params_for_scenario(cfg, scenario);
-        sim_options = local_sim_options_from_cfg(cfg);
+        Rt_true      = generate_rt_signal(tspan, scenario);
+        model_params = scenario.model_params;
+
+        sim_options      = cfg.truth;
+        sim_options.seed = cfg.sim.seed;
+
         truth = simulate_ground_truth_epidemic( ...
             cfg.truth.model_type, tspan, Rt_true, model_params, sim_options);
 
-        artifact = struct();
-        artifact.scenario_id = string(scenario.id);
-        artifact.scenario_name = string(scenario.name);
-        artifact.Rt_true = truth.Rt_true;
-        artifact.S_true = truth.S_true;
-        artifact.I_true = truth.I_true;
-        artifact.R_true = truth.R_true;
-        artifact.tspan = truth.tspan;
-        artifact.truth = truth;
-        artifact.cfg_snapshot = local_cfg_snapshot(cfg, scenario, model_params, sim_options);
-        artifact.beta_curve = truth.beta_curve;
-        artifact.model_params = model_params;
-        artifact.sim_options = sim_options;
+        artifact = struct( ...
+            'scenario_id',   string(scenario.id), ...
+            'scenario_name', string(scenario.name), ...
+            'Rt_true',       truth.Rt_true, ...
+            'S_true',        truth.S_true, ...
+            'I_true',        truth.I_true, ...
+            'R_true',        truth.R_true, ...
+            'beta_curve',    truth.beta_curve, ...
+            'tspan',         truth.tspan ...
+        );
+        artifact.cfg_snapshot = struct( ...
+            'time',         cfg.time, ...
+            'Rt',           cfg.Rt, ...
+            'scenario',     scenario, ...
+            'truth',        cfg.truth, ...
+            'sirs',         cfg.sirs, ...
+            'model_params', model_params, ...
+            'sim_options',  sim_options, ...
+            'sim',          cfg.sim);
 
         outPath = fullfile(dataDir, sprintf('partA_01_truth_%s.mat', scenario.id));
         save(outPath, '-struct', 'artifact');
@@ -79,36 +89,3 @@ if any(failed_mask)
 end
 
 fprintf('=== Part A Synthetic Truth Generation Complete ===\n\n');
-
-%% 4. Local Functions
-function model_params = local_model_params_for_scenario(cfg, scenario)
-%LOCAL_MODEL_PARAMS_FOR_SCENARIO Apply scenario-specific SIRS overrides.
-    model_params = cfg.sirs;
-
-    if isfield(scenario.params, 'I0')
-        model_params.I0 = scenario.params.I0;
-    end
-
-    if isfield(scenario.params, 'R0_init')
-        model_params.R0_init = scenario.params.R0_init;
-    end
-end
-
-function sim_options = local_sim_options_from_cfg(cfg)
-%LOCAL_SIM_OPTIONS_FROM_CFG Build ground-truth simulation options.
-    sim_options = cfg.truth;
-    sim_options.seed = cfg.sim.seed;
-end
-
-function cfg_snapshot = local_cfg_snapshot(cfg, scenario, model_params, sim_options)
-%LOCAL_CFG_SNAPSHOT Capture the scientific inputs used for one artifact.
-    cfg_snapshot = struct();
-    cfg_snapshot.time = cfg.time;
-    cfg_snapshot.Rt = cfg.Rt;
-    cfg_snapshot.scenario = scenario;
-    cfg_snapshot.truth = cfg.truth;
-    cfg_snapshot.sirs = cfg.sirs;
-    cfg_snapshot.model_params = model_params;
-    cfg_snapshot.sim_options = sim_options;
-    cfg_snapshot.sim = cfg.sim;
-end
