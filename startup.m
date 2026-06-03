@@ -87,7 +87,7 @@ function path_text = local_genpath_excluding(root_dir, excluded_names)
         if isempty(path_item) || local_has_excluded_segment(path_item, excluded_names)
             continue;
         end
-        keep_parts{end + 1} = path_item; %#ok<AGROW>
+        keep_parts{end + 1} = path_item; 
     end
 
     path_text = strjoin(keep_parts, pathsep);
