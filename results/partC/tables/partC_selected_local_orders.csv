@@ -1,0 +1,3 @@
+StrategyID,StrategyName,Model,ExoMode,PartASelectedOrder,CandidateOrder,MeanCalibrationWIS,CalibrationWindows,Selected
+local_order_retuning,Local order retuning,AR,None,9,9,0.0747308980167598,16,1
+local_order_retuning,Local order retuning,ARX,I,[6 1 4],[7 2 3],0.107858026429615,16,1

@@ -26,9 +26,8 @@ Description:
   The pipeline expects the downloaded WHO COVID-19 file:
     data/partC/raw/WHO-COVID-19-global-daily-data.csv
 
-  External URDME/StenLib/System Identification dependencies must already be
-  available on the user's MATLAB path. This runner calls startup only and
-  does not add bundled third_party paths.
+  Project dependencies under third_party are added to the MATLAB path before
+  every Part C stage, after startup has initialized config/, scripts/, and src/.
 
 Options:
   --fresh     Clear data/partC/processed and results/partC before execution.
@@ -164,7 +163,7 @@ run_matlab_code() {
   local matlab_pid
   local tail_pid
 
-  matlab_code="warning('off', 'backtrace'); try; startup; ${matlab_body}; catch ME; fprintf(2, '=== MATLAB ERROR ===\\n'); fprintf(2, 'Message: %s\\n', ME.message); fprintf(2, 'Stack trace (most recent first):\\n'); for k = 1:numel(ME.stack); fprintf(2, '  %s:%d in %s\\n', ME.stack(k).file, ME.stack(k).line, ME.stack(k).name); end; rethrow(ME); end"
+  matlab_code="warning('off', 'backtrace'); try; startup; addpath(genpath('${REPO_ROOT}/third_party')); ${matlab_body}; catch ME; fprintf(2, '=== MATLAB ERROR ===\\n'); fprintf(2, 'Message: %s\\n', ME.message); fprintf(2, 'Stack trace (most recent first):\\n'); for k = 1:numel(ME.stack); fprintf(2, '  %s:%d in %s\\n', ME.stack(k).file, ME.stack(k).line, ME.stack(k).name); end; rethrow(ME); end"
 
   log_status "Stage: Starting ${description}"
   append_manifest "$stage_name" "started" "$log_path" "$description"
