@@ -1,138 +1,148 @@
-%PARTB_04_GENERATE_FIGURES Generate structural-mismatch figures.
+%PARTB_04_GENERATE_FIGURES Generate Part B robustness-ladder figures.
 %
 %   Description:
-%       Loads existing Part B structural-mismatch truth, forecast, and
-%       evaluation artifacts, then generates visual diagnostics only. All
-%       metric computation and table writing are handled by Part B 03.
+%       Loads completed Part B robustness-ladder truth, forecast, and
+%       evaluation artifacts, then generates case-level diagnostics and
+%       thesis-level cross-case figures. Metric computation and table writing
+%       remain isolated in Part B 03.
 %
 %   Workflow:
-%       1. Load computed evaluation, SEIR truth, and fixed forecast artifacts.
-%       2. Build plot specifications with Part B presentation wording.
-%       3. Draw reusable visualization functions and export figures.
+%       1. Load cross-case evaluation, truth, and forecast artifacts.
+%       2. Generate case-level diagnostic figures under each case folder.
+%       3. Generate thesis-level robustness figures under results/partB/figures.
 %
 %   See also PARTB_CONFIG, PARTB_03_EVALUATE_MODELS, BUILD_PLOT_SPEC, ...
 %            PLOT_SINGLE_PANEL, PLOT_MULTI_PANEL_FIGURE, EXPORT_FIGURE.
 %
 % A. M. Kaahin 2026-06-02
+% Modified: 2026-06-03
 
 %% 1. Initialization
 clear; close all; clc;
 
-fprintf('=== Part B Structural-Mismatch Figure Generation ===\n');
+fprintf('=== Part B Robustness-Ladder Figure Generation ===\n');
 
 cfg = partB_config();
-data_dir = cfg.output.data_dir;
-forecast_dir = cfg.output.forecast_dir;
-evaluation_dir = cfg.output.score_dir;
 figure_dir = cfg.output.fig_dir;
+evaluation_dir = cfg.output.evaluation_dir;
 
 if ~exist(figure_dir, 'dir'), mkdir(figure_dir); end
 
 evaluation_artifact = fullfile(evaluation_dir, ...
-    sprintf('%s_evaluation_results.mat', char(cfg.experiment_id)));
+    'partB_robustness_ladder_evaluation_results.mat');
 if exist(evaluation_artifact, 'file') ~= 2
     error('FIG:MissingEvaluationArtifact', ...
-        ['Missing Part B structural-mismatch evaluation artifact: %s\n' ...
+        ['Missing Part B evaluation artifact: %s\n' ...
         'Run scripts/partB/partB_03_evaluate_models.m first.'], ...
         evaluation_artifact);
 end
 
 %% 2. Load Existing Artifacts
 evaluation_data = load(evaluation_artifact);
-truth_scenarios = local_load_truth_scenarios(data_dir, cfg);
-window_scores = evaluation_data.window_scores;
 summary_tables = evaluation_data.summary_tables;
+window_scores = local_loaded_table(evaluation_data, 'window_scores');
+pointwise_scores = local_loaded_table(evaluation_data, 'pointwise_scores');
+truth_records = local_load_truth_records(cfg);
+forecast_records = local_load_forecast_records(cfg);
 
-fprintf('Loaded %d truth artifacts from %s\n', numel(truth_scenarios), data_dir);
+fprintf('Loaded %d truth artifact(s) and %d forecast artifact(s).\n', ...
+    numel(truth_records), numel(forecast_records));
 
 generated_figures = strings(0, 1);
 
-%% 3. Fixed-Lead Rt Forecast Comparisons
-forecast_cases = local_forecast_cases_from_scores(window_scores);
-for c = 1:numel(forecast_cases)
-    forecast_case = forecast_cases(c);
-    panels = repmat(struct('series', [], 'plot_spec', struct()), ...
-        numel(truth_scenarios), 1);
+%% 3. Case-Level Diagnostics
+generated_figures = [generated_figures; local_generate_case_diagnostics( ...
+    cfg, truth_records, forecast_records, window_scores, summary_tables)]; %#ok<AGROW>
 
-    for i = 1:numel(truth_scenarios)
-        [forecast_results, forecast_path] = local_load_forecast_results( ...
-            forecast_dir, truth_scenarios(i).scenario_id, ...
-            forecast_case.Model, forecast_case.ExoMode, cfg);
-        if isempty(forecast_results)
-            warning('FIG:MissingForecastArtifact', ...
-                'No forecast artifact found for %s / %s / %s.', ...
-                truth_scenarios(i).scenario_id, forecast_case.Model, ...
-                forecast_case.ExoMode);
-            continue;
-        end
+%% 4. Thesis-Level Figures
+generated_figures = [generated_figures; ...
+    local_draw_robustness_ladder_overview(cfg, figure_dir)]; %#ok<AGROW>
+generated_figures = [generated_figures; ...
+    local_draw_observation_noise_example(cfg, figure_dir, truth_records)]; %#ok<AGROW>
+generated_figures = [generated_figures; ...
+    local_draw_process_noise_example(cfg, figure_dir, truth_records)]; %#ok<AGROW>
+generated_figures = [generated_figures; ...
+    local_draw_structural_mismatch_truth(cfg, figure_dir, truth_records)]; %#ok<AGROW>
+generated_figures = [generated_figures; ...
+    local_draw_robustness_mean_wis(cfg, figure_dir, summary_tables)]; %#ok<AGROW>
+generated_figures = [generated_figures; ...
+    local_draw_robustness_wis_by_horizon(cfg, figure_dir, summary_tables)]; %#ok<AGROW>
+generated_figures = [generated_figures; ...
+    local_draw_coverage_interval_width(cfg, figure_dir, summary_tables)]; %#ok<AGROW>
 
-        fprintf('Drawing comparison from %s\n', forecast_path);
-        panel_spec = struct('title', local_panel_title(truth_scenarios(i)), ...
-            'legend', struct('visible', i == 1, 'location', "northoutside", ...
-            'orientation', "horizontal", 'box', "off", 'font_size', 8));
-        panels(i).plot_spec = panel_spec;
-        panels(i).series = local_forecast_comparison_series( ...
-            forecast_results, truth_scenarios(i), cfg);
+required_figures = local_required_thesis_figures(figure_dir);
+missing_required = required_figures(~isfile(required_figures));
+if ~isempty(missing_required)
+    error('FIG:MissingRequiredThesisFigures', ...
+        'Required Part B thesis figures were not generated: %s.', ...
+        char(strjoin(missing_required, ', ')));
+end
+
+%% 5. Completion
+fprintf('Saved %d figure file(s).\n', numel(generated_figures));
+fprintf('Thesis-level Part B figures are under: %s\n', figure_dir);
+fprintf('=== Part B Robustness-Ladder Figure Generation Complete ===\n\n');
+
+%% 6. Local Functions
+function outputs = local_generate_case_diagnostics(cfg, truth_records, ...
+    forecast_records, window_scores, summary_tables)
+%LOCAL_GENERATE_CASE_DIAGNOSTICS Write case-specific diagnostic figures.
+    outputs = strings(0, 1);
+    if isempty(window_scores) || height(window_scores) == 0
+        return;
     end
 
-    plot_name = sprintf('%s_rt_forecast_%s.png', char(cfg.experiment_id), ...
-        char(local_model_token(forecast_case.Model, forecast_case.ExoMode)));
-    forecast_spec = build_plot_spec( ...
-        'figure_name', "Part B structural-mismatch Rt forecast", ...
+    case_ids = unique(window_scores.CaseID, 'stable');
+    for i = 1:numel(case_ids)
+        case_id = case_ids(i);
+        case_dir = fullfile(cfg.output.root_dir, char(case_id), "figures");
+        if ~exist(case_dir, 'dir'), mkdir(case_dir); end
+
+        case_scores = window_scores(window_scores.CaseID == case_id, :);
+        outputs = [outputs; local_draw_case_wis_distribution(case_dir, ...
+            case_id, case_scores)]; %#ok<AGROW>
+        outputs = [outputs; local_draw_case_horizon_wis(case_dir, case_id, ...
+            summary_tables)]; %#ok<AGROW>
+        outputs = [outputs; local_draw_case_representative_forecast(cfg, ...
+            case_dir, case_id, truth_records, forecast_records)]; %#ok<AGROW>
+    end
+end
+
+function output_path = local_draw_case_wis_distribution(case_dir, case_id, case_scores)
+%LOCAL_DRAW_CASE_WIS_DISTRIBUTION Draw per-case model WIS distributions.
+    spec = build_plot_spec( ...
+        'figure_name', sprintf('Part B %s WIS distribution', char(case_id)), ...
         'title', "", ...
-        'shared_x_label', "Time, $t$ (days)", ...
-        'shared_y_label', "Effective reproduction number, $R_t$", ...
+        'x_label', "Fixed forecast configuration", ...
+        'y_label', "Window WIS", ...
         'font_size', 9, ...
         'axis_label_font_size', 10, ...
-        'tick_label_font_size', 8, ...
-        'panel_labels', local_panel_labels(numel(truth_scenarios)), ...
-        'panel_label_style', struct('FontSize', 10, 'FontWeight', 'bold'), ...
-        'layout', struct('num_rows', 2, 'num_cols', 2), ...
-        'x_limits', [cfg.time.tspan(1), cfg.time.tspan(end)], ...
-        'y_limits', cfg.Rt.bounds, ...
-        'lead_time', local_effective_lead_time(cfg), ...
-        'plot_alphas', cfg.forecast.plot_alphas, ...
-        'output_path', fullfile(figure_dir, plot_name), ...
-        'size_cm', [17.0, 11.0]);
+        'tick_label_font_size', 9, ...
+        'x_tick_rotation', 20, ...
+        'color_order', local_thesis_color_order(), ...
+        'legend', struct('location', "northoutside", ...
+            'orientation', "horizontal", 'box', "off", 'font_size', 8), ...
+        'output_path', fullfile(case_dir, sprintf('partB_%s_model_wis_distribution.png', ...
+            char(case_id))), ...
+        'size_cm', [16.0, 8.5]);
 
-    fig = plot_multi_panel_figure(panels, forecast_spec);
-    generated_figures = [generated_figures; export_figure(fig, forecast_spec)]; %#ok<AGROW>
+    if isempty(case_scores) || height(case_scores) == 0
+        output_path = local_export_empty_panel(spec, "No case score data");
+        return;
+    end
+
+    config_labels = local_model_exo_label(case_scores.Model, case_scores.ExoMode);
+    panel.series = local_box_series(config_labels, case_scores.WindowWIS, ...
+        case_scores.ScenarioName, "Window WIS", 1);
+    fig = plot_single_panel(panel, spec);
+    output_path = export_figure(fig, spec);
     close(fig);
 end
 
-%% 4. Model Comparison
-comparison_spec = build_plot_spec( ...
-    'figure_name', "Part B structural-mismatch model comparison", ...
-    'title', "", ...
-    'x_label', "Fixed forecast configuration", ...
-    'y_label', "Window WIS", ...
-    'font_size', 9, ...
-    'axis_label_font_size', 10, ...
-    'tick_label_font_size', 9, ...
-    'x_tick_rotation', 15, ...
-    'color_order', local_thesis_color_order(), ...
-    'legend', struct('location', "northoutside", 'orientation', "horizontal", ...
-        'box', "off", 'font_size', 9), ...
-        'output_path', fullfile(figure_dir, ...
-        sprintf('%s_model_comparison.png', char(cfg.experiment_id))), ...
-    'size_cm', [17.0, 9.0]);
-comparison_panel = local_model_wis_distribution_panel(window_scores);
-fig = plot_single_panel(comparison_panel, comparison_spec);
-generated_figures = [generated_figures; export_figure(fig, comparison_spec)]; %#ok<AGROW>
-close(fig);
-
-%% 5. Horizon-Wise WIS
-if isfield(summary_tables, 'horizon_summary') && ...
-        ~isempty(summary_tables.horizon_summary) && ...
-        height(summary_tables.horizon_summary) > 0
-    horizon_legend = struct( ...
-        'labels', local_model_exo_labels(summary_tables.horizon_summary), ...
-        'location', "northoutside", ...
-        'orientation', "horizontal", ...
-        'box', "off", ...
-        'font_size', 9);
-    horizon_spec = build_plot_spec( ...
-        'figure_name', "Part B structural-mismatch mean WIS by horizon", ...
+function output_path = local_draw_case_horizon_wis(case_dir, case_id, summary_tables)
+%LOCAL_DRAW_CASE_HORIZON_WIS Draw per-case WIS by forecast horizon.
+    spec = build_plot_spec( ...
+        'figure_name', sprintf('Part B %s horizon WIS', char(case_id)), ...
         'title', "", ...
         'x_label', "Forecast horizon, $h$ (days)", ...
         'y_label', "Mean WIS", ...
@@ -140,354 +150,1028 @@ if isfield(summary_tables, 'horizon_summary') && ...
         'axis_label_font_size', 10, ...
         'tick_label_font_size', 9, ...
         'color_order', local_thesis_color_order(), ...
-        'legend', horizon_legend, ...
-        'output_path', fullfile(figure_dir, ...
-            sprintf('%s_mean_wis_by_horizon.png', char(cfg.experiment_id))), ...
-        'size_cm', [17.0, 8.5]);
-    horizon_panel = local_horizon_wis_panel(summary_tables.horizon_summary);
-    fig = plot_single_panel(horizon_panel, horizon_spec);
-    generated_figures = [generated_figures; export_figure(fig, horizon_spec)]; %#ok<AGROW>
+        'legend', struct('location', "northoutside", ...
+            'orientation', "horizontal", 'box', "off", 'font_size', 9), ...
+        'output_path', fullfile(case_dir, sprintf('partB_%s_wis_by_horizon.png', ...
+            char(case_id))), ...
+        'size_cm', [16.0, 8.5]);
+
+    horizon_summary = local_summary_table(summary_tables, 'case_horizon_summary');
+    if isempty(horizon_summary) || height(horizon_summary) == 0
+        output_path = local_export_empty_panel(spec, "No horizon score data");
+        return;
+    end
+
+    case_rows = horizon_summary(horizon_summary.CaseID == case_id, :);
+    panel.series = local_model_horizon_series(case_rows, false);
+    fig = plot_single_panel(panel, spec);
+    output_path = export_figure(fig, spec);
     close(fig);
 end
 
-%% 6. Completion
-fprintf('Saved %d figure files under %s\n', numel(generated_figures), figure_dir);
-fprintf('=== Part B Structural-Mismatch Figure Generation Complete ===\n\n');
+function output_path = local_draw_case_representative_forecast(cfg, case_dir, ...
+    case_id, truth_records, forecast_records)
+%LOCAL_DRAW_CASE_REPRESENTATIVE_FORECAST Draw one representative forecast.
+    spec = build_plot_spec( ...
+        'figure_name', sprintf('Part B %s representative forecast', char(case_id)), ...
+        'title', "", ...
+        'x_label', "Time, $t$ (days)", ...
+        'y_label', "Effective reproduction number, $R_t$", ...
+        'font_size', 9, ...
+        'axis_label_font_size', 10, ...
+        'tick_label_font_size', 9, ...
+        'y_limits', cfg.Rt.bounds, ...
+        'legend', struct('location', "northoutside", ...
+            'orientation', "horizontal", 'box', "off", 'font_size', 8), ...
+        'output_path', fullfile(case_dir, sprintf('partB_%s_representative_rt_forecast.png', ...
+            char(case_id))), ...
+        'size_cm', [16.0, 8.5]);
 
-%% 7. Local Functions
-function scenarios = local_load_truth_scenarios(data_dir, cfg)
-%LOCAL_LOAD_TRUTH_SCENARIOS Load Part B structural-mismatch truth artifacts.
-    truth_files = dir(fullfile(data_dir, sprintf('%s_truth_*.mat', ...
-        char(cfg.experiment_id))));
-    truth_files = local_sort_dir_by_name(truth_files);
-    if isempty(truth_files)
-        error('FIG:NoTruthArtifacts', ...
-            'No structural-mismatch truth artifacts found under %s.', data_dir);
-    end
-
-    scenarios = repmat(struct('scenario_id', "", 'scenario_name', "", ...
-        'tspan', [], 'Rt_true', []), numel(truth_files), 1);
-    for i = 1:numel(truth_files)
-        artifact_path = fullfile(truth_files(i).folder, truth_files(i).name);
-        loaded = load(artifact_path);
-        scenarios(i).scenario_id = string(loaded.scenario_id);
-        scenarios(i).scenario_name = string(loaded.scenario_name);
-        scenarios(i).tspan = double(loaded.tspan(:));
-        scenarios(i).Rt_true = double(loaded.Rt_true(:));
-    end
-end
-
-function cases = local_forecast_cases_from_scores(window_scores)
-%LOCAL_FORECAST_CASES_FROM_SCORES List model/exogenous cases in score order.
-    if isempty(window_scores) || height(window_scores) == 0
-        cases = struct('Model', {}, 'ExoMode', {});
+    forecast_idx = find([forecast_records.case_id] == case_id, 1);
+    if isempty(forecast_idx)
+        output_path = local_export_empty_panel(spec, "No forecast artifact");
         return;
     end
 
-    config_id = string(window_scores.Model) + " / " + string(window_scores.ExoMode);
-    [~, idx] = unique(config_id, 'stable');
-    cases = repmat(struct('Model', "", 'ExoMode', ""), numel(idx), 1);
-    for i = 1:numel(idx)
-        cases(i).Model = string(window_scores.Model(idx(i)));
-        cases(i).ExoMode = string(window_scores.ExoMode(idx(i)));
-    end
-end
-
-function [forecast_results, forecast_path] = local_load_forecast_results( ...
-    forecast_dir, scenario_id, model_type, exo_mode, cfg)
-%LOCAL_LOAD_FORECAST_RESULTS Load canonical forecast result arrays.
-    forecast_results = [];
-    forecast_path = "";
-    filename = sprintf('%s_forecast_%s_%s_%s.mat', char(cfg.experiment_id), ...
-        char(scenario_id), char(model_type), char(exo_mode));
-    candidate_path = fullfile(forecast_dir, filename);
-    if exist(candidate_path, 'file') ~= 2
+    forecast_record = forecast_records(forecast_idx);
+    truth_idx = local_match_truth_record(truth_records, forecast_record);
+    if isempty(truth_idx)
+        output_path = local_export_empty_panel(spec, "No matching truth artifact");
         return;
     end
 
-    loaded = load(candidate_path);
-    forecast_path = string(candidate_path);
-    if isfield(loaded, 'forecast_results') && ~isempty(loaded.forecast_results)
-        forecast_results = loaded.forecast_results;
+    loaded_forecast = load(forecast_record.path);
+    if ~isfield(loaded_forecast, 'forecast_results') || ...
+            isempty(loaded_forecast.forecast_results)
+        output_path = local_export_empty_panel(spec, "No forecast windows");
+        return;
     end
+
+    panel.series = local_representative_forecast_series( ...
+        loaded_forecast.forecast_results, truth_records(truth_idx), cfg);
+    fig = plot_single_panel(panel, spec);
+    output_path = export_figure(fig, spec);
+    close(fig);
 end
 
-function title_text = local_panel_title(truth_scenario)
-%LOCAL_PANEL_TITLE Build compact scenario panel title text.
-    title_text = sprintf('%s: %s', char(truth_scenario.scenario_id), ...
-        char(truth_scenario.scenario_name));
+function output_path = local_draw_robustness_ladder_overview(cfg, figure_dir)
+%LOCAL_DRAW_ROBUSTNESS_LADDER_OVERVIEW Draw compact robustness schematic.
+    output_file = fullfile(figure_dir, 'partB_robustness_ladder_overview.png');
+    spec = build_plot_spec( ...
+        'figure_name', "Part B robustness ladder overview", ...
+        'title', "", ...
+        'x_label', "", ...
+        'y_label', "", ...
+        'font_size', 9, ...
+        'axis_label_font_size', 10, ...
+        'tick_label_font_size', 9, ...
+        'x_limits', [0.55, 5.45], ...
+        'y_limits', [0.70, 1.25], ...
+        'legend', struct('visible', false), ...
+        'output_path', output_file, ...
+        'size_cm', [17.0, 6.5]);
+
+    x = 1:5;
+    panel.series = [ ...
+        local_line_series(x, ones(size(x)), "", struct('Color', [0.45, 0.45, 0.45], ...
+            'LineWidth', 1.0), 1); ...
+        local_scatter_series(x, ones(size(x)), "", struct('Color', [0.10, 0.10, 0.10], ...
+            'MarkerSize', 34), 2)];
+    fig = plot_single_panel(panel, spec);
+    ax = findobj(fig, 'Type', 'axes');
+    axis(ax, 'off');
+
+    labels = ["Part A clean SIRS" ...
+        "SIRS + observation noise" ...
+        "SIRS + process noise" ...
+        "SEIR structural mismatch" ...
+        "SEIR + observation + process noise"];
+    details = ["uds | no obs/process noise" ...
+        "uds | noisy observations" ...
+        "ssa | stochastic trajectory" ...
+        "uds | SEIR truth" ...
+        "ssa | SEIR truth | noisy observations"];
+    for i = 1:numel(x)
+        text(ax, x(i), 1.13, sprintf('%d', i), ...
+            'HorizontalAlignment', 'center', 'FontWeight', 'bold', ...
+            'FontSize', 10);
+        text(ax, x(i), 1.04, labels(i), ...
+            'HorizontalAlignment', 'center', 'FontSize', 8, ...
+            'FontWeight', 'bold');
+        text(ax, x(i), 0.92, details(i), ...
+            'HorizontalAlignment', 'center', 'FontSize', 7);
+    end
+    text(ax, 3, 0.79, "Fixed Part A-selected AR/None and ARX/I forecasts throughout", ...
+        'HorizontalAlignment', 'center', 'FontSize', 8);
+
+    output_path = export_figure(fig, spec);
+    close(fig);
 end
 
-function series = local_forecast_comparison_series(forecast_results, truth_curve, cfg)
-%LOCAL_FORECAST_COMPARISON_SERIES Build generic Rt forecast comparison series.
-    truth_t = double(truth_curve.tspan(:));
-    truth_rt = double(truth_curve.Rt_true(:));
-    lead_time = local_effective_lead_time(cfg);
-    plot_alphas = sort(double(cfg.forecast.plot_alphas(:)))';
+function output_path = local_draw_observation_noise_example(cfg, figure_dir, truth_records)
+%LOCAL_DRAW_OBSERVATION_NOISE_EXAMPLE Draw latent versus observed Rt input.
+    spec = build_plot_spec( ...
+        'figure_name', "Part B observation-noise example", ...
+        'title', "", ...
+        'x_label', "Time, $t$ (days)", ...
+        'y_label', "Effective reproduction number, $R_t$", ...
+        'font_size', 9, ...
+        'axis_label_font_size', 10, ...
+        'tick_label_font_size', 9, ...
+        'y_limits', cfg.Rt.bounds, ...
+        'legend', struct('location', "northoutside", ...
+            'orientation', "horizontal", 'box', "off", 'font_size', 9), ...
+        'output_path', fullfile(figure_dir, 'partB_observation_noise_example.png'), ...
+        'size_cm', [17.0, 8.5]);
 
-    [target_days, median_forecast, lower_forecast, upper_forecast] = ...
-        local_extract_fixed_lead(forecast_results, lead_time, plot_alphas);
+    idx = find([truth_records.observation_noise_enabled], 1);
+    if isempty(idx)
+        output_path = local_export_empty_panel(spec, ...
+            "Observation-noise case not present in this run");
+        return;
+    end
+
+    truth = truth_records(idx);
+    colors = local_thesis_color_order();
+    panel.series = [ ...
+        local_line_series(truth.tspan, truth.Rt_true, "Latent $R_t$", ...
+            struct('Color', colors(1, :), 'LineWidth', 1.6), 1); ...
+        local_line_series(truth.tspan, truth.Rt_model_input, "Model-input $R_t$", ...
+            struct('Color', colors(2, :), 'LineWidth', 1.0), 2)];
+
+    fig = plot_single_panel(panel, spec);
+    output_path = export_figure(fig, spec);
+    close(fig);
+end
+
+function output_path = local_draw_process_noise_example(cfg, figure_dir, truth_records)
+%LOCAL_DRAW_PROCESS_NOISE_EXAMPLE Draw UDS reference versus SSA realizations.
+    spec = build_plot_spec( ...
+        'figure_name', "Part B process-noise example", ...
+        'title', "", ...
+        'x_label', "Time, $t$ (days)", ...
+        'y_label', "Infected individuals, $I(t)$", ...
+        'font_size', 9, ...
+        'axis_label_font_size', 10, ...
+        'tick_label_font_size', 9, ...
+        'legend', struct('location', "northoutside", ...
+            'orientation', "horizontal", 'box', "off", 'font_size', 8), ...
+        'output_path', fullfile(figure_dir, 'partB_process_noise_uds_vs_ssa.png'), ...
+        'size_cm', [17.0, 8.5]);
+
+    ssa_idx = find([truth_records.process_noise_enabled] & ...
+        [truth_records.truth_model] == "SIRS");
+    if isempty(ssa_idx)
+        output_path = local_export_empty_panel(spec, ...
+            "Process-noise SIRS case not present in this run");
+        return;
+    end
+
+    scenario_id = truth_records(ssa_idx(1)).scenario_id;
+    uds_idx = find([truth_records.truth_model] == "SIRS" & ...
+        [truth_records.solver] == "uds" & ...
+        [truth_records.scenario_id] == scenario_id, 1);
+    colors = local_thesis_color_order();
+    series = local_empty_series(0);
+
+    if ~isempty(uds_idx)
+        series(end + 1, 1) = local_line_series( ...
+            truth_records(uds_idx).tspan, truth_records(uds_idx).I_true, ...
+            "UDS deterministic reference", ...
+            struct('Color', colors(1, :), 'LineWidth', 1.8), 1); %#ok<AGROW>
+    end
+
+    ssa_idx = ssa_idx([truth_records(ssa_idx).scenario_id] == scenario_id);
+    for i = 1:min(numel(ssa_idx), 4)
+        rec = truth_records(ssa_idx(i));
+        series(end + 1, 1) = local_line_series(rec.tspan, rec.I_true, ...
+            sprintf('SSA replicate %d', rec.replicate_id), ...
+            struct('Color', colors(1 + mod(i, size(colors, 1) - 1), :), ...
+            'LineWidth', 1.0), 1 + i); %#ok<AGROW>
+    end
+
+    panel.series = series;
+    fig = plot_single_panel(panel, spec);
+    output_path = export_figure(fig, spec);
+    close(fig);
+end
+
+function output_path = local_draw_structural_mismatch_truth(cfg, figure_dir, truth_records)
+%LOCAL_DRAW_STRUCTURAL_MISMATCH_TRUTH Draw SEIR compartment trajectories.
+    spec = build_plot_spec( ...
+        'figure_name', "Part B SEIR structural-mismatch truth", ...
+        'title', "", ...
+        'shared_x_label', "Time, $t$ (days)", ...
+        'shared_y_label', "Individuals", ...
+        'font_size', 9, ...
+        'axis_label_font_size', 10, ...
+        'tick_label_font_size', 8, ...
+        'panel_labels', ["A", "B", "C", "D"], ...
+        'panel_label_style', struct('FontSize', 10, 'FontWeight', 'bold'), ...
+        'layout', struct('num_rows', 2, 'num_cols', 2), ...
+        'legend', struct('visible', false), ...
+        'output_path', fullfile(figure_dir, 'partB_structural_mismatch_seir_truth.png'), ...
+        'size_cm', [17.0, 10.0]);
+
+    idx = find([truth_records.case_id] == "structural_mismatch" & ...
+        [truth_records.truth_model] == "SEIR", 1);
+    if isempty(idx)
+        panels = repmat(struct('series', local_empty_series(0), ...
+            'plot_spec', struct('no_data_text', ...
+            "Structural-mismatch SEIR case not present in this run")), 4, 1);
+    else
+        truth = truth_records(idx);
+        colors = local_thesis_color_order();
+        compartment_names = ["Susceptible, $S(t)$", "Exposed, $E(t)$", ...
+            "Infectious, $I(t)$", "Recovered, $R(t)$"];
+        compartment_values = {truth.S_true, truth.E_true, truth.I_true, truth.R_true};
+        panels = repmat(struct('series', local_empty_series(0), ...
+            'plot_spec', struct()), 4, 1);
+        for i = 1:4
+            panels(i).series = local_line_series(truth.tspan, ...
+                compartment_values{i}, compartment_names(i), ...
+                struct('Color', colors(i, :), 'LineWidth', 1.4), 1);
+            panels(i).plot_spec = struct('title', compartment_names(i));
+        end
+    end
+
+    fig = plot_multi_panel_figure(panels, spec);
+    output_path = export_figure(fig, spec);
+    close(fig);
+end
+
+function output_path = local_draw_robustness_mean_wis(cfg, figure_dir, summary_tables)
+%LOCAL_DRAW_ROBUSTNESS_MEAN_WIS Draw main mean-WIS robustness comparison.
+    spec = build_plot_spec( ...
+        'figure_name', "Part B robustness mean WIS", ...
+        'title', "", ...
+        'x_label', "Robustness setting", ...
+        'y_label', "Mean WIS", ...
+        'font_size', 9, ...
+        'axis_label_font_size', 10, ...
+        'tick_label_font_size', 8, ...
+        'x_tick_rotation', 0, ...
+        'color_order', local_thesis_color_order(), ...
+        'legend', struct('location', "northoutside", ...
+            'orientation', "horizontal", 'box', "off", 'font_size', 9), ...
+        'output_path', fullfile(figure_dir, 'partB_robustness_mean_wis.png'), ...
+        'size_cm', [17.0, 8.5]);
+
+    case_model_summary = local_summary_table(summary_tables, 'case_model_summary');
+    baseline_summary = local_summary_table(summary_tables, 'partA_baseline_summary');
+    [x_positions, x_labels] = local_robustness_axis(cfg);
+    model_cases = local_fixed_model_cases(cfg);
 
     series = local_empty_series(0);
-    interval_labels = string(compose('%d%% PI', ...
-        round((1 - plot_alphas(:)) * 100)));
-    interval_colors = local_interval_colors(numel(plot_alphas));
-    interval_face_alpha = linspace(0.14, 0.28, max(1, numel(plot_alphas)));
+    colors = local_thesis_color_order();
+    for i = 1:numel(model_cases)
+        y = local_mean_wis_by_case(case_model_summary, baseline_summary, ...
+            model_cases(i), cfg);
+        series(end + 1, 1) = local_line_series(x_positions, y, ...
+            local_model_case_label(model_cases(i)), ...
+            struct('Color', colors(i, :), 'LineWidth', 1.5, 'Marker', 'o', ...
+            'MarkerSize', 5), i); %#ok<AGROW>
+    end
 
-    for j = 1:numel(plot_alphas)
-        valid_interval = isfinite(target_days) & ...
-            isfinite(lower_forecast(:, j)) & isfinite(upper_forecast(:, j));
-        if nnz(valid_interval) < 2
-            continue;
+    panel.series = series;
+    fig = plot_single_panel(panel, spec);
+    local_apply_categorical_x_axis(fig, x_positions, x_labels);
+    output_path = export_figure(fig, spec);
+    close(fig);
+end
+
+function output_path = local_draw_robustness_wis_by_horizon(cfg, figure_dir, summary_tables)
+%LOCAL_DRAW_ROBUSTNESS_WIS_BY_HORIZON Draw horizon-wise WIS across cases.
+    spec = build_plot_spec( ...
+        'figure_name', "Part B robustness WIS by horizon", ...
+        'title', "", ...
+        'shared_x_label', "Forecast horizon, $h$ (days)", ...
+        'shared_y_label', "Mean WIS", ...
+        'font_size', 9, ...
+        'axis_label_font_size', 10, ...
+        'tick_label_font_size', 8, ...
+        'panel_labels', ["A", "B"], ...
+        'panel_label_style', struct('FontSize', 10, 'FontWeight', 'bold'), ...
+        'layout', struct('num_rows', 1, 'num_cols', 2), ...
+        'legend', struct('location', "northoutside", ...
+            'orientation', "horizontal", 'box', "off", 'font_size', 8), ...
+        'output_path', fullfile(figure_dir, 'partB_robustness_wis_by_horizon.png'), ...
+        'size_cm', [17.0, 8.5]);
+
+    horizon_summary = local_summary_table(summary_tables, 'case_horizon_summary');
+    model_cases = local_fixed_model_cases(cfg);
+    panels = repmat(struct('series', local_empty_series(0), ...
+        'plot_spec', struct()), numel(model_cases), 1);
+
+    for i = 1:numel(model_cases)
+        if isempty(horizon_summary) || height(horizon_summary) == 0
+            panels(i).series = local_empty_series(0);
+        else
+            model_idx = horizon_summary.Model == model_cases(i).model_type & ...
+                horizon_summary.ExoMode == model_cases(i).exo_mode;
+            panels(i).series = local_case_horizon_series(horizon_summary(model_idx, :), cfg);
         end
+        panels(i).plot_spec = struct('title', local_model_case_label(model_cases(i)));
+    end
 
+    fig = plot_multi_panel_figure(panels, spec);
+    output_path = export_figure(fig, spec);
+    close(fig);
+end
+
+function output_path = local_draw_coverage_interval_width(cfg, figure_dir, summary_tables)
+%LOCAL_DRAW_COVERAGE_INTERVAL_WIDTH Draw coverage and interval-width diagnostics.
+    spec = build_plot_spec( ...
+        'figure_name', "Part B coverage and interval width", ...
+        'title', "", ...
+        'shared_x_label', "Robustness setting", ...
+        'font_size', 9, ...
+        'axis_label_font_size', 10, ...
+        'tick_label_font_size', 8, ...
+        'panel_labels', ["A", "B"], ...
+        'panel_label_style', struct('FontSize', 10, 'FontWeight', 'bold'), ...
+        'layout', struct('num_rows', 1, 'num_cols', 2), ...
+        'legend', struct('location', "northoutside", ...
+            'orientation', "horizontal", 'box', "off", 'font_size', 8), ...
+        'output_path', fullfile(figure_dir, ...
+            'partB_robustness_coverage_interval_width.png'), ...
+        'size_cm', [17.0, 8.5]);
+
+    case_model_summary = local_summary_table(summary_tables, 'case_model_summary');
+    [x_positions, x_labels] = local_case_only_axis(cfg);
+    model_cases = local_fixed_model_cases(cfg);
+    metric_names = ["MeanCoverage", "MeanIntervalWidth"];
+    y_labels = ["Empirical coverage", "Mean interval width"];
+    panels = repmat(struct('series', local_empty_series(0), ...
+        'plot_spec', struct()), 2, 1);
+
+    colors = local_thesis_color_order();
+    for p = 1:2
+        series = local_empty_series(0);
+        for i = 1:numel(model_cases)
+            y = local_case_metric_values(case_model_summary, model_cases(i), ...
+                cfg, metric_names(p));
+            series(end + 1, 1) = local_line_series(x_positions, y, ...
+                local_model_case_label(model_cases(i)), ...
+                struct('Color', colors(i, :), 'LineWidth', 1.5, ...
+                'Marker', 'o', 'MarkerSize', 5), i); %#ok<AGROW>
+        end
+        panels(p).series = series;
+        panels(p).plot_spec = struct('title', y_labels(p), 'y_label', y_labels(p));
+    end
+
+    fig = plot_multi_panel_figure(panels, spec);
+    axes_handles = findobj(fig, 'Type', 'axes');
+    for i = 1:numel(axes_handles)
+        local_apply_axis_ticks(axes_handles(i), x_positions, x_labels);
+    end
+    output_path = export_figure(fig, spec);
+    close(fig);
+end
+
+function truth_records = local_load_truth_records(cfg)
+%LOCAL_LOAD_TRUTH_RECORDS Load all active truth artifacts.
+    cases = local_active_cases(cfg);
+    active_scenarios = local_active_scenario_ids(cfg);
+    truth_records = local_empty_truth_record(0);
+    for i = 1:numel(cases)
+        case_id = string(cases(i).case_id);
+        data_dir = fullfile(cfg.output.data_root_dir, char(case_id));
+        files = dir(fullfile(data_dir, sprintf('partB_%s_truth_*_rep*.mat', ...
+            char(case_id))));
+        files = local_sort_dir_by_name(files);
+        active_replicates = local_active_replicates(cfg, cases(i));
+        for j = 1:numel(files)
+            artifact_path = string(fullfile(files(j).folder, files(j).name));
+            loaded = load(artifact_path);
+            record = local_truth_record_from_loaded(loaded, artifact_path);
+            if local_truth_record_is_active(record, active_scenarios, active_replicates)
+                truth_records(end + 1, 1) = record; %#ok<AGROW>
+            end
+        end
+    end
+end
+
+function forecast_records = local_load_forecast_records(cfg)
+%LOCAL_LOAD_FORECAST_RECORDS Index all active forecast artifacts.
+    cases = local_active_cases(cfg);
+    active_scenarios = local_active_scenario_ids(cfg);
+    active_forecast_cases = local_active_forecast_cases(cfg);
+    forecast_records = local_empty_forecast_record(0);
+    for i = 1:numel(cases)
+        case_id = string(cases(i).case_id);
+        forecast_dir = fullfile(cfg.output.root_dir, char(case_id), "forecasts");
+        files = dir(fullfile(forecast_dir, sprintf('partB_%s_forecast_*_rep*.mat', ...
+            char(case_id))));
+        files = local_sort_dir_by_name(files);
+        active_replicates = local_active_replicates(cfg, cases(i));
+        for j = 1:numel(files)
+            artifact_path = string(fullfile(files(j).folder, files(j).name));
+            loaded = load(artifact_path);
+            record = local_forecast_record_from_loaded(loaded, artifact_path);
+            if local_forecast_record_is_active(record, active_scenarios, ...
+                    active_replicates, active_forecast_cases)
+                forecast_records(end + 1, 1) = record; %#ok<AGROW>
+            end
+        end
+    end
+end
+
+function record = local_truth_record_from_loaded(loaded, artifact_path)
+%LOCAL_TRUTH_RECORD_FROM_LOADED Normalize truth artifact metadata.
+    record = local_empty_truth_record(1);
+    record.path = artifact_path;
+    record.case_id = local_loaded_string(loaded, 'case_id', "");
+    record.case_name = local_loaded_string(loaded, 'case_name', "");
+    record.truth_model = local_loaded_string(loaded, 'truth_model', "");
+    record.solver = local_loaded_string(loaded, 'solver', "");
+    record.structural_mismatch_enabled = local_loaded_logical(loaded, ...
+        'structural_mismatch_enabled', false);
+    record.observation_noise_enabled = local_loaded_logical(loaded, ...
+        'observation_noise_enabled', false);
+    record.process_noise_enabled = local_loaded_logical(loaded, ...
+        'process_noise_enabled', false);
+    record.replicate_id = local_loaded_double(loaded, 'replicate_id', 1);
+    record.scenario_id = local_loaded_string(loaded, 'scenario_id', "");
+    record.scenario_name = local_loaded_string(loaded, 'scenario_name', "");
+    record.tspan = local_loaded_vector(loaded, 'tspan');
+    record.Rt_true = local_loaded_vector(loaded, 'Rt_true');
+    record.Rt_model_input = local_loaded_vector(loaded, 'Rt_model_input');
+    record.I_true = local_loaded_vector(loaded, 'I_true');
+    record.I_model_input = local_loaded_vector(loaded, 'I_model_input');
+    record.S_true = local_loaded_vector(loaded, 'S_true');
+    record.E_true = local_loaded_vector(loaded, 'E_true');
+    record.R_true = local_loaded_vector(loaded, 'R_true');
+end
+
+function record = local_forecast_record_from_loaded(loaded, artifact_path)
+%LOCAL_FORECAST_RECORD_FROM_LOADED Normalize forecast artifact metadata.
+    record = local_empty_forecast_record(1);
+    record.path = artifact_path;
+    record.case_id = local_loaded_string(loaded, 'case_id', "");
+    record.scenario_id = local_loaded_string(loaded, 'scenario_id', "");
+    record.replicate_id = local_loaded_double(loaded, 'replicate_id', 1);
+    record.model_type = local_loaded_string(loaded, 'model_type', "");
+    record.exo_mode = local_loaded_string(loaded, 'exo_mode', "");
+    record.source_truth_artifact = local_loaded_string(loaded, ...
+        'source_truth_artifact', "");
+end
+
+function idx = local_match_truth_record(truth_records, forecast_record)
+%LOCAL_MATCH_TRUTH_RECORD Find the truth artifact behind a forecast artifact.
+    idx = [];
+    if isempty(truth_records)
+        return;
+    end
+
+    path_match = find([truth_records.path] == forecast_record.source_truth_artifact, 1);
+    if ~isempty(path_match)
+        idx = path_match;
+        return;
+    end
+
+    idx = find([truth_records.case_id] == forecast_record.case_id & ...
+        [truth_records.scenario_id] == forecast_record.scenario_id & ...
+        [truth_records.replicate_id] == forecast_record.replicate_id, 1);
+end
+
+function series = local_representative_forecast_series(forecast_results, truth_record, cfg)
+%LOCAL_REPRESENTATIVE_FORECAST_SERIES Build one forecast-window panel.
+    colors = local_thesis_color_order();
+    series = local_empty_series(0);
+
+    series(end + 1, 1) = local_line_series(truth_record.tspan, ...
+        truth_record.Rt_true, "Evaluation target", ...
+        struct('Color', colors(1, :), 'LineWidth', 1.6), 1); %#ok<AGROW>
+
+    if any(abs(truth_record.Rt_model_input - truth_record.Rt_true) > 1e-12)
+        series(end + 1, 1) = local_line_series(truth_record.tspan, ...
+            truth_record.Rt_model_input, "Model input", ...
+            struct('Color', [0.55, 0.55, 0.55], 'LineWidth', 0.9, ...
+            'LineStyle', ':'), 2); %#ok<AGROW>
+    end
+
+    window_idx = local_first_valid_forecast_window(forecast_results);
+    if isempty(window_idx)
+        return;
+    end
+
+    window = forecast_results(window_idx);
+    t_future = local_struct_vector(window, 't_future');
+    pred = local_struct_vector(window, 'Rt_pred');
+    lower = local_struct_matrix(window, 'lower_bounds');
+    upper = local_struct_matrix(window, 'upper_bounds');
+    alphas = local_struct_vector(window, 'interval_alphas');
+    plot_alphas = local_plot_alphas(cfg, alphas);
+
+    [alpha_idx, labels] = local_interval_indices(alphas, plot_alphas);
+    interval_colors = local_interval_colors(numel(alpha_idx));
+    for i = 1:numel(alpha_idx)
+        j = alpha_idx(i);
         interval_series = local_empty_series(1);
         interval_series.type = "ribbon";
-        interval_series.x = target_days(valid_interval);
-        interval_series.lower = lower_forecast(valid_interval, j);
-        interval_series.upper = upper_forecast(valid_interval, j);
-        interval_series.label = interval_labels(j);
-        interval_series.style = struct('FaceColor', interval_colors(j, :), ...
-            'FaceAlpha', interval_face_alpha(j), 'EdgeColor', 'none');
-        interval_series.legend_rank = 3 + j;
+        interval_series.x = t_future;
+        interval_series.lower = lower(:, j);
+        interval_series.upper = upper(:, j);
+        interval_series.label = labels(i);
+        interval_series.style = struct('FaceColor', interval_colors(i, :), ...
+            'FaceAlpha', 0.16 + 0.08 * i, 'EdgeColor', 'none');
+        interval_series.legend_rank = 5 + i;
         series(end + 1, 1) = interval_series; %#ok<AGROW>
     end
 
-    truth_series = local_empty_series(1);
-    truth_series.type = "line";
-    truth_series.x = truth_t;
-    truth_series.y = truth_rt;
-    truth_series.label = "SEIR truth";
-    truth_series.style = struct('Color', [0, 0, 0], 'LineStyle', '-', ...
-        'LineWidth', 1.4, 'Marker', 'none');
-    truth_series.legend_rank = 1;
-    series(end + 1, 1) = truth_series; %#ok<AGROW>
+    series(end + 1, 1) = local_line_series(t_future, pred, ...
+        "Median forecast", struct('Color', colors(2, :), 'LineWidth', 1.5), 4); %#ok<AGROW>
+end
 
-    valid_median = isfinite(target_days) & isfinite(median_forecast);
-    if any(valid_median)
-        median_series = local_empty_series(1);
-        median_series.type = "line";
-        median_series.x = target_days(valid_median);
-        median_series.y = median_forecast(valid_median);
-        median_series.label = sprintf('%d-day median', lead_time);
-        median_series.style = struct('Color', [0, 0.447, 0.698], ...
-            'LineStyle', '--', 'LineWidth', 1.3, 'Marker', 'o', ...
-            'MarkerSize', 3.0);
-        median_series.legend_rank = 2;
-        series(end + 1, 1) = median_series; %#ok<AGROW>
+function idx = local_first_valid_forecast_window(forecast_results)
+%LOCAL_FIRST_VALID_FORECAST_WINDOW Return first window with a median path.
+    idx = [];
+    for i = 1:numel(forecast_results)
+        if isfield(forecast_results(i), 'Rt_pred') && ...
+                ~isempty(forecast_results(i).Rt_pred)
+            pred = double(forecast_results(i).Rt_pred(:));
+            if any(isfinite(pred))
+                idx = i;
+                return;
+            end
+        end
     end
 end
 
-function panel = local_model_wis_distribution_panel(window_scores)
-%LOCAL_MODEL_WIS_DISTRIBUTION_PANEL Build a generic WIS boxchart panel.
-    panel = struct('series', []);
-    if isempty(window_scores) || ~istable(window_scores) || height(window_scores) == 0
-        return;
+function series = local_model_horizon_series(horizon_rows, include_case_label)
+%LOCAL_MODEL_HORIZON_SERIES Build horizon-wise series by fixed model case.
+    if nargin < 2
+        include_case_label = true;
     end
-
-    valid_idx = isfinite(window_scores.WindowWIS);
-    if ~any(valid_idx)
-        return;
-    end
-
-    plot_data = window_scores(valid_idx, :);
-    config_label = string(plot_data.Model) + " / " + string(plot_data.ExoMode);
-
-    series = local_empty_series(1);
-    series.type = "boxchart";
-    series.x = config_label;
-    series.y = double(plot_data.WindowWIS);
-    series.group = string(plot_data.Scenario);
-    series.legend_visible = true;
-    panel.series = series;
-end
-
-function panel = local_horizon_wis_panel(horizon_scores)
-%LOCAL_HORIZON_WIS_PANEL Build generic line series for horizon-wise WIS.
-    panel = struct('series', []);
-    if isempty(horizon_scores) || height(horizon_scores) == 0 || ...
-            ~ismember('HorizonIdx', horizon_scores.Properties.VariableNames)
-        return;
-    end
-
-    group_ids = string(horizon_scores.Model) + " / " + string(horizon_scores.ExoMode);
-    groups = unique(group_ids, 'stable');
     series = local_empty_series(0);
-    for i = 1:numel(groups)
-        idx = group_ids == groups(i);
-        x_values = double(horizon_scores.HorizonIdx(idx));
-        y_values = double(horizon_scores.MeanWIS(idx));
-        [x_values, y_values] = local_sorted_finite_xy(x_values, y_values);
-        if isempty(x_values)
-            continue;
-        end
-
-        next_series = local_empty_series(1);
-        next_series.type = "line";
-        next_series.x = x_values;
-        next_series.y = y_values;
-        next_series.label = groups(i);
-        next_series.style = struct('LineStyle', '-', 'LineWidth', 1.3, ...
-            'Marker', local_series_marker(i), 'MarkerSize', 3.2);
-        next_series.legend_rank = i;
-        series(end + 1, 1) = next_series; %#ok<AGROW>
+    if isempty(horizon_rows) || height(horizon_rows) == 0
+        return;
     end
-    panel.series = series;
-end
 
-function [target_days, median_forecast, lower_forecast, upper_forecast] = ...
-    local_extract_fixed_lead(forecast_results, lead_time, plot_alphas)
-%LOCAL_EXTRACT_FIXED_LEAD Extract one forecast lead across windows.
-    num_results = numel(forecast_results);
-    num_alphas = numel(plot_alphas);
-    target_days = nan(num_results, 1);
-    median_forecast = nan(num_results, 1);
-    lower_forecast = nan(num_results, num_alphas);
-    upper_forecast = nan(num_results, num_alphas);
-
-    for i = 1:num_results
-        entry = local_normalize_result(forecast_results(i));
-        if numel(entry.pred_Rt) < lead_time
-            continue;
+    model_key = string(horizon_rows.Model) + " / " + string(horizon_rows.ExoMode);
+    [~, idx] = unique(model_key, 'stable');
+    colors = local_thesis_color_order();
+    for i = 1:numel(idx)
+        model = string(horizon_rows.Model(idx(i)));
+        exo = string(horizon_rows.ExoMode(idx(i)));
+        rows = horizon_rows(horizon_rows.Model == model & ...
+            horizon_rows.ExoMode == exo, :);
+        [horizon, order] = sort(double(rows.HorizonIdx));
+        label = local_model_exo_label(model, exo);
+        if include_case_label && ismember('CaseName', rows.Properties.VariableNames)
+            label = label + " | " + string(rows.CaseName(1));
         end
-
-        median_forecast(i) = entry.pred_Rt(lead_time);
-        if numel(entry.forecast_day) >= lead_time
-            target_days(i) = entry.forecast_day(lead_time);
-        elseif isfinite(entry.window_day)
-            target_days(i) = entry.window_day + lead_time;
-        end
-
-        for j = 1:num_alphas
-            idx_alpha = local_alpha_index(entry.alphas, plot_alphas(j));
-            if isempty(idx_alpha)
-                continue;
-            end
-            if size(entry.lower_Rt, 1) >= lead_time && ...
-                    size(entry.upper_Rt, 1) >= lead_time && ...
-                    size(entry.lower_Rt, 2) >= idx_alpha && ...
-                    size(entry.upper_Rt, 2) >= idx_alpha
-                lower_forecast(i, j) = entry.lower_Rt(lead_time, idx_alpha);
-                upper_forecast(i, j) = entry.upper_Rt(lead_time, idx_alpha);
-            end
-        end
+        series(end + 1, 1) = local_line_series(horizon, ...
+            double(rows.MeanWIS(order)), label, ...
+            struct('Color', colors(i, :), 'LineWidth', 1.4), i); %#ok<AGROW>
     end
 end
 
-function entry = local_normalize_result(raw_entry)
-%LOCAL_NORMALIZE_RESULT Read canonical forecast-result fields.
-    entry = struct();
-    entry.pred_Rt = double(raw_entry.Rt_pred(:));
-    entry.lower_Rt = double(raw_entry.lower_bounds);
-    entry.upper_Rt = double(raw_entry.upper_bounds);
-    entry.alphas = double(raw_entry.interval_alphas(:));
-    entry.forecast_day = double(raw_entry.t_future(:));
-    entry.window_day = local_numeric_scalar(raw_entry, 'forecast_origin');
+function series = local_case_horizon_series(horizon_rows, cfg)
+%LOCAL_CASE_HORIZON_SERIES Build horizon-wise series by robustness case.
+    series = local_empty_series(0);
+    if isempty(horizon_rows) || height(horizon_rows) == 0
+        return;
+    end
+
+    cases = cfg.robustness_cases;
+    colors = local_thesis_color_order();
+    for i = 1:numel(cases)
+        case_id = string(cases(i).case_id);
+        rows = horizon_rows(horizon_rows.CaseID == case_id, :);
+        if isempty(rows) || height(rows) == 0
+            continue;
+        end
+        [horizon, order] = sort(double(rows.HorizonIdx));
+        series(end + 1, 1) = local_line_series(horizon, ...
+            double(rows.MeanWIS(order)), local_case_short_label(case_id), ...
+            struct('Color', colors(1 + mod(i - 1, size(colors, 1)), :), ...
+            'LineWidth', 1.3), i); %#ok<AGROW>
+    end
 end
 
-function value = local_numeric_scalar(raw_entry, field_name)
-%LOCAL_NUMERIC_SCALAR Read a scalar numeric struct field.
+function values = local_mean_wis_by_case(case_model_summary, baseline_summary, ...
+    model_case, cfg)
+%LOCAL_MEAN_WIS_BY_CASE Return Part A baseline plus Part B case WIS values.
+    values = nan(numel(cfg.robustness_cases) + 1, 1);
+    if ~isempty(baseline_summary) && height(baseline_summary) > 0
+        idx = baseline_summary.Model == model_case.model_type & ...
+            baseline_summary.ExoMode == model_case.exo_mode;
+        if any(idx)
+            values(1) = baseline_summary.PartAMeanWIS(find(idx, 1));
+        end
+    end
+    for i = 1:numel(cfg.robustness_cases)
+        values(i + 1) = local_case_metric_value(case_model_summary, ...
+            model_case, string(cfg.robustness_cases(i).case_id), "MeanWIS");
+    end
+end
+
+function values = local_case_metric_values(case_model_summary, model_case, ...
+    cfg, metric_name)
+%LOCAL_CASE_METRIC_VALUES Return one metric across Part B cases.
+    values = nan(numel(cfg.robustness_cases), 1);
+    for i = 1:numel(cfg.robustness_cases)
+        values(i) = local_case_metric_value(case_model_summary, model_case, ...
+            string(cfg.robustness_cases(i).case_id), metric_name);
+    end
+end
+
+function value = local_case_metric_value(case_model_summary, model_case, ...
+    case_id, metric_name)
+%LOCAL_CASE_METRIC_VALUE Read a case/model summary metric.
     value = nan;
-    if isfield(raw_entry, field_name) && ~isempty(raw_entry.(field_name))
-        values = double(raw_entry.(field_name));
-        value = values(1);
+    if isempty(case_model_summary) || height(case_model_summary) == 0 || ...
+            ~ismember(metric_name, case_model_summary.Properties.VariableNames)
+        return;
+    end
+
+    idx = case_model_summary.CaseID == case_id & ...
+        case_model_summary.Model == model_case.model_type & ...
+        case_model_summary.ExoMode == model_case.exo_mode;
+    if any(idx)
+        values = double(case_model_summary.(metric_name)(idx));
+        value = local_mean_finite(values);
     end
 end
 
-function idx = local_alpha_index(stored_alphas, target_alpha)
-%LOCAL_ALPHA_INDEX Match a displayed alpha to stored intervals.
-    stored_alphas = double(stored_alphas(:));
-    [min_diff, idx] = min(abs(stored_alphas - target_alpha));
-    if isempty(idx) || min_diff > 1e-8
-        idx = [];
+function [x_positions, x_labels] = local_robustness_axis(cfg)
+%LOCAL_ROBUSTNESS_AXIS Return x-axis positions for Part A plus Part B cases.
+    x_positions = (1:(numel(cfg.robustness_cases) + 1))';
+    x_labels = ["Part A" + newline + "clean"; local_case_axis_labels(cfg)];
+end
+
+function [x_positions, x_labels] = local_case_only_axis(cfg)
+%LOCAL_CASE_ONLY_AXIS Return x-axis positions for Part B cases only.
+    x_positions = (1:numel(cfg.robustness_cases))';
+    x_labels = local_case_axis_labels(cfg);
+end
+
+function labels = local_case_axis_labels(cfg)
+%LOCAL_CASE_AXIS_LABELS Return compact case tick labels.
+    labels = strings(numel(cfg.robustness_cases), 1);
+    for i = 1:numel(cfg.robustness_cases)
+        labels(i) = local_case_short_label(string(cfg.robustness_cases(i).case_id));
     end
 end
 
-function lead_time = local_effective_lead_time(cfg)
-%LOCAL_EFFECTIVE_LEAD_TIME Resolve displayed lead time.
-    lead_time = min(cfg.forecast.plot_lead_time, cfg.forecast.horizon);
+function local_apply_categorical_x_axis(fig, x_positions, x_labels)
+%LOCAL_APPLY_CATEGORICAL_X_AXIS Apply compact categorical x ticks.
+    axes_handles = findobj(fig, 'Type', 'axes');
+    for i = 1:numel(axes_handles)
+        local_apply_axis_ticks(axes_handles(i), x_positions, x_labels);
+    end
+end
+
+function local_apply_axis_ticks(ax, x_positions, x_labels)
+%LOCAL_APPLY_AXIS_TICKS Apply x ticks and labels to one axes.
+    if isempty(ax) || ~isgraphics(ax)
+        return;
+    end
+    ax.XTick = double(x_positions(:));
+    ax.XTickLabel = cellstr(x_labels(:));
+    xlim(ax, [min(x_positions) - 0.35, max(x_positions) + 0.35]);
+end
+
+function model_cases = local_fixed_model_cases(cfg)
+%LOCAL_FIXED_MODEL_CASES Return fixed forecast cases in configured order.
+    fixed = cfg.fixed_forecast_cases;
+    model_cases = repmat(struct('model_type', "", 'exo_mode', ""), ...
+        1, numel(fixed));
+    for i = 1:numel(fixed)
+        model_cases(i).model_type = string(fixed(i).model_type);
+        model_cases(i).exo_mode = string(fixed(i).exo_mode);
+    end
+end
+
+function label = local_model_case_label(model_case)
+%LOCAL_MODEL_CASE_LABEL Return display label for a configured model case.
+    label = local_model_exo_label(model_case.model_type, model_case.exo_mode);
+end
+
+function label = local_model_exo_label(model_type, exo_mode)
+%LOCAL_MODEL_EXO_LABEL Return compact model/exogenous label text.
+    model_type = string(model_type);
+    exo_mode = string(exo_mode);
+    label = model_type + " / " + exo_mode;
+end
+
+function label = local_case_short_label(case_id)
+%LOCAL_CASE_SHORT_LABEL Return compact robustness-case label.
+    switch char(string(case_id))
+        case 'observation_noise'
+            label = "Observation" + newline + "noise";
+        case 'process_noise'
+            label = "Process" + newline + "noise";
+        case 'structural_mismatch'
+            label = "SEIR" + newline + "mismatch";
+        case 'combined_stress'
+            label = "Combined" + newline + "stress";
+        otherwise
+            label = string(case_id);
+    end
+end
+
+function output_path = local_export_empty_panel(spec, message)
+%LOCAL_EXPORT_EMPTY_PANEL Export a no-data single-panel figure.
+    spec = build_plot_spec(spec, 'no_data_text', message);
+    panel.series = local_empty_series(0);
+    fig = plot_single_panel(panel, spec);
+    output_path = export_figure(fig, spec);
+    close(fig);
+end
+
+function required = local_required_thesis_figures(figure_dir)
+%LOCAL_REQUIRED_THESIS_FIGURES Return required thesis-level figure paths.
+    names = ["partB_robustness_ladder_overview.png"; ...
+        "partB_observation_noise_example.png"; ...
+        "partB_process_noise_uds_vs_ssa.png"; ...
+        "partB_structural_mismatch_seir_truth.png"; ...
+        "partB_robustness_mean_wis.png"; ...
+        "partB_robustness_wis_by_horizon.png"; ...
+        "partB_robustness_coverage_interval_width.png"];
+    required = fullfile(figure_dir, names);
+end
+
+function output = local_loaded_table(s, field_name)
+%LOCAL_LOADED_TABLE Read a table field or return an empty table.
+    if isfield(s, field_name) && istable(s.(field_name))
+        output = s.(field_name);
+    else
+        output = table();
+    end
+end
+
+function table_data = local_summary_table(summary_tables, field_name)
+%LOCAL_SUMMARY_TABLE Read a summary table field or return empty table.
+    if isstruct(summary_tables) && isfield(summary_tables, field_name) && ...
+            istable(summary_tables.(field_name))
+        table_data = summary_tables.(field_name);
+    else
+        table_data = table();
+    end
+end
+
+function cases = local_active_cases(cfg)
+%LOCAL_ACTIVE_CASES Apply optional smoke-test case limiting.
+    cases = cfg.robustness_cases;
     if cfg.smoke_test.enabled
-        lead_time = min(lead_time, cfg.smoke_test.horizon);
+        cases = cases(1:min(numel(cases), cfg.smoke_test.num_cases));
     end
+end
+
+function scenario_ids = local_active_scenario_ids(cfg)
+%LOCAL_ACTIVE_SCENARIO_IDS Return active scenario ids.
+    scenarios = cfg.scenarios;
+    if cfg.smoke_test.enabled
+        scenarios = scenarios(1:min(numel(scenarios), cfg.smoke_test.num_scenarios));
+    end
+    scenario_ids = strings(numel(scenarios), 1);
+    for i = 1:numel(scenarios)
+        scenario_ids(i) = string(scenarios(i).id);
+    end
+end
+
+function n = local_active_replicates(cfg, case_cfg)
+%LOCAL_ACTIVE_REPLICATES Return active replicate count for one case.
+    n = max(1, floor(double(case_cfg.num_replicates)));
+    if cfg.smoke_test.enabled
+        n = min(n, cfg.smoke_test.num_replicates);
+    end
+end
+
+function forecast_cases = local_active_forecast_cases(cfg)
+%LOCAL_ACTIVE_FORECAST_CASES Return active fixed forecast cases.
+    forecast_cases = cfg.fixed_forecast_cases;
+    if cfg.smoke_test.enabled
+        forecast_cases = forecast_cases(1:min(numel(forecast_cases), ...
+            cfg.smoke_test.num_forecast_cases));
+    end
+end
+
+function is_active = local_truth_record_is_active(record, active_scenarios, ...
+    active_replicates)
+%LOCAL_TRUTH_RECORD_IS_ACTIVE Check smoke-filtered truth record metadata.
+    is_active = any(active_scenarios == record.scenario_id) && ...
+        record.replicate_id <= active_replicates;
+end
+
+function is_active = local_forecast_record_is_active(record, active_scenarios, ...
+    active_replicates, active_forecast_cases)
+%LOCAL_FORECAST_RECORD_IS_ACTIVE Check smoke-filtered forecast metadata.
+    case_match = false;
+    for i = 1:numel(active_forecast_cases)
+        case_match = case_match || ...
+            (string(active_forecast_cases(i).model_type) == record.model_type && ...
+            string(active_forecast_cases(i).exo_mode) == record.exo_mode);
+    end
+    is_active = any(active_scenarios == record.scenario_id) && ...
+        record.replicate_id <= active_replicates && case_match;
+end
+
+function record = local_empty_truth_record(n)
+%LOCAL_EMPTY_TRUTH_RECORD Construct empty truth-record structs.
+    record = repmat(struct( ...
+        'path', "", ...
+        'case_id', "", ...
+        'case_name', "", ...
+        'truth_model', "", ...
+        'solver', "", ...
+        'structural_mismatch_enabled', false, ...
+        'observation_noise_enabled', false, ...
+        'process_noise_enabled', false, ...
+        'replicate_id', nan, ...
+        'scenario_id', "", ...
+        'scenario_name', "", ...
+        'tspan', [], ...
+        'Rt_true', [], ...
+        'Rt_model_input', [], ...
+        'I_true', [], ...
+        'I_model_input', [], ...
+        'S_true', [], ...
+        'E_true', [], ...
+        'R_true', []), n, 1);
+end
+
+function record = local_empty_forecast_record(n)
+%LOCAL_EMPTY_FORECAST_RECORD Construct empty forecast-record structs.
+    record = repmat(struct( ...
+        'path', "", ...
+        'case_id', "", ...
+        'scenario_id', "", ...
+        'replicate_id', nan, ...
+        'model_type', "", ...
+        'exo_mode', "", ...
+        'source_truth_artifact', ""), n, 1);
 end
 
 function series = local_empty_series(n)
-%LOCAL_EMPTY_SERIES Create generic panel-series placeholders.
-    series = repmat(struct('type', "line", 'x', [], 'y', [], ...
-        'lower', [], 'upper', [], 'group', [], 'label', "", ...
-        'style', struct(), 'legend_visible', true, 'legend_rank', 1), n, 1);
+%LOCAL_EMPTY_SERIES Construct generic plotting series structs.
+    series = repmat(struct( ...
+        'type', "line", ...
+        'x', [], ...
+        'y', [], ...
+        'lower', [], ...
+        'upper', [], ...
+        'group', [], ...
+        'label', "", ...
+        'style', struct(), ...
+        'legend_rank', 1, ...
+        'legend_visible', true), n, 1);
+end
+
+function series = local_line_series(x, y, label, style, rank)
+%LOCAL_LINE_SERIES Build one generic line series.
+    series = local_empty_series(1);
+    series.type = "line";
+    series.x = double(x(:));
+    series.y = double(y(:));
+    series.label = string(label);
+    series.style = style;
+    series.legend_rank = rank;
+    series.legend_visible = strlength(series.label) > 0;
+end
+
+function series = local_scatter_series(x, y, label, style, rank)
+%LOCAL_SCATTER_SERIES Build one generic scatter series.
+    series = local_empty_series(1);
+    series.type = "scatter";
+    series.x = double(x(:));
+    series.y = double(y(:));
+    series.label = string(label);
+    series.style = style;
+    series.legend_rank = rank;
+    series.legend_visible = strlength(series.label) > 0;
+end
+
+function series = local_box_series(x, y, group, label, rank)
+%LOCAL_BOX_SERIES Build one generic boxchart series.
+    series = local_empty_series(1);
+    series.type = "boxchart";
+    series.x = string(x(:));
+    series.y = double(y(:));
+    series.group = string(group(:));
+    series.label = string(label);
+    series.legend_rank = rank;
+end
+
+function values = local_loaded_vector(loaded, field_name)
+%LOCAL_LOADED_VECTOR Read a numeric vector from a loaded artifact.
+    values = [];
+    if isfield(loaded, field_name) && ~isempty(loaded.(field_name))
+        values = double(loaded.(field_name)(:));
+    end
+end
+
+function value = local_loaded_double(loaded, field_name, default_value)
+%LOCAL_LOADED_DOUBLE Read a scalar numeric field.
+    value = default_value;
+    if isfield(loaded, field_name) && ~isempty(loaded.(field_name))
+        raw = double(loaded.(field_name));
+        if isscalar(raw)
+            value = raw;
+        end
+    end
+end
+
+function value = local_loaded_string(loaded, field_name, default_value)
+%LOCAL_LOADED_STRING Read a string-compatible field.
+    value = string(default_value);
+    if isfield(loaded, field_name) && ~isempty(loaded.(field_name))
+        value = string(loaded.(field_name));
+    end
+end
+
+function value = local_loaded_logical(loaded, field_name, default_value)
+%LOCAL_LOADED_LOGICAL Read a logical-compatible field.
+    value = logical(default_value);
+    if isfield(loaded, field_name) && ~isempty(loaded.(field_name))
+        value = logical(loaded.(field_name));
+    end
+end
+
+function values = local_struct_vector(s, field_name)
+%LOCAL_STRUCT_VECTOR Read a numeric vector from a struct.
+    values = [];
+    if isfield(s, field_name) && ~isempty(s.(field_name))
+        values = double(s.(field_name)(:));
+    end
+end
+
+function values = local_struct_matrix(s, field_name)
+%LOCAL_STRUCT_MATRIX Read a numeric matrix from a struct.
+    values = [];
+    if isfield(s, field_name) && ~isempty(s.(field_name))
+        values = double(s.(field_name));
+    end
+end
+
+function plot_alphas = local_plot_alphas(cfg, available_alphas)
+%LOCAL_PLOT_ALPHAS Return requested interval alphas available for plotting.
+    if isfield(cfg.forecast, 'plot_alphas') && ~isempty(cfg.forecast.plot_alphas)
+        plot_alphas = double(cfg.forecast.plot_alphas(:));
+    else
+        plot_alphas = double(available_alphas(:));
+    end
+end
+
+function [idx, labels] = local_interval_indices(available_alphas, requested_alphas)
+%LOCAL_INTERVAL_INDICES Match requested interval levels to available alphas.
+    available_alphas = double(available_alphas(:));
+    requested_alphas = double(requested_alphas(:));
+    idx = zeros(0, 1);
+    labels = strings(0, 1);
+    for i = 1:numel(requested_alphas)
+        [distance, j] = min(abs(available_alphas - requested_alphas(i)));
+        if isempty(j) || ~isfinite(distance)
+            continue;
+        end
+        if distance < 1e-8 && ~ismember(j, idx)
+            idx(end + 1, 1) = j; %#ok<AGROW>
+            labels(end + 1, 1) = sprintf('%d%% PI', ...
+                round((1 - available_alphas(j)) * 100)); %#ok<AGROW>
+        end
+    end
+    if isempty(idx) && ~isempty(available_alphas)
+        idx = numel(available_alphas);
+        labels = sprintf('%d%% PI', round((1 - available_alphas(idx)) * 100));
+    end
+end
+
+function colors = local_interval_colors(n)
+%LOCAL_INTERVAL_COLORS Return interval ribbon colors.
+    base = [0.35, 0.62, 0.80; 0.55, 0.72, 0.86; 0.75, 0.84, 0.91];
+    colors = base(1:min(max(n, 1), size(base, 1)), :);
+    if n > size(base, 1)
+        colors = [colors; repmat(base(end, :), n - size(base, 1), 1)];
+    end
 end
 
 function colors = local_thesis_color_order()
-%LOCAL_THESIS_COLOR_ORDER Colour-blind-safe series palette.
-    colors = [
-        0.902, 0.624, 0.000;
-        0.337, 0.706, 0.914;
-        0.000, 0.620, 0.451;
-        0.000, 0.447, 0.698;
-        0.835, 0.369, 0.000;
-        0.800, 0.475, 0.655];
+%LOCAL_THESIS_COLOR_ORDER Return thesis-friendly categorical colors.
+    colors = [ ...
+        0.0000, 0.4470, 0.7410; ...
+        0.8500, 0.3250, 0.0980; ...
+        0.4660, 0.6740, 0.1880; ...
+        0.4940, 0.1840, 0.5560; ...
+        0.3010, 0.7450, 0.9330; ...
+        0.6350, 0.0780, 0.1840];
 end
 
-function colors = local_interval_colors(num_intervals)
-%LOCAL_INTERVAL_COLORS Build stable interval colors.
-    base_colors = [0.30, 0.65, 0.95; 0.10, 0.45, 0.85; ...
-        0.08, 0.32, 0.66; 0.04, 0.20, 0.46];
-    if num_intervals <= size(base_colors, 1)
-        colors = base_colors(1:num_intervals, :);
+function value = local_mean_finite(values)
+%LOCAL_MEAN_FINITE Mean over finite values only.
+    values = double(values(:));
+    values = values(isfinite(values));
+    if isempty(values)
+        value = nan;
     else
-        colors = lines(num_intervals);
+        value = mean(values);
     end
-end
-
-function marker = local_series_marker(idx)
-%LOCAL_SERIES_MARKER Cycle distinguishable markers.
-    markers = {'o', 's', '^', 'd', 'v', '>', '<', 'p', 'h'};
-    marker = markers{mod(idx - 1, numel(markers)) + 1};
-end
-
-function labels = local_model_exo_labels(summary_table)
-%LOCAL_MODEL_EXO_LABELS Build model/exogenous legend labels.
-    if isempty(summary_table) || height(summary_table) == 0 || ...
-            ~all(ismember({'Model', 'ExoMode'}, summary_table.Properties.VariableNames))
-        labels = strings(0, 1);
-        return;
-    end
-    group_ids = string(summary_table.Model) + " / " + string(summary_table.ExoMode);
-    labels = unique(group_ids, 'stable');
-end
-
-function labels = local_panel_labels(num_panels)
-%LOCAL_PANEL_LABELS Build compact alphabetical panel labels.
-    labels = strings(num_panels, 1);
-    for i = 1:num_panels
-        labels(i) = sprintf('(%s)', char('a' + i - 1));
-    end
-end
-
-function token = local_model_token(model_type, exo_mode)
-%LOCAL_MODEL_TOKEN Build filename token for a model/exogenous case.
-    if string(model_type) == "AR" && string(exo_mode) == "None"
-        token = "ar";
-    else
-        token = lower(regexprep(string(model_type) + "_" + string(exo_mode), ...
-            '[^A-Za-z0-9]+', '_'));
-    end
-end
-
-function [x_values, y_values] = local_sorted_finite_xy(x_values, y_values)
-%LOCAL_SORTED_FINITE_XY Filter finite points and sort by x value.
-    x_values = double(x_values(:));
-    y_values = double(y_values(:));
-    valid_idx = isfinite(x_values) & isfinite(y_values);
-    x_values = x_values(valid_idx);
-    y_values = y_values(valid_idx);
-    [x_values, order] = sort(x_values);
-    y_values = y_values(order);
 end
 
 function files = local_sort_dir_by_name(files)
-%LOCAL_SORT_DIR_BY_NAME Sort a dir struct by file name.
+%LOCAL_SORT_DIR_BY_NAME Sort a dir struct by filename.
     [~, order] = sort({files.name});
     files = files(order);
 end

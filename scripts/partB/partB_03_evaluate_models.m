@@ -173,15 +173,22 @@ fprintf('=== Part B Robustness-Ladder Forecast Evaluation Complete ===\n\n');
 function paths = local_forecast_artifact_paths(cfg)
 %LOCAL_FORECAST_ARTIFACT_PATHS Return active forecast artifacts.
     cases = local_active_cases(cfg);
+    active_scenarios = local_active_scenario_ids(cfg);
+    active_forecast_cases = local_active_forecast_cases(cfg);
     paths = strings(0, 1);
     for i = 1:numel(cases)
         forecast_dir = fullfile(cfg.output.root_dir, char(cases(i).case_id), ...
             "forecasts");
-        files = dir(fullfile(forecast_dir, sprintf('partB_%s_forecast_*.mat', ...
+        files = dir(fullfile(forecast_dir, sprintf('partB_%s_forecast_*_rep*.mat', ...
             char(cases(i).case_id))));
         files = local_sort_dir_by_name(files);
+        active_replicates = local_active_replicates(cfg, cases(i));
         for j = 1:numel(files)
-            paths(end + 1, 1) = string(fullfile(files(j).folder, files(j).name)); %#ok<AGROW>
+            artifact_path = string(fullfile(files(j).folder, files(j).name));
+            if local_forecast_path_is_active(artifact_path, active_scenarios, ...
+                    active_replicates, active_forecast_cases)
+                paths(end + 1, 1) = artifact_path; %#ok<AGROW>
+            end
         end
     end
 end
@@ -192,6 +199,55 @@ function cases = local_active_cases(cfg)
     if cfg.smoke_test.enabled
         cases = cases(1:min(numel(cases), cfg.smoke_test.num_cases));
     end
+end
+
+function scenario_ids = local_active_scenario_ids(cfg)
+%LOCAL_ACTIVE_SCENARIO_IDS Return active scenario ids.
+    scenarios = cfg.scenarios;
+    if cfg.smoke_test.enabled
+        scenarios = scenarios(1:min(numel(scenarios), cfg.smoke_test.num_scenarios));
+    end
+    scenario_ids = strings(numel(scenarios), 1);
+    for i = 1:numel(scenarios)
+        scenario_ids(i) = string(scenarios(i).id);
+    end
+end
+
+function n = local_active_replicates(cfg, case_cfg)
+%LOCAL_ACTIVE_REPLICATES Return active replicate count for one case.
+    n = max(1, floor(double(case_cfg.num_replicates)));
+    if cfg.smoke_test.enabled
+        n = min(n, cfg.smoke_test.num_replicates);
+    end
+end
+
+function forecast_cases = local_active_forecast_cases(cfg)
+%LOCAL_ACTIVE_FORECAST_CASES Return active fixed forecast cases.
+    forecast_cases = cfg.fixed_forecast_cases;
+    if cfg.smoke_test.enabled
+        forecast_cases = forecast_cases(1:min(numel(forecast_cases), ...
+            cfg.smoke_test.num_forecast_cases));
+    end
+end
+
+function is_active = local_forecast_path_is_active(artifact_path, active_scenarios, ...
+    active_replicates, active_forecast_cases)
+%LOCAL_FORECAST_PATH_IS_ACTIVE Check smoke-filtered forecast metadata.
+    is_active = false;
+    loaded = load(artifact_path, 'scenario_id', 'replicate_id', ...
+        'model_type', 'exo_mode');
+    required = {'scenario_id', 'replicate_id', 'model_type', 'exo_mode'};
+    if ~all(isfield(loaded, required))
+        return;
+    end
+    case_match = false;
+    for i = 1:numel(active_forecast_cases)
+        case_match = case_match || ...
+            (string(active_forecast_cases(i).model_type) == string(loaded.model_type) && ...
+            string(active_forecast_cases(i).exo_mode) == string(loaded.exo_mode));
+    end
+    is_active = any(active_scenarios == string(loaded.scenario_id)) && ...
+        double(loaded.replicate_id) <= active_replicates && case_match;
 end
 
 function local_validate_forecast_artifact(loaded, artifact_path)

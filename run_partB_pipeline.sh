@@ -4,11 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$SCRIPT_DIR"
 MATLAB_BIN="${MATLAB_BIN:-/home/kaahin/MATLAB/R2025b/bin/matlab}"
-LOG_ROOT="$REPO_ROOT/results/partB/structural_mismatch/logs"
+LOG_ROOT="$REPO_ROOT/results/partB/logs"
 RUN_ID=""
 RUN_LOG_DIR=""
 PIPELINE_LOG=""
 MANIFEST_FILE=""
+PARTB_CASES=(observation_noise process_noise structural_mismatch combined_stress)
 
 show_help() {
   cat <<'EOF'
@@ -18,18 +19,18 @@ Usage:
   ./run_partB_pipeline.sh --help
 
 Description:
-  Runs the Part B structural-mismatch SEIR robustness pipeline:
+  Runs the staged Part B controlled synthetic robustness ladder:
     1. scripts/partB/partB_01_generate_truth.m
     2. scripts/partB/partB_02_run_fixed_forecasts.m
     3. scripts/partB/partB_03_evaluate_models.m
     4. scripts/partB/partB_04_generate_figures.m
 
   Each invocation creates a timestamped run folder under:
-    results/partB/structural_mismatch/logs/<run_id>/
+    results/partB/logs/<run_id>/
   containing a pipeline log, per-stage MATLAB logs, and a manifest file.
 
 Options:
-  --fresh     Clear structural-mismatch Part B artifacts before execution.
+  --fresh     Clear generated Part B data/results before execution.
   --help, -h  Show this help message.
 EOF
 }
@@ -78,19 +79,34 @@ append_manifest() {
     "$details" >> "$MANIFEST_FILE"
 }
 
-remove_partB_contents() {
-  printf 'Clearing existing Part B structural-mismatch artifacts...\n'
-  rm -rf \
-    "$REPO_ROOT/data/partB/structural_mismatch" \
-    "$REPO_ROOT/results/partB/structural_mismatch"
-
+create_partB_directories() {
   mkdir -p \
-    "$REPO_ROOT/data/partB/structural_mismatch" \
-    "$REPO_ROOT/results/partB/structural_mismatch/forecasts" \
-    "$REPO_ROOT/results/partB/structural_mismatch/evaluation" \
-    "$REPO_ROOT/results/partB/structural_mismatch/figures" \
-    "$REPO_ROOT/results/partB/structural_mismatch/tables" \
-    "$REPO_ROOT/results/partB/structural_mismatch/logs"
+    "$REPO_ROOT/data/partB" \
+    "$REPO_ROOT/results/partB/evaluation" \
+    "$REPO_ROOT/results/partB/tables" \
+    "$REPO_ROOT/results/partB/figures" \
+    "$REPO_ROOT/results/partB/logs" \
+    "$REPO_ROOT/results/partB/scores"
+
+  local case_id
+  for case_id in "${PARTB_CASES[@]}"; do
+    mkdir -p \
+      "$REPO_ROOT/data/partB/$case_id" \
+      "$REPO_ROOT/results/partB/$case_id/forecasts" \
+      "$REPO_ROOT/results/partB/$case_id/evaluation" \
+      "$REPO_ROOT/results/partB/$case_id/figures" \
+      "$REPO_ROOT/results/partB/$case_id/tables" \
+      "$REPO_ROOT/results/partB/$case_id/logs"
+  done
+}
+
+remove_partB_contents() {
+  printf 'Clearing generated Part B robustness-ladder artifacts...\n'
+  rm -rf \
+    "$REPO_ROOT/data/partB" \
+    "$REPO_ROOT/results/partB"
+
+  create_partB_directories
 }
 
 run_matlab_script() {
@@ -102,7 +118,7 @@ run_matlab_script() {
   local start_epoch
   local elapsed_secs
 
-  matlab_code="warning('off', 'backtrace'); run('startup.m'); addpath(genpath('third_party')); run('${script_path}');"
+  matlab_code="warning('off', 'backtrace'); startup; run('${script_path}');"
 
   log_status "Starting ${description}"
   append_manifest "$step_name" "started" "$log_path" "$description"
@@ -151,16 +167,18 @@ cd "$REPO_ROOT"
 
 if [[ "$fresh_run" -eq 1 ]]; then
   remove_partB_contents
+else
+  create_partB_directories
 fi
 
 initialize_run_logging
 
 log_status "Run ID: ${RUN_ID}"
-log_status "Running Part B structural-mismatch SEIR robustness pipeline"
+log_status "Running Part B controlled synthetic robustness ladder"
 
 run_matlab_script \
   "partB_01_generate_truth" \
-  "Generating Part B structural-mismatch SEIR truth" \
+  "Generating Part B robustness-ladder truth artifacts" \
   "scripts/partB/partB_01_generate_truth.m"
 
 run_matlab_script \
@@ -170,13 +188,14 @@ run_matlab_script \
 
 run_matlab_script \
   "partB_03_evaluate_models" \
-  "Evaluating Part B structural-mismatch Rt forecasts" \
+  "Evaluating Part B robustness-ladder Rt forecasts" \
   "scripts/partB/partB_03_evaluate_models.m"
 
 run_matlab_script \
   "partB_04_generate_figures" \
-  "Generating Part B structural-mismatch figures" \
+  "Generating Part B case-level and thesis-level figures" \
   "scripts/partB/partB_04_generate_figures.m"
 
-log_status "Part B pipeline completed successfully."
+log_status "Part B robustness-ladder pipeline completed successfully."
+log_status "Thesis-level figures generated under: $REPO_ROOT/results/partB/figures"
 log_status "Run logs saved to: ${RUN_LOG_DIR}"

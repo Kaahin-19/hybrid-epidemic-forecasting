@@ -118,14 +118,20 @@ fprintf('=== Part B Robustness-Ladder Fixed Forecast Execution Complete ===\n\n'
 function paths = local_truth_artifact_paths(cfg)
 %LOCAL_TRUTH_ARTIFACT_PATHS Return active truth artifact paths.
     cases = local_active_cases(cfg);
+    active_scenarios = local_active_scenario_ids(cfg);
     paths = strings(0, 1);
     for i = 1:numel(cases)
         case_dir = fullfile(cfg.output.data_root_dir, char(cases(i).case_id));
-        files = dir(fullfile(case_dir, sprintf('partB_%s_truth_*.mat', ...
+        files = dir(fullfile(case_dir, sprintf('partB_%s_truth_*_rep*.mat', ...
             char(cases(i).case_id))));
         files = local_sort_dir_by_name(files);
+        active_replicates = local_active_replicates(cfg, cases(i));
         for j = 1:numel(files)
-            paths(end + 1, 1) = string(fullfile(files(j).folder, files(j).name)); %#ok<AGROW>
+            artifact_path = string(fullfile(files(j).folder, files(j).name));
+            if local_truth_path_is_active(artifact_path, active_scenarios, ...
+                    active_replicates)
+                paths(end + 1, 1) = artifact_path; %#ok<AGROW>
+            end
         end
     end
 end
@@ -136,6 +142,38 @@ function cases = local_active_cases(cfg)
     if cfg.smoke_test.enabled
         cases = cases(1:min(numel(cases), cfg.smoke_test.num_cases));
     end
+end
+
+function scenario_ids = local_active_scenario_ids(cfg)
+%LOCAL_ACTIVE_SCENARIO_IDS Return active scenario ids.
+    scenarios = cfg.scenarios;
+    if cfg.smoke_test.enabled
+        scenarios = scenarios(1:min(numel(scenarios), cfg.smoke_test.num_scenarios));
+    end
+    scenario_ids = strings(numel(scenarios), 1);
+    for i = 1:numel(scenarios)
+        scenario_ids(i) = string(scenarios(i).id);
+    end
+end
+
+function n = local_active_replicates(cfg, case_cfg)
+%LOCAL_ACTIVE_REPLICATES Return active replicate count for one case.
+    n = max(1, floor(double(case_cfg.num_replicates)));
+    if cfg.smoke_test.enabled
+        n = min(n, cfg.smoke_test.num_replicates);
+    end
+end
+
+function is_active = local_truth_path_is_active(artifact_path, active_scenarios, ...
+    active_replicates)
+%LOCAL_TRUTH_PATH_IS_ACTIVE Check smoke-filtered truth artifact metadata.
+    is_active = false;
+    loaded = load(artifact_path, 'scenario_id', 'replicate_id');
+    if ~isfield(loaded, 'scenario_id') || ~isfield(loaded, 'replicate_id')
+        return;
+    end
+    is_active = any(active_scenarios == string(loaded.scenario_id)) && ...
+        double(loaded.replicate_id) <= active_replicates;
 end
 
 function forecast_dir = local_case_forecast_dir(cfg, case_id)
