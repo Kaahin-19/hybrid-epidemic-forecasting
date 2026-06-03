@@ -4,16 +4,18 @@
 %       Reads the configured WHO daily COVID-19 CSV, extracts the selected
 %       country and date window, constructs a smoothed incidence proxy, and
 %       estimates an empirical Rt signal with a renewal-style ratio. The
-%       compact Part C processed dataset and overview figure are then saved.
+%       compact Part C processed dataset is then saved for forecast,
+%       evaluation, and figure-generation stages.
 %
 %   Workflow:
 %       1. Initialization and WHO CSV schema validation
 %       2. Country/date filtering, case cleaning, smoothing, and Rt estimation
-%       3. Processed artifact and overview figure persistence
+%       3. Processed artifact persistence
 %
-%   See also PARTC_CONFIG.
+%   See also PARTC_CONFIG, PARTC_05_GENERATE_FIGURES.
 
 % A. M. Kaahin 2026-05-18
+% Modified: 2026-06-03
 
 %% 1. Initialization
 clear; close all; clc;
@@ -32,9 +34,6 @@ end
 
 if ~exist(cfg.output.data_processed_dir, 'dir')
     mkdir(cfg.output.data_processed_dir);
-end
-if ~exist(cfg.output.fig_dir, 'dir')
-    mkdir(cfg.output.fig_dir);
 end
 
 fprintf('Reading WHO daily CSV: %s\n', rawPath);
@@ -136,13 +135,16 @@ country_observed = local_observed_country_name(country_name_values, ...
     cfg.input.country_name);
 metadata = local_build_metadata(cfg, rawPath, country_observed, ...
     numel(date), serial_interval_weights);
-
+metadata.processed_date_range = [date(1), date(end)];
+metadata.processed_t_range = [t(1), t(end)];
+metadata.processed_artifact_name = "partC_01_real_data_processed.mat";
+cfg_snapshot = local_cfg_snapshot(cfg);
 processed_table = table(date, t, Rt_est, I_proxy, I_scaled, daily_cases, ...
     renewal_lambda, 'VariableNames', {'date', 't', 'Rt_est', 'I_proxy', ...
     'I_scaled', 'daily_cases', 'renewal_lambda'});
 
 fprintf('Prepared %d WHO-derived real-data observations for %s.\n', ...
-    height(processed_table), char(country_observed));
+    numel(Rt_est), char(country_observed));
 
 %% 3. Persistence
 matPath = fullfile(cfg.output.data_processed_dir, ...
@@ -151,16 +153,11 @@ csvPath = fullfile(cfg.output.data_processed_dir, ...
     'partC_01_real_data_processed.csv');
 
 save(matPath, 'date', 't', 'Rt_est', 'I_proxy', 'I_scaled', 'cfg', ...
-    'rawPath', 'daily_cases', 'renewal_lambda', 'metadata');
+    'cfg_snapshot', 'rawPath', 'daily_cases', 'renewal_lambda', 'metadata');
 writetable(processed_table, csvPath);
 
 fprintf('Processed MAT artifact saved to: %s\n', matPath);
-fprintf('Processed CSV artifact saved to: %s\n', csvPath);
-
-figPath = fullfile(cfg.output.fig_dir, ...
-    'partC_01_real_data_overview.png');
-local_plot_real_data_overview(date, I_proxy, I_scaled, Rt_est, metadata, figPath);
-fprintf('WHO real-data overview figure saved to: %s\n', figPath);
+fprintf('Processed CSV export saved to: %s\n', csvPath);
 
 fprintf('=== Part C WHO Real Data Preparation Complete ===\n\n');
 
@@ -409,39 +406,13 @@ function metadata = local_build_metadata(cfg, rawPath, country_observed, ...
     metadata.serial_interval_weights = serial_interval_weights;
 end
 
-function local_plot_real_data_overview(date, I_proxy, I_scaled, Rt_est, ...
-    metadata, figPath)
-%LOCAL_PLOT_REAL_DATA_OVERVIEW Plot the WHO-derived Rt and case proxy signals.
-    fig = figure('Name', 'Part C WHO Real Data Overview', 'Visible', 'off');
-    fig.Units = 'centimeters';
-    fig.Position(3) = 17.0;
-    fig.Position(4) = 10.5;
-
-    tlo = tiledlayout(fig, 2, 1, 'Padding', 'compact', ...
-        'TileSpacing', 'compact');
-
-    axRt = nexttile(tlo);
-    hold(axRt, 'on');
-    axtoolbar(axRt, {'export'});
-    plot(axRt, date, Rt_est, 'k-', 'LineWidth', 1.6);
-    ylabel(axRt, '$\mathcal{R}_t$ Estimate', 'Interpreter', 'latex');
-    title(axRt, sprintf('Part C Estimated Rt Signal: %s', ...
-        char(metadata.country_name)));
-    grid(axRt, 'on');
-
-    axI = nexttile(tlo);
-    hold(axI, 'on');
-    axtoolbar(axI, {'export'});
-    yyaxis(axI, 'left');
-    plot(axI, date, I_proxy, '-', 'LineWidth', 1.4);
-    ylabel(axI, 'Smoothed Daily Cases');
-    yyaxis(axI, 'right');
-    plot(axI, date, I_scaled, '--', 'LineWidth', 1.4);
-    ylabel(axI, 'Scaled Case Proxy');
-    xlabel(axI, 'Date');
-    title(axI, 'Part C WHO Case Proxy');
-    grid(axI, 'on');
-
-    exportgraphics(fig, figPath, 'Resolution', 300);
-    close(fig);
+function cfg_snapshot = local_cfg_snapshot(cfg)
+%LOCAL_CFG_SNAPSHOT Store relevant preprocessing configuration.
+    cfg_snapshot = struct();
+    cfg_snapshot.experiment_id = cfg.experiment_id;
+    cfg_snapshot.experiment_name = cfg.experiment_name;
+    cfg_snapshot.data_source = cfg.data_source;
+    cfg_snapshot.input = cfg.input;
+    cfg_snapshot.forecast = cfg.forecast;
+    cfg_snapshot.output = cfg.output;
 end

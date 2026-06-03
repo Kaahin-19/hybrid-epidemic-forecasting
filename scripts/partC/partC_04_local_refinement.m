@@ -21,6 +21,7 @@
 %   See also PARTC_CONFIG, FIT_AR_MODEL, FIT_ARX_MODEL.
 
 % A. M. Kaahin 2026-05-19
+% Modified: 2026-06-03
 
 %% 1. Initialization
 clear; close all; clc;
@@ -31,9 +32,12 @@ cfg = partC_config();
 processedPath = fullfile(cfg.output.data_processed_dir, ...
     'partC_01_real_data_processed.mat');
 refinementDir = cfg.refinement.output_dir;
-scoreDir      = cfg.output.score_dir;
+tableDir      = cfg.output.table_dir;
 figDir        = cfg.output.fig_dir;
 wis_alphas    = cfg.forecast.wis_alphas;
+
+% TODO: Migrate this extension to the canonical Part C forecast/evaluation
+% artifact format after the frozen real-data workflow is finalized.
 
 if ~exist(processedPath, 'file')
     error('REFINE:MissingProcessedData', ...
@@ -42,7 +46,7 @@ if ~exist(processedPath, 'file')
 end
 
 if ~exist(refinementDir, 'dir'), mkdir(refinementDir); end
-if ~exist(scoreDir, 'dir'),      mkdir(scoreDir); end
+if ~exist(tableDir, 'dir'),      mkdir(tableDir); end
 if ~exist(figDir, 'dir'),        mkdir(figDir); end
 
 selected_families = local_parse_selected_model_families( ...
@@ -170,13 +174,13 @@ all_window_wis_summary = local_refinement_wis_summary(all_window_scores);
 fprintf('\n  [ Part C All-Window Diagnostic WIS Summary ]\n');
 disp(all_window_wis_summary);
 
-allWindowSummaryFile = fullfile(scoreDir, ...
+allWindowSummaryFile = fullfile(tableDir, ...
     'partC_04_all_window_wis_summary.csv');
 writetable(all_window_wis_summary, allWindowSummaryFile);
 fprintf('All-window diagnostic WIS summary saved to: %s\n', ...
     allWindowSummaryFile);
 
-allWindowDetailFile = fullfile(scoreDir, ...
+allWindowDetailFile = fullfile(tableDir, ...
     'partC_04_all_window_wis_pointwise_details.csv');
 writetable(all_window_pointwise_details, allWindowDetailFile);
 fprintf('All-window diagnostic WIS pointwise details saved to: %s\n', ...
@@ -282,12 +286,12 @@ holdout_wis_summary = holdout_wis_summary(:, ...
 fprintf('\n  [ Part C Holdout WIS Summary ]\n');
 disp(holdout_wis_summary);
 
-holdoutSummaryFile = fullfile(scoreDir, ...
+holdoutSummaryFile = fullfile(tableDir, ...
     'partC_04_holdout_wis_summary.csv');
 writetable(holdout_wis_summary, holdoutSummaryFile);
 fprintf('Holdout WIS summary saved to: %s\n', holdoutSummaryFile);
 
-holdoutDetailFile = fullfile(scoreDir, ...
+holdoutDetailFile = fullfile(tableDir, ...
     'partC_04_holdout_wis_pointwise_details.csv');
 writetable(holdout_pointwise_details, holdoutDetailFile);
 fprintf('Holdout WIS pointwise details saved to: %s\n', holdoutDetailFile);

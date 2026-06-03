@@ -22,6 +22,7 @@ Description:
     1. scripts/partC/partC_01_prepare_real_data.m
     2. scripts/partC/partC_02_run_forecasts.m
     3. scripts/partC/partC_03_evaluate_models.m
+    4. scripts/partC/partC_05_generate_figures.m
 
   Refined mode runs the held-out local recalibration extension:
     1. scripts/partC/partC_01_prepare_real_data.m
@@ -213,6 +214,30 @@ filter_matlab_output() {
       next
     }
 
+    /^Evaluated [0-9]+ forecast windows/ {
+      print
+      fflush()
+      next
+    }
+
+    /^Saved [0-9]+ table files/ {
+      print
+      fflush()
+      next
+    }
+
+    /^Saved [0-9]+ figure file/ {
+      print
+      fflush()
+      next
+    }
+
+    /^Thesis-level Part C figures are under:/ {
+      print
+      fflush()
+      next
+    }
+
     /^  - Fixed model / {
       print
       fflush()
@@ -276,7 +301,7 @@ run_matlab_code() {
   local matlab_pid
   local tail_pid
 
-  matlab_code="warning('off', 'backtrace'); try; run('startup.m'); addpath(genpath('third_party')); ${matlab_body}; catch ME; fprintf(2, '=== MATLAB ERROR ===\\n'); fprintf(2, 'Message: %s\\n', ME.message); fprintf(2, 'Stack trace (most recent first):\\n'); for k = 1:numel(ME.stack); fprintf(2, '  %s:%d in %s\\n', ME.stack(k).file, ME.stack(k).line, ME.stack(k).name); end; rethrow(ME); end"
+  matlab_code="warning('off', 'backtrace'); try; addpath(genpath(fullfile(pwd, 'third_party'))); startup; ${matlab_body}; catch ME; fprintf(2, '=== MATLAB ERROR ===\\n'); fprintf(2, 'Message: %s\\n', ME.message); fprintf(2, 'Stack trace (most recent first):\\n'); for k = 1:numel(ME.stack); fprintf(2, '  %s:%d in %s\\n', ME.stack(k).file, ME.stack(k).line, ME.stack(k).name); end; rethrow(ME); end"
 
   log_status "Stage: Starting ${description}"
   append_manifest "$stage_name" "$mode_name" "$model_name" "started" "$log_path" "$description"
@@ -331,7 +356,8 @@ remove_partC_contents() {
     "$REPO_ROOT/data/partC/raw" \
     "$REPO_ROOT/data/partC/processed" \
     "$REPO_ROOT/results/partC/forecasts" \
-    "$REPO_ROOT/results/partC/scores" \
+    "$REPO_ROOT/results/partC/evaluation" \
+    "$REPO_ROOT/results/partC/tables" \
     "$REPO_ROOT/results/partC/figures" \
     "$REPO_ROOT/results/partC/refinement" \
     "$REPO_ROOT/results/partC/logs"
@@ -444,6 +470,12 @@ if [[ "$mode_name" == "frozen" ]]; then
     "partC_03_evaluate_models" \
     "$mode_name" "AR,ARX" \
     "scripts/partC/partC_03_evaluate_models.m"
+
+  run_matlab_script \
+    "Generating Part C thesis figures" \
+    "partC_05_generate_figures" \
+    "$mode_name" "AR,ARX" \
+    "scripts/partC/partC_05_generate_figures.m"
 else
   refinement_models="$(join_csv "${selected_model_names[@]}")"
   safe_models="$(sanitize_name "$refinement_models")"
