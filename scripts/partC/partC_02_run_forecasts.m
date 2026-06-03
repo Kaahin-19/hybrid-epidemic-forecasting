@@ -1,21 +1,20 @@
-%PARTC_02_RUN_FORECASTS Run fixed shared-dispatcher forecasts on real data.
+%PARTC_02_RUN_FORECASTS Run Part C strategy forecasts on real data.
 %
 %   Description:
-%       Loads the processed WHO-derived Swedish COVID Rt estimate and runs the
-%       frozen Part C AR/None and ARX/I comparison through the shared Part
-%       A/B expanding-window forecast dispatcher. Rt_est is used as both the
-%       model input and evaluation target. I_scaled is used as the ARX/I
-%       covariate. A normalized SIRS state proxy is constructed only for
-%       closed-loop ARX compatibility and is not interpreted as observed
-%       Swedish susceptible-state data.
+%       Loads the processed WHO-derived Swedish COVID Rt estimate and runs
+%       the final Part C real-data transfer/adaptation study. The strategies
+%       are fixed-parameter transfer, online parameter re-estimation, and
+%       local order retuning. AR/None and ARX/I remain the only Part C model
+%       cases.
 %
 %   Workflow:
-%       1. Load processed real-data artifact and fixed Part A configurations.
-%       2. Build Part C forecast entries compatible with shared window data.
-%       3. Run canonical expanding-window forecasts for AR/None and ARX/I.
-%       4. Save canonical Part C forecast artifacts under results/partC.
+%       1. Load processed real-data artifact and Part A-selected orders.
+%       2. Load or produce local order-retuning selections.
+%       3. Run each strategy/model case on post-calibration forecast windows.
+%       4. Save one canonical forecast artifact per strategy/model case.
 %
-%   See also PARTC_CONFIG, PREPARE_WINDOW_DATA, RUN_EXPANDING_WINDOW_FORECAST.
+%   See also PARTC_CONFIG, BUILD_PARTC_FORECAST_ENTRY, ...
+%            RUN_EXPANDING_WINDOW_FORECAST, RUN_PARTC_FIXED_PARAMETER_FORECAST.
 %
 % A. M. Kaahin 2026-05-18
 % Modified: 2026-06-03
@@ -23,7 +22,7 @@
 %% 1. Initialization
 clear; close all; clc;
 
-fprintf('=== Part C Fixed Forecast Execution ===\n');
+fprintf('=== Part C Strategy Forecast Execution ===\n');
 
 cfg = partC_config();
 processedPath = fullfile(cfg.output.data_processed_dir, ...
@@ -38,78 +37,109 @@ if exist(processedPath, 'file') ~= 2
 end
 
 if ~exist(forecastDir, 'dir'), mkdir(forecastDir); end
+if ~exist(cfg.output.evaluation_dir, 'dir'), mkdir(cfg.output.evaluation_dir); end
+if ~exist(cfg.output.table_dir, 'dir'), mkdir(cfg.output.table_dir); end
 
 loaded = load(processedPath);
 local_validate_processed_data(loaded, processedPath);
-local_require_forecast_dependencies(cfg);
+local_require_forecast_dependencies();
 
 date = loaded.date(:);
-Rt_model_input = double(loaded.Rt_est(:));
-
-fixed_configs = local_load_fixed_partA_configs(cfg);
+fixed_configs = load_partC_fixed_configurations(cfg);
+local_order_selection = local_load_or_select_local_orders(cfg, loaded, ...
+    fixed_configs);
 
 fprintf('Experiment: %s\n', cfg.experiment_id);
-fprintf('Loaded %d processed real-data observations.\n', numel(Rt_model_input));
+fprintf('Loaded %d processed real-data observations.\n', numel(loaded.Rt_est));
 
-%% 2. Forecast Loop
-for c = 1:numel(fixed_configs)
-    model_cfg = fixed_configs(c);
-    fprintf('  - Fixed model %s / %s using %s configuration %s\n', ...
-        model_cfg.model_type, model_cfg.exo_mode, ...
-        model_cfg.selected_configuration_source, ...
-        mat2str(model_cfg.selected_configuration));
+%% 2. Strategy Forecast Loop
+for s = 1:numel(cfg.strategies)
+    strategy = cfg.strategies(s);
+    fprintf('Strategy: %s (%s)\n', ...
+        strategy.strategy_name, strategy.strategy_id);
 
-    scenario_entry = local_build_partC_forecast_entry(loaded, cfg, ...
-        model_cfg.exo_mode);
-    forecast_options = local_forecast_options(cfg, model_cfg.exo_mode, ...
-        scenario_entry);
+    for c = 1:numel(fixed_configs)
+        base_cfg = fixed_configs(c);
+        [selected_order_for_strategy, local_order_selection_metadata] = ...
+            local_strategy_order(base_cfg, strategy, local_order_selection);
 
-    forecast_results = run_expanding_window_forecast(scenario_entry, ...
-        model_cfg.model_type, model_cfg.selected_configuration, ...
-        forecast_options);
-    forecast_results = local_attach_forecast_dates(forecast_results, date);
+        fprintf('  - %s / %s using order %s\n', ...
+            base_cfg.model_type, base_cfg.exo_mode, ...
+            mat2str(selected_order_for_strategy));
 
-    if isempty(forecast_results)
-        warning('FORECAST:NoWindows', ...
-            'No valid Part C forecast windows for %s / %s.', ...
-            model_cfg.model_type, model_cfg.exo_mode);
+        scenario_entry = build_partC_forecast_entry(loaded, cfg, ...
+            base_cfg.exo_mode);
+        forecast_options = local_forecast_options(cfg, base_cfg.exo_mode, ...
+            scenario_entry);
+        calibration_end_idx = local_calibration_end_index(scenario_entry, ...
+            cfg, strategy);
+
+        if strategy.uses_fixed_calibration_parameters
+            [forecast_results, parameter_fit_metadata] = ...
+                run_partC_fixed_parameter_forecast(scenario_entry, ...
+                base_cfg.model_type, selected_order_for_strategy, ...
+                forecast_options, calibration_end_idx);
+        else
+            parameter_fit_metadata = struct();
+            evaluation_entry = local_evaluation_entry(scenario_entry, ...
+                calibration_end_idx);
+            forecast_results = run_expanding_window_forecast( ...
+                evaluation_entry, base_cfg.model_type, ...
+                selected_order_for_strategy, forecast_options);
+        end
+
+        forecast_results = local_attach_forecast_dates(forecast_results, date);
+
+        if isempty(forecast_results)
+            warning('FORECAST:NoWindows', ...
+                'No valid Part C forecast windows for %s / %s / %s.', ...
+                strategy.strategy_id, base_cfg.model_type, base_cfg.exo_mode);
+        end
+
+        %% 3. Persist Forecast Artifact
+        experiment_id = string(cfg.experiment_id);
+        experiment_name = string(cfg.experiment_name);
+        data_source = string(cfg.data_source);
+        country_code = string(cfg.input.country_code);
+        country_name = local_country_name(loaded, cfg);
+        date_range = [date(1), date(end)];
+        strategy_id = string(strategy.strategy_id);
+        strategy_name = string(strategy.strategy_name);
+        order_treatment = string(strategy.order_treatment);
+        parameter_treatment = string(strategy.parameter_treatment);
+        model_type = string(base_cfg.model_type);
+        exo_mode = string(base_cfg.exo_mode);
+        selected_configuration = base_cfg.selected_configuration;
+        selected_configuration_source = string(base_cfg.selected_configuration_source);
+        selected_configuration_artifact = string(base_cfg.selected_configuration_artifact);
+        selection_metadata = base_cfg.selection_metadata;
+        source_processed_artifact = string(processedPath);
+        compatibility_metadata = scenario_entry.compatibility_metadata;
+        cfg_snapshot = local_cfg_snapshot(cfg, strategy, forecast_options, ...
+            base_cfg, selected_order_for_strategy, compatibility_metadata, ...
+            calibration_end_idx);
+
+        outName = sprintf('partC_forecast_%s_%s_%s.mat', ...
+            char(strategy_id), char(model_type), char(exo_mode));
+        outPath = fullfile(forecastDir, outName);
+
+        save(outPath, ...
+            'experiment_id', 'experiment_name', 'data_source', ...
+            'country_code', 'country_name', 'date_range', ...
+            'strategy_id', 'strategy_name', 'order_treatment', ...
+            'parameter_treatment', 'model_type', 'exo_mode', ...
+            'selected_configuration', 'selected_configuration_source', ...
+            'selected_configuration_artifact', 'selection_metadata', ...
+            'selected_order_for_strategy', ...
+            'local_order_selection_metadata', 'parameter_fit_metadata', ...
+            'forecast_results', 'source_processed_artifact', ...
+            'compatibility_metadata', 'cfg_snapshot');
+
+        fprintf('      Forecast artifact saved to: %s\n', outPath);
     end
-
-    %% 3. Persist Forecast Artifact
-    experiment_id = string(cfg.experiment_id);
-    experiment_name = string(cfg.experiment_name);
-    data_source = string(cfg.data_source);
-    country_code = string(cfg.input.country_code);
-    country_name = local_country_name(loaded, cfg);
-    date_range = [date(1), date(end)];
-    model_type = string(model_cfg.model_type);
-    exo_mode = string(model_cfg.exo_mode);
-    selected_configuration = model_cfg.selected_configuration;
-    selected_configuration_source = string(model_cfg.selected_configuration_source);
-    selected_configuration_artifact = string(model_cfg.selected_configuration_artifact);
-    selection_metadata = model_cfg.selection_metadata;
-    source_processed_artifact = string(processedPath);
-    compatibility_metadata = scenario_entry.compatibility_metadata;
-    cfg_snapshot = local_cfg_snapshot(cfg, forecast_options, model_cfg, ...
-        compatibility_metadata);
-
-    outName = sprintf('partC_forecast_real_%s_%s.mat', ...
-        char(model_type), char(exo_mode));
-    outPath = fullfile(forecastDir, outName);
-
-    save(outPath, ...
-        'experiment_id', 'experiment_name', 'data_source', ...
-        'country_code', 'country_name', 'date_range', 'model_type', ...
-        'exo_mode', 'selected_configuration', ...
-        'selected_configuration_source', ...
-        'selected_configuration_artifact', 'selection_metadata', ...
-        'forecast_results', 'source_processed_artifact', ...
-        'compatibility_metadata', 'cfg_snapshot');
-
-    fprintf('      Forecast artifact saved to: %s\n', outPath);
 end
 
-fprintf('=== Part C Fixed Forecast Execution Complete ===\n\n');
+fprintf('=== Part C Strategy Forecast Execution Complete ===\n\n');
 
 %% 4. Local Functions
 function local_validate_processed_data(data, processedPath)
@@ -140,14 +170,11 @@ function local_validate_processed_data(data, processedPath)
     end
 end
 
-function local_require_forecast_dependencies(cfg)
+function local_require_forecast_dependencies()
 %LOCAL_REQUIRE_FORECAST_DEPENDENCIES Check user-provided MATLAB dependencies.
-    required = ["iddata", "ar", "arx"];
-    if isfield(cfg, 'intervals') && cfg.intervals.enabled
-        required = [required, "rparse", "urdme"];
-    end
-
+    required = ["iddata", "ar", "arx", "rparse", "urdme"];
     missing = strings(0, 1);
+
     for i = 1:numel(required)
         if local_dependency_missing(required(i))
             missing(end + 1, 1) = required(i); %#ok<AGROW>
@@ -170,209 +197,79 @@ function tf = local_dependency_missing(function_name)
         exist(name, 'builtin') == 0;
 end
 
-function fixed_configs = local_load_fixed_partA_configs(cfg)
-%LOCAL_LOAD_FIXED_PARTA_CONFIGS Load or fall back to frozen Part A selections.
-    cases = cfg.fixed_forecast_cases;
-    fixed_configs = repmat(local_empty_fixed_config(), 1, numel(cases));
-    for i = 1:numel(cases)
-        fixed_configs(i) = local_load_one_fixed_config(cases(i));
-    end
-end
+function selection = local_load_or_select_local_orders(cfg, processed, fixed_configs)
+%LOCAL_LOAD_OR_SELECT_LOCAL_ORDERS Load or create canonical local selections.
+    selection_path = fullfile(cfg.output.evaluation_dir, ...
+        'partC_local_order_selection.mat');
 
-function model_cfg = local_load_one_fixed_config(fixed_case)
-%LOCAL_LOAD_ONE_FIXED_CONFIG Load one Part A selection artifact or fallback.
-    model_type = string(fixed_case.model_type);
-    exo_mode = string(fixed_case.exo_mode);
-    artifact_path = string(fixed_case.selected_configuration_artifact);
-
-    if strlength(artifact_path) > 0 && exist(artifact_path, 'file') == 2
-        selection = load(artifact_path);
-        local_validate_selection_artifact(selection, artifact_path, ...
-            model_type, exo_mode);
-        selected_configuration = reshape(double(selection.selected_configuration), 1, []);
-        source = "partA_model_selection";
-        selection_artifact = artifact_path;
-        fallback_used = false;
-        selection_metadata = local_selection_metadata(selection);
-    else
-        selected_configuration = reshape(double(fixed_case.fallback_configuration), 1, []);
-        source = "partC_config_fallback";
-        selection_artifact = "";
-        fallback_used = true;
-        selection_metadata = struct('selected_index', nan, ...
-            'best_global_wis', nan);
-        warning('FORECAST:PartASelectionFallback', ...
-            ['Missing Part A selection artifact for %s / %s: %s. ', ...
-            'Using documented Part C fallback %s.'], ...
-            model_type, exo_mode, artifact_path, mat2str(selected_configuration));
-    end
-
-    local_validate_configuration_shape(model_type, selected_configuration);
-    selection_metadata.fallback_used = fallback_used;
-
-    model_cfg = local_empty_fixed_config();
-    model_cfg.model_type = model_type;
-    model_cfg.exo_mode = exo_mode;
-    model_cfg.selected_configuration = selected_configuration;
-    model_cfg.selected_configuration_source = source;
-    model_cfg.selected_configuration_artifact = selection_artifact;
-    model_cfg.selection_metadata = selection_metadata;
-end
-
-function local_validate_selection_artifact(selection, artifact_path, model_type, exo_mode)
-%LOCAL_VALIDATE_SELECTION_ARTIFACT Validate a Part A selection artifact.
-    required_fields = {'model_type', 'exo_mode', 'selected_configuration'};
-    if ~all(isfield(selection, required_fields))
-        error('FORECAST:InvalidSelectionArtifact', ...
-            'Selection artifact is missing required fields: %s.', artifact_path);
-    end
-
-    if string(selection.model_type) ~= model_type || string(selection.exo_mode) ~= exo_mode
-        error('FORECAST:SelectionIdentityMismatch', ...
-            'Selection artifact identity mismatch: %s.', artifact_path);
-    end
-end
-
-function local_validate_configuration_shape(model_type, selected_configuration)
-%LOCAL_VALIDATE_CONFIGURATION_SHAPE Check expected parameter counts.
-    switch char(model_type)
-        case 'AR'
-            expected_count = 1;
-        case 'ARX'
-            expected_count = 3;
-        otherwise
-            error('FORECAST:UnsupportedModel', ...
-                'Part C frozen workflow supports only AR and ARX.');
-    end
-
-    if numel(selected_configuration) ~= expected_count
-        error('FORECAST:InvalidSelectedConfiguration', ...
-            'Selected configuration for %s has invalid size: %s.', ...
-            model_type, mat2str(selected_configuration));
-    end
-end
-
-function metadata = local_selection_metadata(selection)
-%LOCAL_SELECTION_METADATA Capture optional Part A selection metadata.
-    metadata = struct();
-    metadata.selected_index = local_numeric_field(selection, 'selected_index');
-    metadata.best_global_wis = local_numeric_field(selection, 'best_global_wis');
-    if isnan(metadata.best_global_wis) && isfield(selection, 'global_mean_wis') && ...
-            isfield(selection, 'selected_index') && ...
-            selection.selected_index >= 1 && ...
-            selection.selected_index <= numel(selection.global_mean_wis)
-        metadata.best_global_wis = double(selection.global_mean_wis(selection.selected_index));
-    end
-end
-
-function value = local_numeric_field(s, field_name)
-%LOCAL_NUMERIC_FIELD Read a scalar numeric field or NaN.
-    value = nan;
-    if isfield(s, field_name) && ~isempty(s.(field_name)) && isnumeric(s.(field_name))
-        raw = double(s.(field_name));
-        if isscalar(raw)
-            value = raw;
+    if exist(selection_path, 'file') == 2
+        loaded_selection = load(selection_path);
+        if isfield(loaded_selection, 'selection')
+            selection = loaded_selection.selection;
+        else
+            selection = loaded_selection;
         end
+        if local_selection_has_dependency_preflight(selection)
+            return;
+        end
+        warning('FORECAST:StaleLocalOrderSelection', ...
+            ['Existing local order selection artifact lacks dependency ' ...
+            'preflight metadata; recomputing it.']);
     end
+
+    fprintf('Selecting local orders now.\n');
+    selection = select_partC_local_orders(cfg, processed, fixed_configs);
+    local_write_local_order_selection_outputs(cfg, selection, selection_path);
 end
 
-function model_cfg = local_empty_fixed_config()
-%LOCAL_EMPTY_FIXED_CONFIG Build a fixed configuration placeholder.
-    model_cfg = struct( ...
-        'model_type', "", ...
-        'exo_mode', "", ...
-        'selected_configuration', [], ...
-        'selected_configuration_source', "", ...
-        'selected_configuration_artifact', "", ...
-        'selection_metadata', struct());
+function local_write_local_order_selection_outputs(cfg, selection, selection_path)
+%LOCAL_WRITE_LOCAL_ORDER_SELECTION_OUTPUTS Persist local order selection.
+    selection_artifact = string(selection_path);
+    selection.cfg_snapshot.dependency_preflight_completed = true;
+    selected_local_configs = selection.selected_local_configs;
+    local_order_grid_scores = selection.local_order_grid_scores;
+    selected_local_orders = selection.selected_local_orders;
+    cfg_snapshot = selection.cfg_snapshot;
+    save(selection_path, 'selection', 'selection_artifact', ...
+        'selected_local_configs', 'local_order_grid_scores', ...
+        'selected_local_orders', 'cfg_snapshot');
+
+    writetable(local_order_grid_scores, fullfile(cfg.output.table_dir, ...
+        'partC_local_order_grid_scores.csv'));
+    writetable(selected_local_orders, fullfile(cfg.output.table_dir, ...
+        'partC_selected_local_orders.csv'));
 end
 
-function scenario_entry = local_build_partC_forecast_entry(loaded, cfg, exo_mode)
-%LOCAL_BUILD_PARTC_FORECAST_ENTRY Build generic forecast input for real data.
-    horizon = cfg.forecast.horizon;
-    Rt_model_input = double(loaded.Rt_est(:));
-    Rt_evaluation_target = Rt_model_input;
-    tspan = double(loaded.t(:));
-    I_scaled = double(loaded.I_scaled(:));
+function tf = local_selection_has_dependency_preflight(selection)
+%LOCAL_SELECTION_HAS_DEPENDENCY_PREFLIGHT Check valid selection provenance.
+    tf = isfield(selection, 'cfg_snapshot') && ...
+        isfield(selection.cfg_snapshot, 'dependency_preflight_completed') && ...
+        logical(selection.cfg_snapshot.dependency_preflight_completed);
+end
 
-    [S_model_input, I_model_input, U_true, compatibility_metadata] = ...
-        local_compatibility_state(I_scaled, cfg, exo_mode);
+function [selected_order, local_metadata] = local_strategy_order( ...
+    base_cfg, strategy, local_order_selection)
+%LOCAL_STRATEGY_ORDER Resolve the order used by one strategy/model case.
+    selected_order = base_cfg.selected_configuration;
+    local_metadata = struct();
 
-    scenario_inputs = struct( ...
-        'Rt_true', Rt_model_input, ...
-        'tspan', tspan, ...
-        'S_true', S_model_input, ...
-        'I_true', I_model_input, ...
-        'U_true', U_true);
+    if ~strategy.uses_local_order_grid
+        return;
+    end
 
-    max_window_day = tspan(end) - horizon;
-    windows = cfg.forecast.min_window : cfg.forecast.step_size : max_window_day;
-
-    if isempty(windows)
-        window_data = struct([]);
-    else
-        window_data = repmat(prepare_window_data(scenario_inputs, windows(1), ...
-            horizon, cfg.sirs_projection), numel(windows), 1);
-        for w = 1:numel(windows)
-            window_data(w) = prepare_window_data(scenario_inputs, windows(w), ...
-                horizon, cfg.sirs_projection);
-            if window_data(w).is_valid_window
-                idx = window_data(w).horizon_indices;
-                if max(idx) <= numel(Rt_evaluation_target)
-                    window_data(w).truth_Rt = Rt_evaluation_target(idx);
-                else
-                    window_data(w).is_valid_window = false;
-                end
-            end
+    local_configs = local_order_selection.selected_local_configs;
+    for i = 1:numel(local_configs)
+        if string(local_configs(i).model_type) == string(base_cfg.model_type) && ...
+                string(local_configs(i).exo_mode) == string(base_cfg.exo_mode)
+            selected_order = local_configs(i).selected_order_for_strategy;
+            local_metadata = local_configs(i).local_order_selection_metadata;
+            return;
         end
     end
 
-    scenario_entry = struct();
-    scenario_entry.scenario_id = "real";
-    scenario_entry.scenario_name = "WHO-derived Sweden Rt estimate";
-    scenario_entry.num_exo = size(U_true, 2);
-    scenario_entry.windows = windows(:);
-    scenario_entry.window_data = window_data;
-    scenario_entry.Rt_true = Rt_evaluation_target;
-    scenario_entry.tspan = tspan;
-    scenario_entry.compatibility_metadata = compatibility_metadata;
-end
-
-function [S_model_input, I_model_input, U_true, metadata] = ...
-    local_compatibility_state(I_scaled, cfg, exo_mode)
-%LOCAL_COMPATIBILITY_STATE Build the explicit Part C ARX state proxy.
-    I_scaled = double(I_scaled(:));
-    pop_size = double(cfg.sirs_projection.pop_size);
-    max_fraction = 1 - (1 / pop_size);
-    I_fraction = min(max(I_scaled, 0), max_fraction);
-    I_model_input = I_fraction * pop_size;
-    S_model_input = pop_size - I_model_input;
-    S_model_input = max(S_model_input, 1);
-    total_si = S_model_input + I_model_input;
-    S_model_input = S_model_input .* (pop_size ./ total_si);
-    I_model_input = I_model_input .* (pop_size ./ total_si);
-
-    switch char(exo_mode)
-        case 'None'
-            U_true = [];
-        case 'I'
-            U_true = I_scaled;
-        otherwise
-            error('FORECAST:UnsupportedExoMode', ...
-                'Part C frozen workflow supports only None and I exogenous modes.');
-    end
-
-    metadata = struct();
-    metadata.Rt_model_input = "Rt_est";
-    metadata.Rt_evaluation_target = "Rt_est";
-    metadata.I_model_input = "I_scaled mapped to a normalized compatibility state";
-    metadata.S_model_input = ...
-        "Neutral complement to I_scaled for closed-loop ARX compatibility only";
-    metadata.U_true = "I_scaled for ARX/I; empty for AR/None";
-    metadata.pop_size = pop_size;
-    metadata.max_state_fraction = max_fraction;
-    metadata.biological_interpretation = ...
-        "The Part C S/I state is not an observed Swedish susceptible trajectory.";
+    error('FORECAST:MissingLocalOrderSelection', ...
+        'Missing local order selection for %s / %s.', ...
+        base_cfg.model_type, base_cfg.exo_mode);
 end
 
 function forecast_options = local_forecast_options(cfg, exo_mode, scenario_entry)
@@ -386,6 +283,40 @@ function forecast_options = local_forecast_options(cfg, exo_mode, scenario_entry
         'num_exo', scenario_entry.num_exo, ...
         'intervals', cfg.intervals, ...
         'scenario_id', scenario_entry.scenario_id);
+end
+
+function evaluation_entry = local_evaluation_entry(scenario_entry, calibration_end_idx)
+%LOCAL_EVALUATION_ENTRY Keep post-calibration forecast windows only.
+    window_data = scenario_entry.window_data;
+    keep_idx = false(numel(window_data), 1);
+    for i = 1:numel(window_data)
+        keep_idx(i) = window_data(i).is_valid_window && ...
+            window_data(i).window_day_idx >= calibration_end_idx;
+    end
+
+    if ~any(keep_idx)
+        error('FORECAST:NoEvaluationWindows', ...
+            'No post-calibration Part C forecast windows are available.');
+    end
+
+    evaluation_entry = scenario_entry;
+    evaluation_entry.window_data = window_data(keep_idx);
+    evaluation_entry.windows = [evaluation_entry.window_data.window_day]';
+end
+
+function calibration_end_idx = local_calibration_end_index(scenario_entry, cfg, strategy)
+%LOCAL_CALIBRATION_END_INDEX Convert strategy calibration fraction to index.
+    n = numel(scenario_entry.Rt_true);
+    calibration_fraction = double(strategy.calibration_fraction);
+    calibration_end_idx = floor(n * calibration_fraction);
+    min_idx = cfg.forecast.min_window + cfg.forecast.horizon + 1;
+    max_idx = n - cfg.forecast.horizon;
+    calibration_end_idx = min(max(calibration_end_idx, min_idx), max_idx);
+
+    if calibration_end_idx <= min_idx || calibration_end_idx >= n
+        error('FORECAST:InvalidCalibrationSplit', ...
+            'Part C calibration split leaves no usable evaluation span.');
+    end
 end
 
 function forecast_results = local_attach_forecast_dates(forecast_results, date)
@@ -417,21 +348,26 @@ function country_name = local_country_name(loaded, cfg)
     end
 end
 
-function cfg_snapshot = local_cfg_snapshot(cfg, forecast_options, model_cfg, ...
-    compatibility_metadata)
-%LOCAL_CFG_SNAPSHOT Store relevant fixed-forecast configuration.
+function cfg_snapshot = local_cfg_snapshot(cfg, strategy, forecast_options, ...
+    model_cfg, selected_order_for_strategy, compatibility_metadata, ...
+    calibration_end_idx)
+%LOCAL_CFG_SNAPSHOT Store relevant strategy-forecast configuration.
     cfg_snapshot = struct();
     cfg_snapshot.experiment_id = cfg.experiment_id;
     cfg_snapshot.experiment_name = cfg.experiment_name;
     cfg_snapshot.data_source = cfg.data_source;
+    cfg_snapshot.strategy = strategy;
     cfg_snapshot.forecast = cfg.forecast;
     cfg_snapshot.intervals = forecast_options.intervals;
     cfg_snapshot.sirs_projection = cfg.sirs_projection;
     cfg_snapshot.compatibility_metadata = compatibility_metadata;
     cfg_snapshot.fixed_forecast_cases = cfg.fixed_forecast_cases;
+    cfg_snapshot.local_order_grid = cfg.local_order_grid;
     cfg_snapshot.model_type = model_cfg.model_type;
     cfg_snapshot.exo_mode = model_cfg.exo_mode;
     cfg_snapshot.selected_configuration_source = ...
         model_cfg.selected_configuration_source;
+    cfg_snapshot.selected_order_for_strategy = selected_order_for_strategy;
+    cfg_snapshot.calibration_end_idx = calibration_end_idx;
     cfg_snapshot.sim_seed = cfg.sim.seed;
 end
