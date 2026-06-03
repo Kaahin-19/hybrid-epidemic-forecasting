@@ -79,7 +79,7 @@ rt_spec = build_plot_spec( ...
     'size_cm', [17.0, 10.5]);
 rt_panels = local_rt_scenario_panels(truth_scenarios, rt_spec);
 fig = plot_multi_panel_figure(rt_panels, rt_spec);
-generated_figures = [generated_figures; export_figure(fig, rt_spec)]; %#ok<AGROW>
+generated_figures = [generated_figures; export_figure(fig, rt_spec)];
 close(fig);
 
 %% 4. Model WIS Distribution
@@ -99,7 +99,7 @@ performance_spec = build_plot_spec( ...
     'size_cm', [17.0, 9.5]);
 performance_panel = local_model_wis_distribution_panel(window_scores);
 fig = plot_single_panel(performance_panel, performance_spec);
-generated_figures = [generated_figures; export_figure(fig, performance_spec)]; %#ok<AGROW>
+generated_figures = [generated_figures; export_figure(fig, performance_spec)];
 close(fig);
 
 %% 5. Horizon-Wise WIS
@@ -123,7 +123,7 @@ horizon_spec = build_plot_spec( ...
     'size_cm', [17.0, 9.0]);
 horizon_panel = local_horizon_wis_panel(table_cache.horizon_summary, horizon_spec);
 fig = plot_single_panel(horizon_panel, horizon_spec);
-generated_figures = [generated_figures; export_figure(fig, horizon_spec)]; %#ok<AGROW>
+generated_figures = [generated_figures; export_figure(fig, horizon_spec)];
 close(fig);
 
 %% 6. Coverage Summary
@@ -150,7 +150,7 @@ coverage_spec = build_plot_spec( ...
     'size_cm', [16.0, 10.0]);
 coverage_panel = local_coverage_panel(table_cache.interval_summary, coverage_spec);
 fig = plot_single_panel(coverage_panel, coverage_spec);
-generated_figures = [generated_figures; export_figure(fig, coverage_spec)]; %#ok<AGROW>
+generated_figures = [generated_figures; export_figure(fig, coverage_spec)];
 close(fig);
 
 %% 7. Forecast Comparisons for Every Global Configuration
@@ -429,7 +429,7 @@ function panel = local_coverage_panel(interval_summary, plot_spec)
         reference_series.style = struct('Color', [0, 0, 0], ...
             'LineStyle', '--', 'LineWidth', 1.0);
         reference_series.legend_rank = numel(series) + 1;
-        series(end + 1, 1) = reference_series; %#ok<AGROW>
+        series(end + 1, 1) = reference_series;
     end
 
     panel.series = series;
@@ -478,7 +478,7 @@ function [panel, plot_spec] = local_forecast_comparison_panel( ...
     truth_series.style = struct('Color', [0, 0, 0], 'LineStyle', '-', ...
         'LineWidth', 1.4, 'Marker', 'none');
     truth_series.legend_rank = 1;
-    series(end + 1, 1) = truth_series; %#ok<AGROW>
+    series(end + 1, 1) = truth_series;
 
     valid_median = isfinite(target_days) & isfinite(median_forecast);
     if any(valid_median)
@@ -491,7 +491,7 @@ function [panel, plot_spec] = local_forecast_comparison_panel( ...
         median_series.style = struct('Color', [0, 0, 1], 'LineStyle', '--', ...
             'LineWidth', 1.3, 'Marker', 'o', 'MarkerSize', 3.2);
         median_series.legend_rank = 2;
-        series(end + 1, 1) = median_series; %#ok<AGROW>
+        series(end + 1, 1) = median_series;
     end
 
     if ~isfield(plot_spec, 'x_limits') || isempty(plot_spec.x_limits)

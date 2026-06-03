@@ -118,7 +118,7 @@ run_matlab_script() {
   local start_epoch
   local elapsed_secs
 
-  matlab_code="warning('off', 'backtrace'); startup; run('${script_path}');"
+  matlab_code="warning('off', 'backtrace'); startup; addpath(genpath('${REPO_ROOT}/third_party')); run('${script_path}');"
 
   log_status "Starting ${description}"
   append_manifest "$step_name" "started" "$log_path" "$description"

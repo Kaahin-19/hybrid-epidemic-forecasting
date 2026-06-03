@@ -72,7 +72,7 @@ exo_mode = EXO_MODE;
 for i = 1:numel(scenario_data)
     scenario_entry = scenario_data(i);
     scenario_id   = char(scenario_entry.scenario_id);
-    scenario_name = scenario_entry.scenario_name; %#ok<NASGU>
+    scenario_name = scenario_entry.scenario_name;
     fprintf('  - Forecasting Scenario: %s...\n', scenario_id);
 
     forecast_results = run_expanding_window_forecast(scenario_entry, ...
