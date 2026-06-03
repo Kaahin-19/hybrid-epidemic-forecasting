@@ -15,7 +15,7 @@ addpath(fullfile(repo_root, 'config'));
 addpath(genpath(fullfile(repo_root, 'scripts')));
 local_rmpath_tree(fullfile(repo_root, 'src', 'build'));
 addpath(local_genpath_excluding(fullfile(repo_root, 'src'), {'build'}));
-addpath(genpath(fullfile(repo_root, 'third_party')));
+
 
 %% 2. Directory Initialization
 required_dirs = {'data/partA', ...
