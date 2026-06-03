@@ -1,0 +1,2 @@
+ExperimentID,ExperimentName,DataSource,CountryCode,CountryName,MinWindow,StepSize,ForecastHorizon,WISAlphas,NumForecastArtifacts,NumWindowScores,NumPointwiseScores
+partC_real_data_validation,Part C Swedish COVID real-data validation,WHO-derived COVID-19 daily cases,SE,Sweden,49,7,14,"0.05, 0.1, 0.2, 0.5",2,272,3808
