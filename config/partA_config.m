@@ -144,17 +144,15 @@ cfg.run.exo_mode   = local_resolve_run_configuration(cfg.run.model_type, cfg.run
 cfg.forecast.min_window = 49;
 cfg.forecast.step_size  = 7;
 cfg.forecast.horizon    = 14;
-cfg.forecast.max_ar_order  = 10;
-cfg.forecast.max_exo_order = 4;
-cfg.forecast.max_exo_delay = 4;
-cfg.forecast.max_state_order = 6;
+cfg.forecast.max_ar_order  = 2;
+cfg.forecast.max_exo_order = 2;
+cfg.forecast.max_exo_delay = 2;
+cfg.forecast.max_state_order = 2;
 cfg.forecast.state_diff_orders = 0;
 cfg.forecast.wis_alphas    = [0.05, 0.10, 0.20, 0.50];
 cfg.forecast.plot_alphas   = [0.10, 0.50];
 cfg.forecast.plot_lead_time = 7;
 
-% Cross-stage run snapshot saved into selection/forecast artifacts and used to
-% verify that downstream stages share the configuration that produced them.
 cfg.run_snapshot = struct( ...
     'min_window', cfg.forecast.min_window, ...
     'step_size',  cfg.forecast.step_size, ...
