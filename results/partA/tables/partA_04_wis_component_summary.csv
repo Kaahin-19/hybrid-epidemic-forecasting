@@ -1,0 +1,2 @@
+Model,ExoMode,NumPoints,MeanRawScaleWIS,MeanMedianComponent,MeanDispersionComponent,MeanUnderpredictionComponent,MeanOverpredictionComponent,MedianComponentShare,DispersionComponentShare,UnderpredictionComponentShare,OverpredictionComponentShare
+ARX,I,2464,0.024561484751081,0.00367110539328877,0.00234354805107334,0.00764530590880446,0.0109015253979145,0.149465939477751,0.0954155693283238,0.311272139542296,0.44384635165163
