@@ -60,6 +60,8 @@ cfg_snapshot = cfg.run_snapshot;
 model_type = MODEL_TYPE;
 exo_mode = EXO_MODE;
 
+fprintf('Saving forecast artifacts to: %s\n', saveDir);
+
 for i = 1:numel(scenario_data)
     scenario_entry = scenario_data(i);
     scenario_id   = char(scenario_entry.scenario_id);
@@ -82,7 +84,7 @@ for i = 1:numel(scenario_data)
         'model_type', 'exo_mode', ...
         'scenario_id', 'scenario_name', ...
         'selected_configuration', 'forecast_results', 'cfg_snapshot');
-    fprintf('Forecast artifact saved to: %s\n', outName);
+    fprintf('    saved %s\n', [file_prefix, '.mat']);
 end
 
 fprintf('=== Forecast Pipeline Complete ===\n\n');
