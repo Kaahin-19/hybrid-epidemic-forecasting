@@ -17,7 +17,7 @@ function [candidate_grid, parameter_names] = generate_candidate_grid(cfg, model_
 %       candidate_grid  - Numeric matrix with one candidate per row.
 %       parameter_names - Cell array of parameter labels matching columns.
 %
-%   See also PARTA_CONFIG, PARTA_02_SELECT_GLOBAL_MODEL_CONFIGURATIONS.
+%   See also PARTA_CONFIG, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS.
 %
 % A. M. Kaahin 2026-05-31
 

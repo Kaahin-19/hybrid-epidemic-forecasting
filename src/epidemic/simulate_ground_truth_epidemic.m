@@ -23,7 +23,7 @@ function truth = simulate_ground_truth_epidemic(model_type, tspan, Rt_true, mode
 %       truth - Structure containing model states, Rt_true, beta_curve,
 %               model metadata, solver, seed, and simulation options.
 %
-%   See also RPARSE, URDME, PARTA_01_GENERATE_SYNTHETIC_TRUTH.
+%   See also RPARSE, URDME, PARTA_01_GENERATE_TRUTH.
 %
 % A. M. Kaahin 2026-05-31
 % Modified: 2026-06-03

@@ -1,4 +1,4 @@
-%PARTA_02_SELECT_GLOBAL_MODEL_CONFIGURATIONS Select global Part A model configurations.
+%PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS Select global Part A model hyperparameters.
 %
 %   Description:
 %       Evaluates the active model family and exogenous-input setting across

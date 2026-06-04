@@ -17,7 +17,7 @@
 %
 %   See also PARTA_CONFIG, BUILD_FORECASTING_DATASET, ...
 %            RUN_EXPANDING_WINDOW_FORECAST, RUN_MODEL_FORECAST, ...
-%            PARTA_02_SELECT_GLOBAL_MODEL_CONFIGURATIONS, PARTA_04_EVALUATE_FORECASTS.
+%            PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_04_EVALUATE_FORECASTS.
 %
 % A. M. Kaahin 2026-02-19
 % Modified: 2026-06-04
@@ -99,7 +99,7 @@ artifact_path = fullfile(selection_dir, [file_prefix, '.mat']);
 if ~exist(artifact_path, 'file')
     error('FORECAST:MissingSelectionArtifact', ...
         ['Missing global model-selection artifact: %s. ', ...
-        'Run partA_02_select_global_model_configurations.m first.'], artifact_path);
+        'Run partA_02_select_global_hyperparameters.m first.'], artifact_path);
 end
 
 selection = load(artifact_path);

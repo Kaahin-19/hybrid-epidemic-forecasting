@@ -20,7 +20,7 @@ function Rt = generate_rt_signal(tspan, scenario, params)
 %   Outputs:
 %       Rt - Effective reproduction-number values evaluated at tspan.
 %
-%   See also PARTA_CONFIG, PARTA_01_GENERATE_SYNTHETIC_TRUTH.
+%   See also PARTA_CONFIG, PARTA_01_GENERATE_TRUTH.
 %
 % A. M. Kaahin 2026-05-31
 

@@ -17,9 +17,9 @@ Usage:
 
 Description:
   Runs the Part A pipeline in the following order:
-    1. scripts/partA/partA_01_generate_synthetic_truth.m
+    1. scripts/partA/partA_01_generate_truth.m
     2. For each selected valid Model/Exo combination:
-         - scripts/partA/partA_02_select_global_model_configurations.m
+         - scripts/partA/partA_02_select_global_hyperparameters.m
          - scripts/partA/partA_03_run_forecasts.m
     3. scripts/partA/partA_04_evaluate_forecasts.m
     4. scripts/partA/partA_05_generate_figures.m
@@ -461,8 +461,8 @@ if [[ "${#skipped_combos[@]}" -gt 0 ]]; then
 fi
 
 run_matlab_scripts "Generating synthetic ground truth" \
-  "truth" "-" "-" "$RUN_LOG_DIR/partA_01_generate_synthetic_truth.log" \
-  "scripts/partA/partA_01_generate_synthetic_truth.m"
+  "truth" "-" "-" "$RUN_LOG_DIR/partA_01_generate_truth.log" \
+  "scripts/partA/partA_01_generate_truth.m"
 
 for idx in "${!combo_models[@]}"; do
   model_name="${combo_models[$idx]}"
@@ -476,7 +476,7 @@ for idx in "${!combo_models[@]}"; do
     "Selecting model configuration for ${model_name} | ${exo_name}" \
     "model_selection" "$model_name" "$exo_name" \
     "$RUN_LOG_DIR/${safe_model}_${safe_exo}_model_selection.log" \
-    "fprintf('Stage: Starting model-configuration selection\\n'); run('scripts/partA/partA_02_select_global_model_configurations.m'); fprintf('Stage: Model-configuration selection complete\\n');"
+    "fprintf('Stage: Starting model-configuration selection\\n'); run('scripts/partA/partA_02_select_global_hyperparameters.m'); fprintf('Stage: Model-configuration selection complete\\n');"
 
   PARTA_MODEL_TYPE="$model_name" \
   PARTA_EXO_MODE="$exo_name" \

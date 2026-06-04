@@ -32,8 +32,8 @@ The implementation is divided into three major phases as outlined in the project
 * ``config/partC_config.m``: Reuses the Part A forecast settings while defining WHO COVID-19 input paths, the Sweden default date window, case preprocessing settings, Part C output paths, fixed AR/None versus ARX/I configurations, and local-refinement grids.
 
 ### Execution Scripts
-* ``scripts/partA/partA_01_generate_synthetic_truth.m``: Simulates the SIRS epidemic model to generate and save one synthetic ground-truth ``.mat`` artifact for each Part A scenario.
-* ``scripts/partA/partA_02_select_global_model_configurations.m``: Selects one global model configuration per model family and exogenous-input setting using cross-scenario WIS and the active ``cfg.run`` configuration.
+* ``scripts/partA/partA_01_generate_truth.m``: Simulates the SIRS epidemic model to generate and save one synthetic ground-truth ``.mat`` artifact for each Part A scenario.
+* ``scripts/partA/partA_02_select_global_hyperparameters.m``: Selects one global model configuration per model family and exogenous-input setting using cross-scenario WIS and the active ``cfg.run`` configuration.
 * ``scripts/partA/partA_03_run_forecasts.m``: Acts as a unified switchboard to execute expanding-window probabilistic forecasts using the selected global hyperparameter configuration, causal effective-``R_t`` SIRS covariate projection, and the active ``cfg.run`` configuration.
 * ``scripts/partA/partA_04_evaluate_forecasts.m``: Aggregates all forecast artifacts, computes WIS, WIS components, RMSE, MAE, coverage, calibration, and interval-width metrics, saves the evaluation ``.mat`` artifact under ``results/partA/evaluation/``, and writes table outputs under ``results/partA/tables/``.
 * ``scripts/partA/partA_05_generate_figures.m``: Loads saved truth, model-selection, forecast, evaluation, and table artifacts, then writes final Part A figures under ``results/partA/figures/``.
