@@ -27,7 +27,6 @@ cfg = partA_config();
 MODEL_TYPE = char(cfg.run.model_type);
 EXO_MODE   = char(cfg.run.exo_mode);
 
-EXO_MODE = local_validate_configuration(MODEL_TYPE, EXO_MODE);
 fprintf('Configuration: Model = %s | Exogenous Mode = %s\n', MODEL_TYPE, EXO_MODE);
 
 selectionDir = cfg.output.model_selection_dir;
@@ -75,15 +74,7 @@ exo_mode = EXO_MODE;
 wis_alphas = cfg.forecast.wis_alphas;
 aggregation_mode = 'equal_scenario_mean_wis';
 failure_policy = 'inf_on_invalid';
-cfg_snapshot = struct( ...
-    'min_window', cfg.forecast.min_window, ...
-    'step_size', cfg.forecast.step_size, ...
-    'horizon', cfg.forecast.horizon, ...
-    'wis_alphas', cfg.forecast.wis_alphas, ...
-    'pop_size', cfg.sirs.pop_size, ...
-    'gamma', cfg.sirs.gamma, ...
-    'xi', cfg.sirs.xi, ...
-    'sim_seed', cfg.sim.seed);
+cfg_snapshot = cfg.run_snapshot;
 
 file_prefix = sprintf('partA_02_global_hyperparameters_%s_%s', MODEL_TYPE, EXO_MODE);
 artifact_path = fullfile(selectionDir, [file_prefix, '.mat']);
@@ -101,19 +92,6 @@ fprintf('Global model-selection artifact saved to: %s\n', artifact_path);
 fprintf('=== Global Model-Configuration Selection Complete ===\n\n');
 
 %% 5. Local Functions
-function valid_exo_mode = local_validate_configuration(model_type, exo_mode)
-%LOCAL_VALIDATE_CONFIGURATION Resolve logical conflicts in run configuration.
-valid_exo_mode = exo_mode;
-if strcmp(model_type, 'AR') && ~strcmp(exo_mode, 'None')
-    warning('CFG:ArExo', 'AR is strictly autoregressive. Forcing EXO_MODE to None.');
-    valid_exo_mode = 'None';
-elseif strcmp(model_type, 'ARX') && strcmp(exo_mode, 'None')
-    error('CFG:ArxExo', 'ARX requires exogenous covariates. Set EXO_MODE to S, I, or Both.');
-elseif ~any(strcmp(model_type, {'AR', 'ARX', 'N4SID', 'SSEST'}))
-    error('CFG:UnknownModel', 'Unsupported MODEL_TYPE: %s', model_type);
-end
-end
-
 function local_shutdown_parallel_pool()
 %LOCAL_SHUTDOWN_PARALLEL_POOL Close the local parallel pool before MATLAB exits.
 pool = gcp('nocreate');

@@ -138,20 +138,32 @@ cfg.sim.seed = 1234;
 cfg.run.model_type = string(local_env_or_default('PARTA_MODEL_TYPE', 'ARX'));
 cfg.run.exo_mode   = string(local_env_or_default('PARTA_EXO_MODE', 'I'));
 cfg.run.num_workers = 4;
-local_validate_run_configuration(cfg.run.model_type, cfg.run.exo_mode);
+cfg.run.exo_mode   = local_resolve_run_configuration(cfg.run.model_type, cfg.run.exo_mode);
 
 %% 8. Forecasting Hyperparameters
 cfg.forecast.min_window = 49;
 cfg.forecast.step_size  = 7;
 cfg.forecast.horizon    = 14;
-cfg.forecast.max_ar_order  = 10;
-cfg.forecast.max_exo_order = 4;
-cfg.forecast.max_exo_delay = 4;
-cfg.forecast.max_state_order = 6;
+cfg.forecast.max_ar_order  = 2;   % TEST-ONLY (orig 10) — revert before real run
+cfg.forecast.max_exo_order = 2;   % TEST-ONLY (orig 4)  — revert before real run
+cfg.forecast.max_exo_delay = 2;   % TEST-ONLY (orig 4)  — revert before real run
+cfg.forecast.max_state_order = 2; % TEST-ONLY (orig 6)  — revert before real run
 cfg.forecast.state_diff_orders = 0;
 cfg.forecast.wis_alphas    = [0.05, 0.10, 0.20, 0.50];
 cfg.forecast.plot_alphas   = [0.10, 0.50];
 cfg.forecast.plot_lead_time = 7;
+
+% Cross-stage run snapshot saved into selection/forecast artifacts and used to
+% verify that downstream stages share the configuration that produced them.
+cfg.run_snapshot = struct( ...
+    'min_window', cfg.forecast.min_window, ...
+    'step_size',  cfg.forecast.step_size, ...
+    'horizon',    cfg.forecast.horizon, ...
+    'wis_alphas', cfg.forecast.wis_alphas, ...
+    'pop_size',   cfg.sirs.pop_size, ...
+    'gamma',      cfg.sirs.gamma, ...
+    'xi',         cfg.sirs.xi, ...
+    'sim_seed',   cfg.sim.seed);
 
 %% 9. Predictive Interval Settings
 cfg.intervals.enabled = true;
@@ -186,7 +198,7 @@ if isempty(value)
 end
 end
 
-function local_validate_run_configuration(model_type, exo_mode)
+function exo_mode = local_resolve_run_configuration(model_type, exo_mode)
 valid_models = ["AR", "ARX", "N4SID", "SSEST"];
 valid_exo_modes = ["None", "S", "I", "Both"];
 
@@ -198,5 +210,13 @@ end
 if ~any(strcmp(exo_mode, valid_exo_modes))
     error('CFG:InvalidRunExo', ...
         'Unsupported PARTA_EXO_MODE value: %s.', string(exo_mode));
+end
+
+if model_type == "AR" && exo_mode ~= "None"
+    warning('CFG:ArExo', 'AR is strictly autoregressive. Forcing EXO_MODE to None.');
+    exo_mode = "None";
+elseif model_type == "ARX" && exo_mode == "None"
+    error('CFG:ArxExo', ...
+        'ARX requires exogenous covariates. Set EXO_MODE to S, I, or Both.');
 end
 end

@@ -20,7 +20,7 @@
 %            PARTA_02_SELECT_GLOBAL_MODEL_CONFIGURATIONS, PARTA_04_EVALUATE_FORECASTS.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-06-02
+% Modified: 2026-06-04
 
 %% 1. Initialization
 clear; close all; clc;
@@ -31,7 +31,6 @@ cfg = partA_config();
 MODEL_TYPE = char(cfg.run.model_type);
 EXO_MODE   = char(cfg.run.exo_mode);
 
-EXO_MODE = local_validate_configuration(MODEL_TYPE, EXO_MODE);
 fprintf('Configuration: Model = %s | Exogenous Mode = %s\n', MODEL_TYPE, EXO_MODE);
 
 saveDir = cfg.output.forecast_dir;
@@ -56,15 +55,7 @@ forecast_options = struct( ...
     'num_exo', 0, ...
     'intervals', cfg.intervals);
 
-cfg_snapshot = struct( ...
-    'min_window', cfg.forecast.min_window, ...
-    'step_size', cfg.forecast.step_size, ...
-    'horizon', cfg.forecast.horizon, ...
-    'wis_alphas', cfg.forecast.wis_alphas, ...
-    'pop_size', cfg.sirs.pop_size, ...
-    'gamma', cfg.sirs.gamma, ...
-    'xi', cfg.sirs.xi, ...
-    'sim_seed', cfg.sim.seed);
+cfg_snapshot = cfg.run_snapshot;
 
 model_type = MODEL_TYPE;
 exo_mode = EXO_MODE;
@@ -97,110 +88,30 @@ end
 fprintf('=== Forecast Pipeline Complete ===\n\n');
 
 %% 5. Local Functions
-function valid_exo_mode = local_validate_configuration(model_type, exo_mode)
-%LOCAL_VALIDATE_CONFIGURATION Resolve logical conflicts in run configuration.
-    valid_exo_mode = exo_mode;
-    if strcmp(model_type, 'AR') && ~strcmp(exo_mode, 'None')
-        warning('CFG:ArExo', 'AR is strictly autoregressive. Forcing EXO_MODE to None.');
-        valid_exo_mode = 'None';
-    elseif strcmp(model_type, 'ARX') && strcmp(exo_mode, 'None')
-        error('CFG:ArxExo', 'ARX requires exogenous covariates. Set EXO_MODE to S, I, or Both.');
-    elseif ~any(strcmp(model_type, {'AR', 'ARX', 'N4SID', 'SSEST'}))
-        error('CFG:UnknownModel', 'Unsupported MODEL_TYPE: %s', model_type);
-    end
-end
-
 function selected_configuration = local_load_selected_configuration( ...
     selection_dir, model_type, exo_mode, cfg)
-%LOCAL_LOAD_SELECTED_CONFIGURATION Load and validate the selection artifact.
-    expected_num_params = local_expected_param_count(model_type);
+%LOCAL_LOAD_SELECTED_CONFIGURATION Load and screen the partA_02 selection artifact.
+file_prefix = sprintf('partA_02_global_hyperparameters_%s_%s', model_type, exo_mode);
+artifact_path = fullfile(selection_dir, [file_prefix, '.mat']);
 
-    file_prefix = sprintf('partA_02_global_hyperparameters_%s_%s', model_type, exo_mode);
-    artifact_path = fullfile(selection_dir, [file_prefix, '.mat']);
-
-    if ~exist(artifact_path, 'file')
-        error('FORECAST:MissingSelectionArtifact', ...
-            ['Missing global model-selection artifact: %s. ', ...
-            'Run partA_02_select_global_model_configurations.m first.'], artifact_path);
-    end
-
-    selection = load(artifact_path);
-    local_validate_selection_artifact(selection, artifact_path, ...
-        model_type, exo_mode, cfg, expected_num_params);
-    selected_configuration = local_extract_selected_configuration(selection);
+if ~exist(artifact_path, 'file')
+    error('FORECAST:MissingSelectionArtifact', ...
+        ['Missing global model-selection artifact: %s. ', ...
+        'Run partA_02_select_global_model_configurations.m first.'], artifact_path);
 end
 
-function local_validate_selection_artifact(selection, artifact_path, ...
-    model_type, exo_mode, cfg, expected_num_params)
-%LOCAL_VALIDATE_SELECTION_ARTIFACT Validate a loaded model-selection artifact.
-    required_fields = {'model_type', 'exo_mode', 'cfg_snapshot'};
-    if ~all(isfield(selection, required_fields))
-        error('FORECAST:InvalidSelectionArtifact', ...
-            'Model-selection artifact is missing required fields: %s.', artifact_path);
-    end
+selection = load(artifact_path);
 
-    if ~isfield(selection, 'selected_configuration')
-        error('FORECAST:InvalidSelectionArtifact', ...
-            'Model-selection artifact is missing selected_configuration: %s.', ...
-            artifact_path);
-    end
-
-    if ~strcmp(string(selection.model_type), string(model_type))
-        error('FORECAST:SelectionModelMismatch', ...
-            'Selection artifact model mismatch. Expected %s, found %s.', ...
-            model_type, string(selection.model_type));
-    end
-
-    if ~strcmp(string(selection.exo_mode), string(exo_mode))
-        error('FORECAST:SelectionExoMismatch', ...
-            'Selection artifact exogenous-mode mismatch. Expected %s, found %s.', ...
-            exo_mode, string(selection.exo_mode));
-    end
-
-    selected_configuration = local_extract_selected_configuration(selection);
-    if numel(selected_configuration) ~= expected_num_params
-        error('FORECAST:SelectionDimensionMismatch', ...
-            'Selected configuration dimensionality is invalid in artifact: %s.', ...
-            artifact_path);
-    end
-
-    snapshot = selection.cfg_snapshot;
-    if ~isfield(snapshot, 'min_window') || snapshot.min_window ~= cfg.forecast.min_window || ...
-            ~isfield(snapshot, 'step_size') || snapshot.step_size ~= cfg.forecast.step_size || ...
-            ~isfield(snapshot, 'horizon') || snapshot.horizon ~= cfg.forecast.horizon || ...
-            ~isfield(snapshot, 'wis_alphas') || ...
-            ~isequal(double(snapshot.wis_alphas(:)), double(cfg.forecast.wis_alphas(:))) || ...
-            ~isfield(snapshot, 'pop_size') || snapshot.pop_size ~= cfg.sirs.pop_size || ...
-            ~isfield(snapshot, 'gamma') || snapshot.gamma ~= cfg.sirs.gamma || ...
-            ~isfield(snapshot, 'xi') || snapshot.xi ~= cfg.sirs.xi || ...
-            ~isfield(snapshot, 'sim_seed') || snapshot.sim_seed ~= cfg.sim.seed
-        error('FORECAST:SelectionConfigMismatch', ...
-            'Model-selection artifact is incompatible with the current configuration: %s.', ...
-            artifact_path);
-    end
-
-    if isfield(selection, 'wis_alphas') && ...
-            ~isequal(double(selection.wis_alphas(:)), double(cfg.forecast.wis_alphas(:)))
-        error('FORECAST:SelectionAlphaMismatch', ...
-            'Model-selection artifact uses different WIS alphas: %s.', artifact_path);
-    end
+if ~isfield(selection, 'selected_configuration') || isempty(selection.selected_configuration)
+    error('FORECAST:InvalidSelectionArtifact', ...
+        'Selection artifact has no selected_configuration: %s.', artifact_path);
 end
 
-function selected_configuration = local_extract_selected_configuration(selection)
-%LOCAL_EXTRACT_SELECTED_CONFIGURATION Read the canonical selected configuration.
-    selected_configuration = reshape(double(selection.selected_configuration), 1, []);
+if ~isfield(selection, 'cfg_snapshot') || ~isequal(selection.cfg_snapshot, cfg.run_snapshot)
+    error('FORECAST:SelectionConfigMismatch', ...
+        'Selection artifact is incompatible with the current configuration: %s.', ...
+        artifact_path);
 end
 
-function expected_num_params = local_expected_param_count(model_type)
-%LOCAL_EXPECTED_PARAM_COUNT Return the parameter count for a model family.
-    switch model_type
-        case 'AR'
-            expected_num_params = 1;
-        case 'ARX'
-            expected_num_params = 3;
-        case {'N4SID', 'SSEST'}
-            expected_num_params = 2;
-        otherwise
-            error('CFG:UnknownModel', 'Unsupported MODEL_TYPE: %s', model_type);
-    end
+selected_configuration = reshape(double(selection.selected_configuration), 1, []);
 end

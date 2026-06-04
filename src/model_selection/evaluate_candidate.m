@@ -46,13 +46,13 @@ function scenario_scores = evaluate_candidate(model_type, candidate_configuratio
                 model_type, params, window_entry, evaluation_options, ...
                 data.num_exo, scenario_key, w);
 
-            if ~local_is_valid_forecast(Rt_pred, out_alphas, Rt_lower, Rt_upper, ...
+            if ~is_valid_forecast(Rt_pred, out_alphas, Rt_lower, Rt_upper, ...
                     window_entry.truth_Rt)
                 window_wis(w) = inf;
                 continue;
             end
 
-            pointwise_wis = local_compute_wis(window_entry.truth_Rt, Rt_pred, ...
+            pointwise_wis = compute_wis(window_entry.truth_Rt, Rt_pred, ...
                 Rt_lower, Rt_upper, out_alphas);
             if any(~isfinite(pointwise_wis))
                 window_wis(w) = inf;
@@ -159,45 +159,3 @@ function [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = local_fit_candidate( 
     end
 end
 
-function is_valid = local_is_valid_forecast(Rt_pred, out_alphas, Rt_lower, Rt_upper, truth_Rt)
-%LOCAL_IS_VALID_FORECAST Verify forecast output dimensions and finiteness.
-    out_alphas = reshape(double(out_alphas), 1, []);
-    Rt_pred = double(Rt_pred(:));
-    Rt_lower = double(Rt_lower);
-    Rt_upper = double(Rt_upper);
-    truth_Rt = double(truth_Rt(:));
-
-    is_valid = ...
-        ~isempty(out_alphas) && ...
-        numel(Rt_pred) == numel(truth_Rt) && ...
-        size(Rt_lower, 1) == numel(truth_Rt) && ...
-        size(Rt_upper, 1) == numel(truth_Rt) && ...
-        size(Rt_lower, 2) == numel(out_alphas) && ...
-        size(Rt_upper, 2) == numel(out_alphas) && ...
-        all(isfinite(Rt_pred)) && ...
-        all(isfinite(Rt_lower(:))) && ...
-        all(isfinite(Rt_upper(:))) && ...
-        all(Rt_lower(:) <= Rt_upper(:));
-end
-
-function wis = local_compute_wis(truth_Rt, median_Rt, lower_Rt, upper_Rt, alphas)
-%LOCAL_COMPUTE_WIS Compute pointwise weighted interval score values.
-    truth_Rt = double(truth_Rt(:));
-    median_Rt = double(median_Rt(:));
-    lower_Rt = double(lower_Rt);
-    upper_Rt = double(upper_Rt);
-    alphas = reshape(double(alphas), 1, []);
-
-    num_intervals = numel(alphas);
-    wis = 0.5 * abs(truth_Rt - median_Rt);
-
-    for j = 1:num_intervals
-        alpha = alphas(j);
-        interval_score = (upper_Rt(:, j) - lower_Rt(:, j)) ...
-            + (2 / alpha) * max(lower_Rt(:, j) - truth_Rt, 0) ...
-            + (2 / alpha) * max(truth_Rt - upper_Rt(:, j), 0);
-        wis = wis + (alpha / 2) * interval_score;
-    end
-
-    wis = wis / (num_intervals + 0.5);
-end
