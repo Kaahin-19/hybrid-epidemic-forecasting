@@ -30,172 +30,173 @@ function cfg = partA_config()
 % A. M. Kaahin 2026-02-18
 % Modified: 2026-06-04
 
-    cfg = struct();
+cfg = struct();
 
-    %% 1. Time Grid
-    cfg.time.T_end = 365;
-    cfg.time.dt    = 1;
-    cfg.time.tspan = 0:cfg.time.dt:cfg.time.T_end;
+%% 1. Time Grid
+cfg.time.T_end = 365;
+cfg.time.dt    = 1;
+cfg.time.tspan = 0:cfg.time.dt:cfg.time.T_end;
 
-    %% 2. Effective-Reproduction-Number Admissibility Constraints
-    cfg.Rt.bounds = [0.5, 2.0];
+%% 2. Effective-Reproduction-Number Admissibility Constraints
+cfg.Rt.bounds = [0.5, 2.0];
 
-    %% 3. Scenario Slots
-    cfg.scenarios = repmat(struct( ...
-        "id", "", ...
-        "name", "", ...
-        "signal_type", "", ...
-        "params", struct(), ...
-        "init", struct() ...
+%% 3. Scenario Slots
+cfg.scenarios = repmat(struct( ...
+    "id", "", ...
+    "name", "", ...
+    "signal_type", "", ...
+    "params", struct(), ...
+    "init", struct() ...
     ), 1, 4);
 
-    T_end      = cfg.time.T_end;
-    wave_space = T_end / 5;
-    wave_denom = (wave_space^2) / 8;
+T_end      = cfg.time.T_end;
+wave_space = T_end / 5;
+wave_denom = (wave_space^2) / 8;
 
-    % Slot A1
-    cfg.scenarios(1).id        = "A1"; 
-    cfg.scenarios(1).name      = "Seasonal Forcing";
-    cfg.scenarios(1).signal_type = "seasonal";
-    cfg.scenarios(1).params    = struct( ...
-        "center", 1.2, ...
-        "amp",    0.3, ...
-        "period", T_end / 2 ... 
+% Slot A1
+cfg.scenarios(1).id        = "A1";
+cfg.scenarios(1).name      = "Seasonal Forcing";
+cfg.scenarios(1).signal_type = "seasonal";
+cfg.scenarios(1).params    = struct( ...
+    "center", 1.2, ...
+    "amp",    0.3, ...
+    "period", T_end / 2 ...
     );
 
-    % Slot A2
-    cfg.scenarios(2).id        = "A2";
-    cfg.scenarios(2).name      = "Policy Intervention";
-    cfg.scenarios(2).signal_type = "sigmoid";
-    cfg.scenarios(2).params    = struct( ...
-        "high", 1.8, ...
-        "low",  0.7, ...
-        "t0",   T_end / 3, ...
-        "k",    0.5 ...
+% Slot A2
+cfg.scenarios(2).id        = "A2";
+cfg.scenarios(2).name      = "Policy Intervention";
+cfg.scenarios(2).signal_type = "sigmoid";
+cfg.scenarios(2).params    = struct( ...
+    "high", 1.8, ...
+    "low",  0.7, ...
+    "t0",   T_end / 3, ...
+    "k",    0.5 ...
     );
-    cfg.scenarios(2).init      = struct("I0", 5000);
+cfg.scenarios(2).init      = struct("I0", 5000);
 
-    % Slot A3
-    cfg.scenarios(3).id        = "A3";
-    cfg.scenarios(3).name      = "Damping Resurgence"; 
-    cfg.scenarios(3).signal_type = "multi_wave";
-    cfg.scenarios(3).params    = struct( ...
-        "baseline", 0.6, ...  
-        "mu1",      1 * wave_space, ...
-        "A1",       1.100, ... 
-        "mu2",      2 * wave_space, ...
-        "A2",       1.045, ... 
-        "mu3",      3 * wave_space, ...
-        "A3",       0.993, ... 
-        "mu4",      4 * wave_space, ...
-        "A4",       0.943, ... 
-        "denom",    wave_denom ...
+% Slot A3
+cfg.scenarios(3).id        = "A3";
+cfg.scenarios(3).name      = "Damping Resurgence";
+cfg.scenarios(3).signal_type = "multi_wave";
+cfg.scenarios(3).params    = struct( ...
+    "baseline", 0.6, ...
+    "mu1",      1 * wave_space, ...
+    "A1",       1.100, ...
+    "mu2",      2 * wave_space, ...
+    "A2",       1.045, ...
+    "mu3",      3 * wave_space, ...
+    "A3",       0.993, ...
+    "mu4",      4 * wave_space, ...
+    "A4",       0.943, ...
+    "denom",    wave_denom ...
     );
 
-    % Slot A4
-    cfg.scenarios(4).id        = "A4";
-    cfg.scenarios(4).name      = "Amplifying Resurgence";
-    cfg.scenarios(4).signal_type = "multi_wave";
-    cfg.scenarios(4).params    = struct( ...
-        "baseline", 0.6, ...  
-        "mu1",      1 * wave_space, ...
-        "A1",       0.943, ... 
-        "mu2",      2 * wave_space, ...
-        "A2",       0.993, ... 
-        "mu3",      3 * wave_space, ...
-        "A3",       1.045, ... 
-        "mu4",      4 * wave_space, ...
-        "A4",       1.100, ...
-        "denom",    wave_denom ...
+% Slot A4
+cfg.scenarios(4).id        = "A4";
+cfg.scenarios(4).name      = "Amplifying Resurgence";
+cfg.scenarios(4).signal_type = "multi_wave";
+cfg.scenarios(4).params    = struct( ...
+    "baseline", 0.6, ...
+    "mu1",      1 * wave_space, ...
+    "A1",       0.943, ...
+    "mu2",      2 * wave_space, ...
+    "A2",       0.993, ...
+    "mu3",      3 * wave_space, ...
+    "A3",       1.045, ...
+    "mu4",      4 * wave_space, ...
+    "A4",       1.100, ...
+    "denom",    wave_denom ...
     );
-    cfg.scenarios(4).init      = struct("R0_init", 40000);
+cfg.scenarios(4).init      = struct("R0_init", 40000);
 
-    %% 4. Simulation Parameters (SIRS)
-    cfg.sirs.gamma    = 1/7;
-    cfg.sirs.xi       = 1/90;
-    cfg.sirs.pop_size = 100000;
-    cfg.sirs.I0       = 500;
-    cfg.sirs.R0_init  = 0;
+%% 4. Simulation Parameters (SIRS)
+cfg.sirs.gamma    = 1/7;
+cfg.sirs.xi       = 1/90;
+cfg.sirs.pop_size = 100000;
+cfg.sirs.I0       = 500;
+cfg.sirs.R0_init  = 0;
 
-    for s = 1:numel(cfg.scenarios)
-        model_params = cfg.sirs;
-        overrides = cfg.scenarios(s).init;
-        for field = string(fieldnames(overrides))'
-            model_params.(field) = overrides.(field);
-        end
-        cfg.scenarios(s).model_params = model_params;
+for s = 1:numel(cfg.scenarios)
+    model_params = cfg.sirs;
+    overrides = cfg.scenarios(s).init;
+    for field = string(fieldnames(overrides))'
+        model_params.(field) = overrides.(field);
     end
+    cfg.scenarios(s).model_params = model_params;
+end
 
-    %% 5. Ground-Truth Simulation
-    cfg.truth.model_type = "SIRS";
-    cfg.truth.solver     = "uds";
-    cfg.truth.compile    = true;
+%% 5. Ground-Truth Simulation
+cfg.truth.model_type = "SIRS";
+cfg.truth.solver     = "uds";
+cfg.truth.compile    = true;
 
-    %% 6. Reproducibility
-    cfg.sim.seed = 1234;
+%% 6. Reproducibility
+cfg.sim.seed = 1234;
 
-    %% 7. Active Run Configuration
-    cfg.run.model_type = string(local_env_or_default('PARTA_MODEL_TYPE', 'ARX'));
-    cfg.run.exo_mode   = string(local_env_or_default('PARTA_EXO_MODE', 'I'));
-    local_validate_run_configuration(cfg.run.model_type, cfg.run.exo_mode);
+%% 7. Active Run Configuration
+cfg.run.model_type = string(local_env_or_default('PARTA_MODEL_TYPE', 'ARX'));
+cfg.run.exo_mode   = string(local_env_or_default('PARTA_EXO_MODE', 'I'));
+cfg.run.num_workers = 4;
+local_validate_run_configuration(cfg.run.model_type, cfg.run.exo_mode);
 
-    %% 8. Forecasting Hyperparameters
-    cfg.forecast.min_window = 49;
-    cfg.forecast.step_size  = 7;
-    cfg.forecast.horizon    = 14;
-    cfg.forecast.max_ar_order  = 10;
-    cfg.forecast.max_exo_order = 4;
-    cfg.forecast.max_exo_delay = 4;
-    cfg.forecast.max_state_order = 6;
-    cfg.forecast.state_diff_orders = 0;
-    cfg.forecast.wis_alphas    = [0.05, 0.10, 0.20, 0.50];
-    cfg.forecast.plot_alphas   = [0.10, 0.50];
-    cfg.forecast.plot_lead_time = 7;
+%% 8. Forecasting Hyperparameters
+cfg.forecast.min_window = 49;
+cfg.forecast.step_size  = 7;
+cfg.forecast.horizon    = 14;
+cfg.forecast.max_ar_order  = 10;
+cfg.forecast.max_exo_order = 4;
+cfg.forecast.max_exo_delay = 4;
+cfg.forecast.max_state_order = 6;
+cfg.forecast.state_diff_orders = 0;
+cfg.forecast.wis_alphas    = [0.05, 0.10, 0.20, 0.50];
+cfg.forecast.plot_alphas   = [0.10, 0.50];
+cfg.forecast.plot_lead_time = 7;
 
-    %% 9. Predictive Interval Settings
-    cfg.intervals.enabled = true;
-    cfg.intervals.seed = 1234;
-    cfg.intervals.selection_method = "closed_loop_residual_bootstrap";
-    cfg.intervals.final_method = "closed_loop_monte_carlo";
-    cfg.intervals.selection_num_draws = 40;
-    cfg.intervals.final_num_draws = 80;
-    cfg.intervals.min_residual_std = 1e-6;
-    cfg.intervals.use_common_random_numbers = true;
-    cfg.intervals.include_epidemic_seed_variation = true;
+%% 9. Predictive Interval Settings
+cfg.intervals.enabled = true;
+cfg.intervals.seed = 1234;
+cfg.intervals.selection_method = "closed_loop_residual_bootstrap";
+cfg.intervals.final_method = "closed_loop_monte_carlo";
+cfg.intervals.selection_num_draws = 40;
+cfg.intervals.final_num_draws = 80;
+cfg.intervals.min_residual_std = 1e-6;
+cfg.intervals.use_common_random_numbers = true;
+cfg.intervals.include_epidemic_seed_variation = true;
 
-    %% 10. Output Artifacts
-    thisDir  = fileparts(mfilename('fullpath'));
-    repoRoot = fileparts(thisDir);
+%% 10. Output Artifacts
+thisDir  = fileparts(mfilename('fullpath'));
+repoRoot = fileparts(thisDir);
 
-    cfg.output.data_dir     = fullfile(repoRoot, "data", "partA");
-    cfg.output.root_dir     = fullfile(repoRoot, "results", "partA");
-    cfg.output.model_selection_dir = fullfile(cfg.output.root_dir, "model_selection");
-    cfg.output.forecast_dir = fullfile(cfg.output.root_dir, "forecasts");
-    cfg.output.score_dir    = fullfile(cfg.output.root_dir, "evaluation");
-    cfg.output.fig_dir      = fullfile(cfg.output.root_dir, "figures");
-    cfg.output.table_dir    = fullfile(cfg.output.root_dir, "tables");
-    cfg.output.log_dir      = fullfile(cfg.output.root_dir, "logs");
+cfg.output.data_dir     = fullfile(repoRoot, "data", "partA");
+cfg.output.root_dir     = fullfile(repoRoot, "results", "partA");
+cfg.output.model_selection_dir = fullfile(cfg.output.root_dir, "model_selection");
+cfg.output.forecast_dir = fullfile(cfg.output.root_dir, "forecasts");
+cfg.output.score_dir    = fullfile(cfg.output.root_dir, "evaluation");
+cfg.output.fig_dir      = fullfile(cfg.output.root_dir, "figures");
+cfg.output.table_dir    = fullfile(cfg.output.root_dir, "tables");
+cfg.output.log_dir      = fullfile(cfg.output.root_dir, "logs");
 
 end
 
 function value = local_env_or_default(env_name, default_value)
-    value = getenv(env_name);
-    if isempty(value)
-        value = default_value;
-    end
+value = getenv(env_name);
+if isempty(value)
+    value = default_value;
+end
 end
 
 function local_validate_run_configuration(model_type, exo_mode)
-    valid_models = ["AR", "ARX", "N4SID", "SSEST"];
-    valid_exo_modes = ["None", "S", "I", "Both"];
+valid_models = ["AR", "ARX", "N4SID", "SSEST"];
+valid_exo_modes = ["None", "S", "I", "Both"];
 
-    if ~any(strcmp(model_type, valid_models))
-        error('CFG:InvalidRunModel', ...
-            'Unsupported PARTA_MODEL_TYPE value: %s.', string(model_type));
-    end
+if ~any(strcmp(model_type, valid_models))
+    error('CFG:InvalidRunModel', ...
+        'Unsupported PARTA_MODEL_TYPE value: %s.', string(model_type));
+end
 
-    if ~any(strcmp(exo_mode, valid_exo_modes))
-        error('CFG:InvalidRunExo', ...
-            'Unsupported PARTA_EXO_MODE value: %s.', string(exo_mode));
-    end
+if ~any(strcmp(exo_mode, valid_exo_modes))
+    error('CFG:InvalidRunExo', ...
+        'Unsupported PARTA_EXO_MODE value: %s.', string(exo_mode));
+end
 end
