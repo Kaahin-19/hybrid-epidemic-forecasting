@@ -61,9 +61,6 @@ function summaries = summarize_forecast_scores(window_scores, pointwise_scores, 
     summaries.interval_summary = local_summarize_interval_scores( ...
         interval_scores, local_strategy_group_vars(interval_scores, ...
         {'Model', 'ExoMode', 'Alpha'}));
-    summaries.calibration_summary = local_summarize_interval_scores( ...
-        interval_scores, local_strategy_group_vars(interval_scores, ...
-        {'Model', 'ExoMode', 'Alpha'}));
     summaries.scenario_calibration_summary = local_summarize_interval_scores( ...
         interval_scores, local_strategy_group_vars(interval_scores, ...
         {'Scenario', 'ScenarioName', 'Model', 'ExoMode', 'Alpha'}));
@@ -93,14 +90,11 @@ function summary = local_summarize_window_scores(scores, group_vars)
     summary.NumValidWindows = splitapply(@local_count_valid, scores.IsValid, G);
     summary.NumFiniteWIS = splitapply(@local_count_finite, scores.WindowWIS, G);
     summary.MeanWIS = splitapply(@local_mean_finite, scores.WindowWIS, G);
-    summary.MeanRawScaleWIS = splitapply(@local_mean_finite, ...
-        local_numeric_column(scores, 'WindowRawScaleWIS', 'WindowWIS'), G);
     summary.MedianWIS = splitapply(@local_median_finite, scores.WindowWIS, G);
     summary.StdWIS = splitapply(@local_std_finite, scores.WindowWIS, G);
     summary.MinWIS = splitapply(@local_min_finite, scores.WindowWIS, G);
     summary.MaxWIS = splitapply(@local_max_finite, scores.WindowWIS, G);
     summary.MeanRMSE = splitapply(@local_mean_finite, scores.WindowRMSE, G);
-    summary.MeanMedianPointForecastRMSE = summary.MeanRMSE;
     summary.MeanMAE = splitapply(@local_mean_finite, ...
         local_numeric_column(scores, 'WindowMAE'), G);
     summary.MeanWISMedianComponent = splitapply(@local_mean_finite, ...
@@ -130,20 +124,16 @@ function summary = local_summarize_pointwise_scores(scores, group_vars)
     [G, keys] = findgroups(scores(:, group_vars));
     summary = keys;
     wis = local_numeric_column(scores, 'WIS');
-    raw_scale_wis = local_numeric_column(scores, 'RawScaleWIS', 'WIS');
     squared_error = local_numeric_column(scores, 'SquaredError');
     absolute_error = local_numeric_column(scores, 'AbsoluteError');
 
     summary.NumPoints = splitapply(@numel, wis, G);
     summary.NumFiniteWIS = splitapply(@local_count_finite, wis, G);
     summary.MeanWIS = splitapply(@local_mean_finite, wis, G);
-    summary.MeanRawScaleWIS = splitapply(@local_mean_finite, raw_scale_wis, G);
     summary.MedianWIS = splitapply(@local_median_finite, wis, G);
     summary.StdWIS = splitapply(@local_std_finite, wis, G);
     summary.RMSE = sqrt(splitapply(@local_mean_finite, squared_error, G));
-    summary.MedianPointForecastRMSE = summary.RMSE;
     summary.MAE = splitapply(@local_mean_finite, absolute_error, G);
-    summary.MeanAbsoluteError = summary.MAE;
     summary.MeanWISMedianComponent = splitapply(@local_mean_finite, ...
         local_numeric_column(scores, 'WISMedianComponent'), G);
     summary.MeanWISDispersionComponent = splitapply(@local_mean_finite, ...

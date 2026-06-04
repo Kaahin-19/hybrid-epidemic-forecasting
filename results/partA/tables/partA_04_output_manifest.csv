@@ -1,0 +1,17 @@
+File,Contents
+partA_04_window_scores.csv,Per-window scores (one row per forecast origin)
+partA_04_pointwise_scores.csv,Per-horizon scores (one row per horizon step)
+partA_04_interval_scores.csv,Per-horizon/alpha interval scores
+partA_04_scenario_summary.csv,Window scores by Scenario+Model+ExoMode
+partA_04_scenario_performance_summary.csv,Pointwise scores by Scenario
+partA_04_horizon_summary.csv,Pointwise scores by Model+ExoMode+Horizon
+partA_04_horizon_stratification_summary.csv,Pointwise scores by Horizon
+partA_04_scenario_horizon_summary.csv,Pointwise scores by Scenario+Model+ExoMode+Horizon
+partA_04_model_summary.csv,Window scores by Model+ExoMode
+partA_04_exo_mode_summary.csv,Window scores by ExoMode
+partA_04_interval_summary.csv,Interval scores by Model+ExoMode+Alpha
+partA_04_scenario_calibration_summary.csv,Interval scores by Scenario+Model+ExoMode+Alpha
+partA_04_wis_component_summary.csv,WIS decomposition shares by Model+ExoMode
+partA_04_selection_summary.csv,Selected configuration per Model+ExoMode
+partA_04_missing_selection_artifacts.csv,Selection artifacts that were missing
+partA_04_evaluation_settings.csv,Forecast horizon / window / alpha settings
