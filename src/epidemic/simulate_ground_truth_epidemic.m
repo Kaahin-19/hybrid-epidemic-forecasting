@@ -60,7 +60,7 @@ end
 %% 3. Local Functions - SIRS
 
 function truth = local_simulate_sirs(tspan, Rt_true, params, options, build_dir)
-
+%LOCAL_SIMULATE_SIRS Simulate effective-Rt-driven SIRS truth.
     U = zeros(3, numel(tspan));
 
     U(:, 1) = [
@@ -101,7 +101,7 @@ end
 
 function umod = local_advance_sirs_interval(tspan, state0, beta_value, params, ...
     solver, compile_requested, seed, build_dir)
-
+%LOCAL_ADVANCE_SIRS_INTERVAL Advance one SIRS interval with URDME.
     caller_rng_state = rng;
     rng_cleanup = onCleanup(@() rng(caller_rng_state));
 
@@ -174,7 +174,7 @@ end
 %% 4. Local Functions - SEIR
 
 function truth = local_simulate_seir(tspan, Rt_true, params, options, build_dir)
-
+%LOCAL_SIMULATE_SEIR Simulate effective-Rt-driven SEIR truth.
     U = zeros(4, numel(tspan));
 
     U(:, 1) = [
@@ -217,7 +217,7 @@ end
 
 function umod = local_advance_seir_interval(tspan, state0, beta_value, params, ...
     solver, compile_requested, seed, build_dir)
-
+%LOCAL_ADVANCE_SEIR_INTERVAL Advance one SEIR interval with URDME.
     caller_rng_state = rng;
     rng_cleanup = onCleanup(@() rng(caller_rng_state));
 
@@ -290,7 +290,7 @@ end
 %% 5. Local Functions - Shared Calculations
 
 function beta = local_beta_from_effective_rt(Rt_value, susceptible, gamma, pop_size)
-
+%LOCAL_BETA_FROM_EFFECTIVE_RT Convert effective Rt to mass-action beta.
     if susceptible <= 0 || ~isfinite(susceptible)
         error('EPIDEMIC:InvalidSusceptibleState', ...
             'Cannot compute beta from a nonpositive or nonfinite susceptible state.');
@@ -305,7 +305,7 @@ function beta = local_beta_from_effective_rt(Rt_value, susceptible, gamma, pop_s
 end
 
 function seed = local_interval_seed(base_seed, interval_idx, solver)
-
+%LOCAL_INTERVAL_SEED Derive a per-interval RNG seed.
     seed = base_seed;
 
     if strcmp(solver, 'ssa')
