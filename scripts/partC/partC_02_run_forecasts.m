@@ -9,7 +9,7 @@
 %
 %   Workflow:
 %       1. Load processed real-data artifact and Part A-selected orders.
-%       2. Load or produce local order-retuning selections.
+%       2. Load local order-retuning selections from Part C 04.
 %       3. Run each strategy/model case on post-calibration forecast windows.
 %       4. Save one canonical forecast artifact per strategy/model case.
 %
@@ -17,7 +17,7 @@
 %            RUN_EXPANDING_WINDOW_FORECAST, RUN_PARTC_FIXED_PARAMETER_FORECAST.
 %
 % A. M. Kaahin 2026-05-18
-% Modified: 2026-06-03
+% Modified: 2026-06-05
 
 %% 1. Initialization
 clear; close all; clc;
@@ -42,12 +42,11 @@ if ~exist(cfg.output.table_dir, 'dir'), mkdir(cfg.output.table_dir); end
 
 loaded = load(processedPath);
 local_validate_processed_data(loaded, processedPath);
-local_require_forecast_dependencies();
+require_partC_forecast_dependencies("FORECAST:MissingExternalDependency");
 
 date = loaded.date(:);
 fixed_configs = load_partC_fixed_configurations(cfg);
-local_order_selection = local_load_or_select_local_orders(cfg, loaded, ...
-    fixed_configs);
+local_order_selection = local_load_local_order_selection(cfg);
 
 fprintf('Experiment: %s\n', cfg.experiment_id);
 fprintf('Loaded %d processed real-data observations.\n', numel(loaded.Rt_est));
@@ -170,81 +169,30 @@ function local_validate_processed_data(data, processedPath)
     end
 end
 
-function local_require_forecast_dependencies()
-%LOCAL_REQUIRE_FORECAST_DEPENDENCIES Check user-provided MATLAB dependencies.
-    required = ["iddata", "ar", "arx", "rparse", "urdme"];
-    missing = strings(0, 1);
-
-    for i = 1:numel(required)
-        if local_dependency_missing(required(i))
-            missing(end + 1, 1) = required(i); %#ok<AGROW>
-        end
-    end
-
-    if ~isempty(missing)
-        error('FORECAST:MissingExternalDependency', ...
-            ['Missing required MATLAB/URDME dependency function(s): %s.\n' ...
-            'Part C does not add third_party paths automatically; add your ' ...
-            'local URDME/StenLib/System Identification paths before running.'], ...
-            char(strjoin(missing, ', ')));
-    end
-end
-
-function tf = local_dependency_missing(function_name)
-%LOCAL_DEPENDENCY_MISSING Return true when MATLAB cannot resolve a dependency.
-    name = char(function_name);
-    tf = exist(name, 'file') == 0 && exist(name, 'class') == 0 && ...
-        exist(name, 'builtin') == 0;
-end
-
-function selection = local_load_or_select_local_orders(cfg, processed, fixed_configs)
-%LOCAL_LOAD_OR_SELECT_LOCAL_ORDERS Load or create canonical local selections.
+function selection = local_load_local_order_selection(cfg)
+%LOCAL_LOAD_LOCAL_ORDER_SELECTION Load canonical Part C local-order selections.
     selection_path = fullfile(cfg.output.evaluation_dir, ...
         'partC_local_order_selection.mat');
 
-    if exist(selection_path, 'file') == 2
-        loaded_selection = load(selection_path);
-        if isfield(loaded_selection, 'selection')
-            selection = loaded_selection.selection;
-        else
-            selection = loaded_selection;
-        end
-        if local_selection_has_dependency_preflight(selection)
-            return;
-        end
-        warning('FORECAST:StaleLocalOrderSelection', ...
-            ['Existing local order selection artifact lacks dependency ' ...
-            'preflight metadata; recomputing it.']);
+    if exist(selection_path, 'file') ~= 2
+        error('FORECAST:MissingLocalOrderSelection', ...
+            ['Missing Part C local-order selection artifact: %s\n' ...
+            'Run scripts/partC/partC_04_select_local_orders.m first.'], ...
+            selection_path);
     end
 
-    fprintf('Selecting local orders now.\n');
-    selection = select_partC_local_orders(cfg, processed, fixed_configs);
-    local_write_local_order_selection_outputs(cfg, selection, selection_path);
-end
+    loaded_selection = load(selection_path);
+    if isfield(loaded_selection, 'selection')
+        selection = loaded_selection.selection;
+    else
+        selection = loaded_selection;
+    end
 
-function local_write_local_order_selection_outputs(cfg, selection, selection_path)
-%LOCAL_WRITE_LOCAL_ORDER_SELECTION_OUTPUTS Persist local order selection.
-    selection_artifact = string(selection_path);
-    selection.cfg_snapshot.dependency_preflight_completed = true;
-    selected_local_configs = selection.selected_local_configs;
-    local_order_grid_scores = selection.local_order_grid_scores;
-    selected_local_orders = selection.selected_local_orders;
-    cfg_snapshot = selection.cfg_snapshot;
-    save(selection_path, 'selection', 'selection_artifact', ...
-        'selected_local_configs', 'local_order_grid_scores', ...
-        'selected_local_orders', 'cfg_snapshot');
-
-    writetable(local_order_grid_scores, fullfile(cfg.output.table_dir, ...
-        'partC_local_order_grid_scores.csv'));
-    writetable(selected_local_orders, fullfile(cfg.output.table_dir, ...
-        'partC_selected_local_orders.csv'));
-end
-
-function tf = local_selection_has_dependency_preflight(selection)
-%LOCAL_SELECTION_HAS_DEPENDENCY_PREFLIGHT Check valid selection provenance.
-    tf = isfield(selection, 'cfg_snapshot') && ...
-        isfield(selection.cfg_snapshot, 'dependency_preflight_completed') && ...
-        logical(selection.cfg_snapshot.dependency_preflight_completed);
+    if ~isfield(selection, 'selected_local_configs')
+        error('FORECAST:InvalidLocalOrderSelection', ...
+            'Local-order selection artifact is missing selected_local_configs: %s.', ...
+            selection_path);
+    end
 end
 
 function [selected_order, local_metadata] = local_strategy_order( ...

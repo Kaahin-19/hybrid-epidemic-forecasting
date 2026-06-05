@@ -81,9 +81,7 @@ performance_spec = build_plot_spec( ...
         'box', "off", 'font_size', 9), ...
     'size_cm', [17.0, 9.5]);
 performance_panel = local_model_wis_distribution_panel(window_scores);
-fig = plot_single_panel(performance_panel, performance_spec);
-export_figure(fig, performance_spec);
-close(fig);
+local_export_single_panel(performance_panel, performance_spec);
 
 %% 5. Horizon-Wise WIS
 horizon_legend = struct( ...
@@ -101,9 +99,7 @@ horizon_spec = build_plot_spec( ...
     'output_path', fullfile(figure_dir, 'partA_05_mean_wis_by_horizon.png'), ...
     'size_cm', [17.0, 9.0]);
 horizon_panel = local_horizon_wis_panel(table_cache.horizon_summary, horizon_spec);
-fig = plot_single_panel(horizon_panel, horizon_spec);
-export_figure(fig, horizon_spec);
-close(fig);
+local_export_single_panel(horizon_panel, horizon_spec);
 
 %% 6. Coverage Summary
 coverage_legend = struct( ...
@@ -124,9 +120,7 @@ coverage_spec = build_plot_spec( ...
     'output_path', fullfile(figure_dir, 'partA_05_coverage_summary.png'), ...
     'size_cm', [16.0, 10.0]);
 coverage_panel = local_coverage_panel(table_cache.interval_summary, coverage_spec);
-fig = plot_single_panel(coverage_panel, coverage_spec);
-export_figure(fig, coverage_spec);
-close(fig);
+local_export_single_panel(coverage_panel, coverage_spec);
 
 %% 7. Forecast Comparisons for Every Global Configuration
 configurations = local_all_configurations(table_cache.model_summary);
@@ -171,9 +165,7 @@ for c = 1:numel(configurations)
         fprintf('Drawing comparison from %s\n', forecast_path);
         [comparison_panel, comparison_spec] = local_forecast_comparison_panel( ...
             forecast_results, truth_scenarios(i), comparison_spec);
-        fig = plot_single_panel(comparison_panel, comparison_spec);
-        export_figure(fig, comparison_spec);
-        close(fig);
+        local_export_single_panel(comparison_panel, comparison_spec);
     end
 end
 
@@ -236,7 +228,15 @@ function [forecast_results, forecast_path] = local_load_forecast_results( ...
     forecast_results = loaded.forecast_results;
 end
 
-%% 10. Local Functions - Panel Assembly
+%% 10. Local Functions - Figure Export
+function local_export_single_panel(panel_data, plot_spec)
+%LOCAL_EXPORT_SINGLE_PANEL Draw, export, and close a single-panel figure.
+    fig = plot_single_panel(panel_data, plot_spec);
+    export_figure(fig, plot_spec);
+    close(fig);
+end
+
+%% 11. Local Functions - Panel Assembly
 function panels = local_rt_scenario_panels(scenarios, ~)
 %LOCAL_RT_SCENARIO_PANELS Build generic panels for scenario trajectories.
     panels = repmat(struct('series', [], 'plot_spec', struct()), ...
@@ -435,7 +435,7 @@ function [panel, plot_spec] = local_forecast_comparison_panel( ...
     panel = struct('series', series);
 end
 
-%% 11. Local Functions - Forecast Extraction
+%% 12. Local Functions - Forecast Extraction
 function [target_days, median_forecast, lower_forecast, upper_forecast] = ...
     local_extract_fixed_lead(forecast_results, lead_time, plot_alphas)
 %LOCAL_EXTRACT_FIXED_LEAD Extract one forecast lead across windows.
@@ -491,7 +491,7 @@ function idx = local_alpha_index(stored_alphas, target_alpha)
     end
 end
 
-%% 12. Local Functions - Plot Labels and Series Helpers
+%% 13. Local Functions - Plot Labels and Series Helpers
 function series = local_empty_series(n)
 %LOCAL_EMPTY_SERIES Create generic panel-series placeholders.
     series = repmat(struct('type', "line", 'x', [], 'y', [], ...
@@ -559,7 +559,7 @@ function colors = local_interval_colors(num_intervals)
     end
 end
 
-%% 13. Local Functions - Summary Tables and Utilities
+%% 14. Local Functions - Summary Tables and Utilities
 function configurations = local_all_configurations(model_summary)
 %LOCAL_ALL_CONFIGURATIONS List model/exogenous configurations.
     configurations = struct('Model', {}, 'ExoMode', {});

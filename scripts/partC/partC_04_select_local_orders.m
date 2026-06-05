@@ -17,6 +17,7 @@
 %   See also PARTC_CONFIG, SELECT_PARTC_LOCAL_ORDERS, PARTC_02_RUN_FORECASTS.
 %
 % A. M. Kaahin 2026-06-03
+% Modified: 2026-06-05
 
 %% 1. Initialization
 clear; close all; clc;
@@ -41,7 +42,7 @@ if ~exist(cfg.output.table_dir, 'dir'), mkdir(cfg.output.table_dir); end
 
 loaded = load(processedPath);
 local_validate_processed_data(loaded, processedPath);
-local_require_forecast_dependencies();
+require_partC_forecast_dependencies("LOCALORDER:MissingExternalDependency");
 fixed_configs = load_partC_fixed_configurations(cfg);
 
 fprintf('Calibration fraction: %.2f\n', ...
@@ -86,33 +87,6 @@ function local_validate_processed_data(data, processedPath)
         error('LOCALORDER:InvalidProcessedData', ...
             'Processed artifact is missing required fields: %s.', processedPath);
     end
-end
-
-function local_require_forecast_dependencies()
-%LOCAL_REQUIRE_FORECAST_DEPENDENCIES Check user-provided MATLAB dependencies.
-    required = ["iddata", "ar", "arx", "rparse", "urdme"];
-    missing = strings(0, 1);
-
-    for i = 1:numel(required)
-        if local_dependency_missing(required(i))
-            missing(end + 1, 1) = required(i); %#ok<AGROW>
-        end
-    end
-
-    if ~isempty(missing)
-        error('LOCALORDER:MissingExternalDependency', ...
-            ['Missing required MATLAB/URDME dependency function(s): %s.\n' ...
-            'Part C does not add third_party paths automatically; add your ' ...
-            'local URDME/StenLib/System Identification paths before running.'], ...
-            char(strjoin(missing, ', ')));
-    end
-end
-
-function tf = local_dependency_missing(function_name)
-%LOCAL_DEPENDENCY_MISSING Return true when MATLAB cannot resolve a dependency.
-    name = char(function_name);
-    tf = exist(name, 'file') == 0 && exist(name, 'class') == 0 && ...
-        exist(name, 'builtin') == 0;
 end
 
 function strategy = local_strategy(cfg, strategy_id)

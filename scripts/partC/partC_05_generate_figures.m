@@ -16,6 +16,7 @@
 %            PLOT_SINGLE_PANEL, PLOT_MULTI_PANEL_FIGURE, EXPORT_FIGURE.
 %
 % A. M. Kaahin 2026-06-03
+% Modified: 2026-06-05
 
 %% 1. Initialization
 clear; close all; clc;
@@ -53,22 +54,15 @@ forecast_records = local_load_forecast_records(forecastDir, cfg);
 fprintf('Loaded %d forecast artifact(s) from %s\n', ...
     numel(forecast_records), forecastDir);
 
-generated_figures = strings(0, 1);
-
 %% 3. Thesis-Level Figures
-generated_figures = [generated_figures; ...
-    local_draw_real_data_overview(figureDir, processed)];
-generated_figures = [generated_figures; ...
-    local_draw_strategy_wis_distribution(figureDir, window_scores)];
-generated_figures = [generated_figures; ...
-    local_draw_strategy_mean_wis_by_horizon(cfg, figureDir, ...
-    summary_tables.horizon_summary)];
-generated_figures = [generated_figures; ...
-    local_draw_strategy_coverage_interval_width(figureDir, ...
-    summary_tables.interval_summary)];
-generated_figures = [generated_figures; ...
-    local_draw_forecast_comparison_strategies(cfg, figureDir, processed, ...
-    forecast_records)];
+local_draw_real_data_overview(figureDir, processed);
+local_draw_strategy_wis_distribution(figureDir, window_scores);
+local_draw_strategy_mean_wis_by_horizon(cfg, figureDir, ...
+    summary_tables.horizon_summary);
+local_draw_strategy_coverage_interval_width(figureDir, ...
+    summary_tables.interval_summary);
+local_draw_forecast_comparison_strategies(cfg, figureDir, processed, ...
+    forecast_records);
 
 required_figures = local_required_thesis_figures(figureDir);
 missing_required = required_figures(~isfile(required_figures));
@@ -79,7 +73,6 @@ if ~isempty(missing_required)
 end
 
 %% 4. Completion
-fprintf('Saved %d figure file(s).\n', numel(generated_figures));
 fprintf('Thesis-level Part C figures are under: %s\n', figureDir);
 fprintf('=== Part C Figure Generation Complete ===\n\n');
 

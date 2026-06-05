@@ -21,9 +21,11 @@ function selection = select_partC_local_orders(cfg, processed, fixed_configs)
 %       selection - Structure containing local grid scores, selected order
 %                   table, and retuned model configurations.
 %
-%   See also BUILD_PARTC_LOCAL_ORDER_GRID, RUN_EXPANDING_WINDOW_FORECAST, COMPUTE_WIS.
+%   See also BUILD_PARTC_LOCAL_ORDER_GRID, RUN_EXPANDING_WINDOW_FORECAST, ...
+%            EVALUATE_FORECAST_WINDOW_METRICS.
 %
 % A. M. Kaahin 2026-06-03
+% Modified: 2026-06-05
 
     %% 1. Strategy Setup
     strategy = local_strategy(cfg, "local_order_retuning");
@@ -148,11 +150,9 @@ function [mean_wis, calibration_windows] = local_mean_calibration_wis(forecast_r
         upper_Rt = double(forecast_results(k).upper_bounds);
         alphas = reshape(double(forecast_results(k).interval_alphas), 1, []);
 
-        if local_is_valid_forecast(truth_Rt, pred_Rt, lower_Rt, upper_Rt, alphas)
-            pointwise_wis = compute_wis(truth_Rt, pred_Rt, lower_Rt, ...
-                upper_Rt, alphas);
-            window_wis(k) = mean(pointwise_wis);
-        end
+        metrics = evaluate_forecast_window_metrics(truth_Rt, pred_Rt, ...
+            lower_Rt, upper_Rt, alphas);
+        window_wis(k) = metrics.window_wis;
     end
 
     finite_wis = window_wis(isfinite(window_wis));
@@ -161,21 +161,6 @@ function [mean_wis, calibration_windows] = local_mean_calibration_wis(forecast_r
     else
         mean_wis = mean(finite_wis);
     end
-end
-
-function is_valid = local_is_valid_forecast(truth_Rt, pred_Rt, lower_Rt, upper_Rt, alphas)
-%LOCAL_IS_VALID_FORECAST Verify metric input shape and values.
-    is_valid = ...
-        ~isempty(truth_Rt) && ~isempty(alphas) && ...
-        numel(pred_Rt) == numel(truth_Rt) && ...
-        size(lower_Rt, 1) == numel(truth_Rt) && ...
-        size(upper_Rt, 1) == numel(truth_Rt) && ...
-        size(lower_Rt, 2) == numel(alphas) && ...
-        size(upper_Rt, 2) == numel(alphas) && ...
-        all(isfinite(truth_Rt(:))) && all(isfinite(pred_Rt(:))) && ...
-        all(pred_Rt(:) > 0) && all(isfinite(lower_Rt(:))) && ...
-        all(isfinite(upper_Rt(:))) && all(lower_Rt(:) > 0) && ...
-        all(upper_Rt(:) > 0) && all(lower_Rt(:) <= upper_Rt(:));
 end
 
 function calibration_entry = local_calibration_entry(scenario_entry, ...

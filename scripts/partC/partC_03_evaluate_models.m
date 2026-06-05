@@ -14,11 +14,11 @@
 %          selection tables.
 %       4. Save evaluation .mat artifact and CSV tables.
 %
-%   See also PARTC_CONFIG, COMPUTE_WIS, SUMMARIZE_FORECAST_SCORES, ...
-%            PARTC_05_GENERATE_FIGURES.
+%   See also PARTC_CONFIG, EVALUATE_FORECAST_WINDOW_METRICS, ...
+%            SUMMARIZE_FORECAST_SCORES, PARTC_05_GENERATE_FIGURES.
 %
 % A. M. Kaahin 2026-05-18
-% Modified: 2026-06-03
+% Modified: 2026-06-05
 
 %% 1. Initialization
 clear; close all; clc;
@@ -265,55 +265,20 @@ function [window_row, pointwise_rows, interval_rows] = local_evaluate_window( ..
     upper_Rt = double(window_entry.upper_Rt);
     alphas = reshape(double(window_entry.alphas), 1, []);
     horizon = numel(truth_Rt);
-    is_valid = local_is_valid_forecast(truth_Rt, pred_Rt, lower_Rt, upper_Rt, alphas);
-
-    if is_valid
-        pointwise_wis = compute_wis(truth_Rt, pred_Rt, lower_Rt, upper_Rt, alphas);
-        wis_components = compute_wis_components(truth_Rt, pred_Rt, ...
-            lower_Rt, upper_Rt, alphas);
-        window_rmse = compute_rmse(truth_Rt, pred_Rt);
-        window_mae = compute_mae(truth_Rt, pred_Rt);
-        coverage = compute_coverage(truth_Rt, lower_Rt, upper_Rt);
-        interval_width = compute_interval_width(lower_Rt, upper_Rt);
-        nominal_coverage = local_nominal_coverage_matrix(horizon, alphas);
-        calibration_error = coverage - nominal_coverage;
-        window_wis = mean(pointwise_wis);
-        mean_wis_median_component = local_mean_finite(wis_components.median);
-        mean_wis_dispersion_component = local_mean_finite(wis_components.dispersion);
-        mean_wis_under_component = local_mean_finite(wis_components.underprediction);
-        mean_wis_over_component = local_mean_finite(wis_components.overprediction);
-        mean_coverage = local_mean_finite(coverage(:));
-        mean_calibration_bias = local_mean_finite(calibration_error(:));
-        mean_absolute_calibration_error = local_mean_finite(abs(calibration_error(:)));
-        mean_interval_width = local_mean_finite(interval_width(:));
-    else
-        pointwise_wis = inf(max(horizon, 0), 1);
-        wis_components = local_nan_wis_components(max(horizon, 0), numel(alphas));
-        window_rmse = inf;
-        window_mae = inf;
-        coverage = nan(max(horizon, 0), numel(alphas));
-        interval_width = nan(max(horizon, 0), numel(alphas));
-        calibration_error = nan(max(horizon, 0), numel(alphas));
-        window_wis = inf;
-        mean_wis_median_component = nan;
-        mean_wis_dispersion_component = nan;
-        mean_wis_under_component = nan;
-        mean_wis_over_component = nan;
-        mean_coverage = nan;
-        mean_calibration_bias = nan;
-        mean_absolute_calibration_error = nan;
-        mean_interval_width = nan;
-    end
+    metrics = evaluate_forecast_window_metrics(truth_Rt, pred_Rt, ...
+        lower_Rt, upper_Rt, alphas);
 
     metadata = local_score_metadata(loaded, artifact_path);
     window_date = local_window_date(window_entry, date_lookup);
     forecast_dates = local_forecast_dates(window_entry, date_lookup, horizon);
 
     window_row = local_window_row(metadata, window_entry, window_date, ...
-        window_wis, window_rmse, window_mae, mean_wis_median_component, ...
-        mean_wis_dispersion_component, mean_wis_under_component, ...
-        mean_wis_over_component, mean_coverage, mean_calibration_bias, ...
-        mean_absolute_calibration_error, mean_interval_width, is_valid);
+        metrics.window_wis, metrics.window_rmse, metrics.window_mae, ...
+        metrics.mean_wis_median_component, ...
+        metrics.mean_wis_dispersion_component, metrics.mean_wis_under_component, ...
+        metrics.mean_wis_over_component, metrics.mean_coverage, ...
+        metrics.mean_calibration_bias, metrics.mean_absolute_calibration_error, ...
+        metrics.mean_interval_width, metrics.is_valid);
 
     if horizon == 0
         pointwise_rows = table();
@@ -324,19 +289,17 @@ function [window_row, pointwise_rows, interval_rows] = local_evaluate_window( ..
     forecast_day = local_forecast_day(window_entry, horizon);
     horizon_idx = (1:horizon)';
     error_values = pred_Rt - truth_Rt;
-    coverage_mean = local_row_mean_finite(coverage);
-    calibration_bias_mean = local_row_mean_finite(calibration_error);
-    absolute_calibration_mean = local_row_mean_finite(abs(calibration_error));
-    width_mean = local_row_mean_finite(interval_width);
 
     pointwise_rows = local_pointwise_rows(metadata, window_entry, window_date, ...
         horizon_idx, forecast_day, forecast_dates, truth_Rt, pred_Rt, ...
-        error_values, pointwise_wis, wis_components, coverage_mean, ...
-        calibration_bias_mean, absolute_calibration_mean, width_mean);
+        error_values, metrics.pointwise_wis, metrics.wis_components, ...
+        metrics.coverage_mean, metrics.calibration_bias_mean, ...
+        metrics.absolute_calibration_mean, metrics.width_mean);
 
     interval_rows = local_interval_rows(metadata, window_entry, window_date, ...
         horizon_idx, forecast_day, forecast_dates, truth_Rt, alphas, ...
-        lower_Rt, upper_Rt, coverage, interval_width, wis_components);
+        lower_Rt, upper_Rt, metrics.coverage, metrics.interval_width, ...
+        metrics.wis_components);
 end
 
 function metadata = local_score_metadata(loaded, artifact_path)
@@ -619,21 +582,6 @@ function cfg_snapshot = local_cfg_snapshot(cfg)
     cfg_snapshot.sirs_projection = cfg.sirs_projection;
 end
 
-function is_valid = local_is_valid_forecast(truth_Rt, pred_Rt, lower_Rt, upper_Rt, alphas)
-%LOCAL_IS_VALID_FORECAST Verify forecast metric input shape and values.
-    is_valid = ...
-        ~isempty(truth_Rt) && ~isempty(alphas) && ...
-        numel(pred_Rt) == numel(truth_Rt) && ...
-        size(lower_Rt, 1) == numel(truth_Rt) && ...
-        size(upper_Rt, 1) == numel(truth_Rt) && ...
-        size(lower_Rt, 2) == numel(alphas) && ...
-        size(upper_Rt, 2) == numel(alphas) && ...
-        all(isfinite(truth_Rt(:))) && all(isfinite(pred_Rt(:))) && ...
-        all(pred_Rt(:) > 0) && all(isfinite(lower_Rt(:))) && ...
-        all(isfinite(upper_Rt(:))) && all(lower_Rt(:) > 0) && ...
-        all(upper_Rt(:) > 0) && all(lower_Rt(:) <= upper_Rt(:));
-end
-
 function window_date = local_window_date(window_entry, date_lookup)
 %LOCAL_WINDOW_DATE Return recorded or lookup forecast-origin date.
     window_date = window_entry.window_date;
@@ -746,44 +694,5 @@ function value = local_get_datetime_vector(s, field_name)
     if isfield(s, field_name) && ~isempty(s.(field_name)) && ...
             isdatetime(s.(field_name))
         value = s.(field_name)(:);
-    end
-end
-
-function values = local_row_mean_finite(matrix_values)
-%LOCAL_ROW_MEAN_FINITE Compute finite row means without toolboxes.
-    values = nan(size(matrix_values, 1), 1);
-    for i = 1:size(matrix_values, 1)
-        values(i) = local_mean_finite(matrix_values(i, :));
-    end
-end
-
-function nominal_coverage = local_nominal_coverage_matrix(horizon, alphas)
-%LOCAL_NOMINAL_COVERAGE_MATRIX Expand nominal coverage by horizon.
-    nominal_coverage = repmat(1 - reshape(double(alphas), 1, []), horizon, 1);
-end
-
-function components = local_nan_wis_components(horizon, num_alphas)
-%LOCAL_NAN_WIS_COMPONENTS Create placeholder WIS component arrays.
-    components = struct();
-    components.raw_scale_wis = inf(horizon, 1);
-    components.median = nan(horizon, 1);
-    components.dispersion = nan(horizon, 1);
-    components.underprediction = nan(horizon, 1);
-    components.overprediction = nan(horizon, 1);
-    components.interval_score = nan(horizon, num_alphas);
-    components.interval_component = nan(horizon, num_alphas);
-    components.sharpness_by_interval = nan(horizon, num_alphas);
-    components.underprediction_by_interval = nan(horizon, num_alphas);
-    components.overprediction_by_interval = nan(horizon, num_alphas);
-end
-
-function value = local_mean_finite(values)
-%LOCAL_MEAN_FINITE Mean over finite numeric values only.
-    values = double(values(:));
-    values = values(isfinite(values));
-    if isempty(values)
-        value = nan;
-    else
-        value = mean(values);
     end
 end

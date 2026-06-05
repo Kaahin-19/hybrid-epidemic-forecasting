@@ -5,11 +5,11 @@ function is_valid = is_valid_forecast(Rt_pred, out_alphas, Rt_lower, Rt_upper, t
 %       is_valid = is_valid_forecast(Rt_pred, out_alphas, Rt_lower, Rt_upper, truth_Rt)
 %
 %   Description:
-%       Shared validity predicate for Part A forecasts. Confirms that the
+%       Shared validity predicate for forecast outputs. Confirms that the
 %       median forecast, interval bounds, and miscoverage rates are mutually
-%       consistent in shape, finite, and ordered (lower <= upper). Used by both
-%       the model-selection scoring path and the final forecasting path so the
-%       two stages share one definition of a usable forecast.
+%       consistent in shape, finite, and ordered (lower <= upper). Used by
+%       model-selection, final synthetic forecasts, and Part C fixed-parameter
+%       forecasts so these stages share one definition of a usable forecast.
 %
 %   Inputs:
 %       Rt_pred    - Horizon-by-one predictive median vector.
@@ -21,9 +21,11 @@ function is_valid = is_valid_forecast(Rt_pred, out_alphas, Rt_lower, Rt_upper, t
 %   Outputs:
 %       is_valid - Logical scalar.
 %
-%   See also EVALUATE_CANDIDATE, RUN_EXPANDING_WINDOW_FORECAST.
+%   See also EVALUATE_CANDIDATE, RUN_EXPANDING_WINDOW_FORECAST, ...
+%            RUN_PARTC_FIXED_PARAMETER_FORECAST.
 %
 % A. M. Kaahin 2026-06-04
+% Modified: 2026-06-05
 
     out_alphas = reshape(double(out_alphas), 1, []);
     Rt_pred = double(Rt_pred(:));

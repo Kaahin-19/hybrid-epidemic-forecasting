@@ -15,7 +15,7 @@
 %            PLOT_SINGLE_PANEL, PLOT_MULTI_PANEL_FIGURE, EXPORT_FIGURE.
 %
 % A. M. Kaahin 2026-06-02
-% Modified: 2026-06-03
+% Modified: 2026-06-05
 
 %% 1. Initialization
 clear; close all; clc;
@@ -40,35 +40,26 @@ end
 %% 2. Load Existing Artifacts
 evaluation_data = load(evaluation_artifact);
 summary_tables = evaluation_data.summary_tables;
-window_scores = local_loaded_table(evaluation_data, 'window_scores');
-pointwise_scores = local_loaded_table(evaluation_data, 'pointwise_scores');
+window_scores = local_required_table(evaluation_data, 'window_scores', ...
+    evaluation_artifact);
 truth_records = local_load_truth_records(cfg);
 forecast_records = local_load_forecast_records(cfg);
 
 fprintf('Loaded %d truth artifact(s) and %d forecast artifact(s).\n', ...
     numel(truth_records), numel(forecast_records));
 
-generated_figures = strings(0, 1);
-
 %% 3. Case-Level Diagnostics
-generated_figures = [generated_figures; local_generate_case_diagnostics( ...
-    cfg, truth_records, forecast_records, window_scores, summary_tables)]; %#ok<AGROW>
+local_generate_case_diagnostics(cfg, truth_records, forecast_records, ...
+    window_scores, summary_tables);
 
 %% 4. Thesis-Level Figures
-generated_figures = [generated_figures; ...
-    local_draw_robustness_ladder_overview(cfg, figure_dir)]; %#ok<AGROW>
-generated_figures = [generated_figures; ...
-    local_draw_observation_noise_example(cfg, figure_dir, truth_records)]; %#ok<AGROW>
-generated_figures = [generated_figures; ...
-    local_draw_process_noise_example(cfg, figure_dir, truth_records)]; %#ok<AGROW>
-generated_figures = [generated_figures; ...
-    local_draw_structural_mismatch_truth(cfg, figure_dir, truth_records)]; %#ok<AGROW>
-generated_figures = [generated_figures; ...
-    local_draw_robustness_mean_wis(cfg, figure_dir, summary_tables)]; %#ok<AGROW>
-generated_figures = [generated_figures; ...
-    local_draw_robustness_wis_by_horizon(cfg, figure_dir, summary_tables)]; %#ok<AGROW>
-generated_figures = [generated_figures; ...
-    local_draw_coverage_interval_width(cfg, figure_dir, summary_tables)]; %#ok<AGROW>
+local_draw_robustness_ladder_overview(cfg, figure_dir);
+local_draw_observation_noise_example(cfg, figure_dir, truth_records);
+local_draw_process_noise_example(cfg, figure_dir, truth_records);
+local_draw_structural_mismatch_truth(cfg, figure_dir, truth_records);
+local_draw_robustness_mean_wis(cfg, figure_dir, summary_tables);
+local_draw_robustness_wis_by_horizon(cfg, figure_dir, summary_tables);
+local_draw_coverage_interval_width(cfg, figure_dir, summary_tables);
 
 required_figures = local_required_thesis_figures(figure_dir);
 missing_required = required_figures(~isfile(required_figures));
@@ -79,15 +70,13 @@ if ~isempty(missing_required)
 end
 
 %% 5. Completion
-fprintf('Saved %d figure file(s).\n', numel(generated_figures));
 fprintf('Thesis-level Part B figures are under: %s\n', figure_dir);
 fprintf('=== Part B Robustness-Ladder Figure Generation Complete ===\n\n');
 
 %% 6. Local Functions
-function outputs = local_generate_case_diagnostics(cfg, truth_records, ...
+function local_generate_case_diagnostics(cfg, truth_records, ...
     forecast_records, window_scores, summary_tables)
 %LOCAL_GENERATE_CASE_DIAGNOSTICS Write case-specific diagnostic figures.
-    outputs = strings(0, 1);
     if isempty(window_scores) || height(window_scores) == 0
         return;
     end
@@ -99,12 +88,10 @@ function outputs = local_generate_case_diagnostics(cfg, truth_records, ...
         if ~exist(case_dir, 'dir'), mkdir(case_dir); end
 
         case_scores = window_scores(window_scores.CaseID == case_id, :);
-        outputs = [outputs; local_draw_case_wis_distribution(case_dir, ...
-            case_id, case_scores)]; %#ok<AGROW>
-        outputs = [outputs; local_draw_case_horizon_wis(case_dir, case_id, ...
-            summary_tables)]; %#ok<AGROW>
-        outputs = [outputs; local_draw_case_representative_forecast(cfg, ...
-            case_dir, case_id, truth_records, forecast_records)]; %#ok<AGROW>
+        local_draw_case_wis_distribution(case_dir, case_id, case_scores);
+        local_draw_case_horizon_wis(case_dir, case_id, summary_tables);
+        local_draw_case_representative_forecast(cfg, case_dir, case_id, ...
+            truth_records, forecast_records);
     end
 end
 
@@ -214,7 +201,7 @@ function output_path = local_draw_case_representative_forecast(cfg, case_dir, ..
     close(fig);
 end
 
-function output_path = local_draw_robustness_ladder_overview(cfg, figure_dir)
+function output_path = local_draw_robustness_ladder_overview(~, figure_dir)
 %LOCAL_DRAW_ROBUSTNESS_LADDER_OVERVIEW Draw compact robustness schematic.
     output_file = fullfile(figure_dir, 'partB_robustness_ladder_overview.png');
     spec = build_plot_spec( ...
@@ -304,7 +291,7 @@ function output_path = local_draw_observation_noise_example(cfg, figure_dir, tru
     close(fig);
 end
 
-function output_path = local_draw_process_noise_example(cfg, figure_dir, truth_records)
+function output_path = local_draw_process_noise_example(~, figure_dir, truth_records)
 %LOCAL_DRAW_PROCESS_NOISE_EXAMPLE Draw UDS reference versus SSA realizations.
     spec = build_plot_spec( ...
         'figure_name', "Part B process-noise example", ...
@@ -338,7 +325,7 @@ function output_path = local_draw_process_noise_example(cfg, figure_dir, truth_r
         series(end + 1, 1) = local_line_series( ...
             truth_records(uds_idx).tspan, truth_records(uds_idx).I_true, ...
             "UDS deterministic reference", ...
-            struct('Color', colors(1, :), 'LineWidth', 1.8), 1); %#ok<AGROW>
+            struct('Color', colors(1, :), 'LineWidth', 1.8), 1);
     end
 
     ssa_idx = ssa_idx([truth_records(ssa_idx).scenario_id] == scenario_id);
@@ -356,7 +343,7 @@ function output_path = local_draw_process_noise_example(cfg, figure_dir, truth_r
     close(fig);
 end
 
-function output_path = local_draw_structural_mismatch_truth(cfg, figure_dir, truth_records)
+function output_path = local_draw_structural_mismatch_truth(~, figure_dir, truth_records)
 %LOCAL_DRAW_STRUCTURAL_MISMATCH_TRUTH Draw SEIR compartment trajectories.
     spec = build_plot_spec( ...
         'figure_name', "Part B SEIR structural-mismatch truth", ...
@@ -642,13 +629,13 @@ function series = local_representative_forecast_series(forecast_results, truth_r
 
     series(end + 1, 1) = local_line_series(truth_record.tspan, ...
         truth_record.Rt_true, "Evaluation target", ...
-        struct('Color', colors(1, :), 'LineWidth', 1.6), 1); %#ok<AGROW>
+        struct('Color', colors(1, :), 'LineWidth', 1.6), 1);
 
     if any(abs(truth_record.Rt_model_input - truth_record.Rt_true) > 1e-12)
         series(end + 1, 1) = local_line_series(truth_record.tspan, ...
             truth_record.Rt_model_input, "Model input", ...
             struct('Color', [0.55, 0.55, 0.55], 'LineWidth', 0.9, ...
-            'LineStyle', ':'), 2); %#ok<AGROW>
+            'LineStyle', ':'), 2);
     end
 
     window_idx = local_first_valid_forecast_window(forecast_results);
@@ -681,7 +668,7 @@ function series = local_representative_forecast_series(forecast_results, truth_r
     end
 
     series(end + 1, 1) = local_line_series(t_future, pred, ...
-        "Median forecast", struct('Color', colors(2, :), 'LineWidth', 1.5), 4); %#ok<AGROW>
+        "Median forecast", struct('Color', colors(2, :), 'LineWidth', 1.5), 4);
 end
 
 function idx = local_first_valid_forecast_window(forecast_results)
@@ -894,12 +881,14 @@ function required = local_required_thesis_figures(figure_dir)
     required = fullfile(figure_dir, names);
 end
 
-function output = local_loaded_table(s, field_name)
-%LOCAL_LOADED_TABLE Read a table field or return an empty table.
+function output = local_required_table(s, field_name, artifact_path)
+%LOCAL_REQUIRED_TABLE Read a required table field from an artifact.
     if isfield(s, field_name) && istable(s.(field_name))
         output = s.(field_name);
     else
-        output = table();
+        error('FIG:InvalidEvaluationArtifact', ...
+            'Evaluation artifact %s is missing required table field: %s.', ...
+            artifact_path, field_name);
     end
 end
 

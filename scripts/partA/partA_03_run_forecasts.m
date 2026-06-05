@@ -12,7 +12,8 @@
 %   Workflow:
 %       1. Load configuration and resolve the active model/exogenous setting.
 %       2. Load and validate the global model-selection artifact.
-%       3. Build the expanding-window forecast dataset and run forecasts.
+%       3. Build the expanding-window forecast dataset and run scenario
+%          forecasts in parallel when multiple workers are configured.
 %       4. Save one MATLAB forecast artifact per scenario.
 %
 %   See also PARTA_CONFIG, BUILD_FORECASTING_DATASET, ...
@@ -20,7 +21,7 @@
 %            PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_04_EVALUATE_FORECASTS.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-06-04
+% Modified: 2026-06-05
 
 %% 1. Initialization
 clear; close all; clc;
@@ -45,6 +46,7 @@ fprintf('Using global configuration: %s\n', mat2str(selected_configuration));
 
 %% 3. Build Dataset and Run Forecasts
 scenario_data = build_forecasting_dataset(cfg, EXO_MODE);
+num_scenarios = numel(scenario_data);
 
 forecast_options = struct( ...
     'horizon', cfg.forecast.horizon, ...
@@ -60,16 +62,31 @@ cfg_snapshot = cfg.run_snapshot;
 model_type = MODEL_TYPE;
 exo_mode = EXO_MODE;
 
+pool_cleanup = local_start_parallel_pool(cfg.run.num_workers, num_scenarios); %#ok<NASGU>
+
+forecast_results_by_scenario = cell(num_scenarios, 1);
+scenario_ids = strings(num_scenarios, 1);
+scenario_names = strings(num_scenarios, 1);
+
+fprintf('Running forecasts for %d scenarios.\n', num_scenarios);
+
+parfor i = 1:num_scenarios
+    scenario_entry = scenario_data(i);
+    scenario_ids(i) = string(scenario_entry.scenario_id);
+    scenario_names(i) = string(scenario_entry.scenario_name);
+
+    forecast_results_by_scenario{i} = run_expanding_window_forecast(scenario_entry, ...
+        MODEL_TYPE, selected_configuration, forecast_options);
+end
+
+clear pool_cleanup
+
 fprintf('Saving forecast artifacts to: %s\n', saveDir);
 
-for i = 1:numel(scenario_data)
-    scenario_entry = scenario_data(i);
-    scenario_id   = char(scenario_entry.scenario_id);
-    scenario_name = scenario_entry.scenario_name;
-    fprintf('  - Forecasting Scenario: %s...\n', scenario_id);
-
-    forecast_results = run_expanding_window_forecast(scenario_entry, ...
-        MODEL_TYPE, selected_configuration, forecast_options);
+for i = 1:num_scenarios
+    scenario_id = char(scenario_ids(i));
+    scenario_name = scenario_names(i);
+    forecast_results = forecast_results_by_scenario{i};
 
     if isempty(forecast_results)
         warning('FORECAST:NoWindows', ...
@@ -90,6 +107,32 @@ end
 fprintf('=== Forecast Pipeline Complete ===\n\n');
 
 %% 5. Local Functions
+function pool_cleanup = local_start_parallel_pool(num_workers, num_tasks)
+%LOCAL_START_PARALLEL_POOL Start a process pool for scenario forecasts.
+pool_cleanup = [];
+worker_count = min(max(1, round(double(num_workers))), max(1, double(num_tasks)));
+if worker_count <= 1
+    return;
+end
+
+pool = gcp('nocreate');
+if isempty(pool)
+    fprintf('Starting parallel pool with %d workers.\n', worker_count);
+    parpool('Processes', worker_count);
+    pool_cleanup = onCleanup(@local_shutdown_parallel_pool);
+else
+    fprintf('Using existing parallel pool with %d workers.\n', pool.NumWorkers);
+end
+end
+
+function local_shutdown_parallel_pool()
+%LOCAL_SHUTDOWN_PARALLEL_POOL Close the local parallel pool before MATLAB exits.
+pool = gcp('nocreate');
+if ~isempty(pool)
+    delete(pool);
+end
+end
+
 function selected_configuration = local_load_selected_configuration( ...
     selection_dir, model_type, exo_mode, cfg)
 %LOCAL_LOAD_SELECTED_CONFIGURATION Load and screen the partA_02 selection artifact.
