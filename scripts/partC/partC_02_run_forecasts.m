@@ -42,7 +42,6 @@ if ~exist(cfg.output.table_dir, 'dir'), mkdir(cfg.output.table_dir); end
 
 loaded = load(processedPath);
 local_validate_processed_data(loaded, processedPath);
-require_partC_forecast_dependencies("FORECAST:MissingExternalDependency");
 
 date = loaded.date(:);
 fixed_configs = load_partC_fixed_configurations(cfg);

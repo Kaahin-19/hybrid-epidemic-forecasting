@@ -42,7 +42,6 @@ if ~exist(cfg.output.table_dir, 'dir'), mkdir(cfg.output.table_dir); end
 
 loaded = load(processedPath);
 local_validate_processed_data(loaded, processedPath);
-require_partC_forecast_dependencies("LOCALORDER:MissingExternalDependency");
 fixed_configs = load_partC_fixed_configurations(cfg);
 
 fprintf('Calibration fraction: %.2f\n', ...
@@ -52,7 +51,6 @@ fprintf('Maximum calibration windows scored per candidate: %d\n', ...
 
 %% 2. Selection
 selection = select_partC_local_orders(cfg, loaded, fixed_configs);
-selection.cfg_snapshot.dependency_preflight_completed = true;
 
 %% 3. Persistence
 selection_artifact = string(selectionPath);
