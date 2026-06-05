@@ -21,7 +21,7 @@ function wis = compute_wis(truth_Rt, median_Rt, lower_Rt, upper_Rt, alphas)
 %   Outputs:
 %       wis - Horizon-by-one vector of pointwise WIS values.
 %
-%   See also COMPUTE_WIS_COMPONENTS, COMPUTE_RMSE, COMPUTE_COVERAGE.
+%   See also COMPUTE_WIS_COMPONENTS.
 %
 % A. M. Kaahin 2026-06-01
 

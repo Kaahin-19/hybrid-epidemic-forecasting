@@ -24,7 +24,7 @@ function metrics = evaluate_forecast_window_metrics( ...
 %       metrics - Structure containing validity, WIS, RMSE, MAE, coverage,
 %                 calibration, interval-width, and WIS-component metrics.
 %
-%   See also COMPUTE_WIS_COMPONENTS, COMPUTE_RMSE, COMPUTE_COVERAGE.
+%   See also COMPUTE_WIS_COMPONENTS.
 %
 % A. M. Kaahin 2026-06-05
 
@@ -43,10 +43,10 @@ function metrics = evaluate_forecast_window_metrics( ...
         wis_components = compute_wis_components(truth_Rt, pred_Rt, ...
             lower_Rt, upper_Rt, alphas);
         pointwise_wis = wis_components.raw_scale_wis;
-        window_rmse = compute_rmse(truth_Rt, pred_Rt);
-        window_mae = compute_mae(truth_Rt, pred_Rt);
-        coverage = compute_coverage(truth_Rt, lower_Rt, upper_Rt);
-        interval_width = compute_interval_width(lower_Rt, upper_Rt);
+        window_rmse = local_compute_rmse(truth_Rt, pred_Rt);
+        window_mae = local_compute_mae(truth_Rt, pred_Rt);
+        coverage = local_compute_coverage(truth_Rt, lower_Rt, upper_Rt);
+        interval_width = local_compute_interval_width(lower_Rt, upper_Rt);
         nominal_coverage = local_nominal_coverage_matrix(horizon, alphas);
         calibration_error = coverage - nominal_coverage;
         window_wis = mean(pointwise_wis);
@@ -145,4 +145,81 @@ function value = local_mean_finite(values)
     else
         value = mean(values);
     end
+end
+
+function rmse = local_compute_rmse(truth_Rt, pred_Rt)
+%LOCAL_COMPUTE_RMSE Root mean squared error over finite paired values.
+    truth_Rt = double(truth_Rt(:));
+    pred_Rt = double(pred_Rt(:));
+
+    if numel(truth_Rt) ~= numel(pred_Rt)
+        error('EVALUATION:InvalidForecastShape', ...
+            'truth_Rt and pred_Rt must have the same number of elements.');
+    end
+
+    finite_idx = isfinite(truth_Rt) & isfinite(pred_Rt);
+    if ~any(finite_idx)
+        rmse = inf;
+        return;
+    end
+
+    residuals = pred_Rt(finite_idx) - truth_Rt(finite_idx);
+    rmse = sqrt(mean(residuals .^ 2));
+end
+
+function mae = local_compute_mae(truth_Rt, pred_Rt)
+%LOCAL_COMPUTE_MAE Mean absolute error over finite paired values.
+    truth_Rt = double(truth_Rt(:));
+    pred_Rt = double(pred_Rt(:));
+
+    if numel(truth_Rt) ~= numel(pred_Rt)
+        error('EVALUATION:InvalidForecastShape', ...
+            'Truth and prediction vectors must have the same length.');
+    end
+
+    valid_idx = isfinite(truth_Rt) & isfinite(pred_Rt);
+    if ~any(valid_idx)
+        mae = inf;
+        return;
+    end
+
+    mae = mean(abs(pred_Rt(valid_idx) - truth_Rt(valid_idx)));
+end
+
+function coverage = local_compute_coverage(truth_Rt, lower_Rt, upper_Rt)
+%LOCAL_COMPUTE_COVERAGE Pointwise interval coverage indicators (0/1/NaN).
+    truth_Rt = double(truth_Rt(:));
+    lower_Rt = double(lower_Rt);
+    upper_Rt = double(upper_Rt);
+
+    if isempty(truth_Rt) || size(lower_Rt, 1) ~= numel(truth_Rt) || ...
+            size(upper_Rt, 1) ~= numel(truth_Rt) || ...
+            size(lower_Rt, 2) ~= size(upper_Rt, 2)
+        error('EVALUATION:InvalidForecastShape', ...
+            'truth_Rt and interval matrices have incompatible dimensions.');
+    end
+
+    truth_matrix = repmat(truth_Rt, 1, size(lower_Rt, 2));
+    valid_idx = isfinite(truth_matrix) & isfinite(lower_Rt) & ...
+        isfinite(upper_Rt) & lower_Rt <= upper_Rt;
+
+    coverage = nan(size(lower_Rt));
+    coverage(valid_idx) = double(truth_matrix(valid_idx) >= lower_Rt(valid_idx) & ...
+        truth_matrix(valid_idx) <= upper_Rt(valid_idx));
+end
+
+function interval_width = local_compute_interval_width(lower_Rt, upper_Rt)
+%LOCAL_COMPUTE_INTERVAL_WIDTH Interval widths with NaN for malformed bounds.
+    lower_Rt = double(lower_Rt);
+    upper_Rt = double(upper_Rt);
+
+    if ~isequal(size(lower_Rt), size(upper_Rt))
+        error('EVALUATION:InvalidForecastShape', ...
+            'lower_Rt and upper_Rt must have identical dimensions.');
+    end
+
+    interval_width = upper_Rt - lower_Rt;
+    invalid_idx = ~isfinite(lower_Rt) | ~isfinite(upper_Rt) | ...
+        lower_Rt > upper_Rt;
+    interval_width(invalid_idx) = nan;
 end

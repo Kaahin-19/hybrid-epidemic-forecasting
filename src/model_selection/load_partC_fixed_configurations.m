@@ -17,7 +17,7 @@ function fixed_configs = load_partC_fixed_configurations(cfg)
 %       fixed_configs - Structure array with model identity, selected order,
 %                       source artifact, and selection metadata.
 %
-%   See also PARTC_CONFIG, BUILD_PARTC_LOCAL_ORDER_GRID.
+%   See also PARTC_CONFIG, GENERATE_CANDIDATE_GRID.
 %
 % A. M. Kaahin 2026-06-03
 

@@ -1,0 +1,22 @@
+StrategyID,StrategyName,Model,ExoMode,PartASelectedOrder,CandidateOrder,MeanCalibrationWIS,CalibrationWindows,Selected
+local_order_retuning,Local order retuning,AR,None,2,1,0.0761203764706463,16,1
+local_order_retuning,Local order retuning,AR,None,2,2,0.0764037007580974,16,0
+local_order_retuning,Local order retuning,AR,None,2,3,0.0762425060870392,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[2 1 2],0.111725911361069,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[1 1 1],0.102366632088305,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[2 1 1],0.111107240894916,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[3 1 1],0.109296372771007,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[1 2 1],0.104474140796666,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[2 2 1],0.108843245261709,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[3 2 1],0.10491553691245,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[1 1 2],0.10261034881651,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[3 1 2],0.109967920502511,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[1 2 2],0.106352503678562,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[2 2 2],0.115505171416431,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[3 2 2],0.108834844258847,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[1 1 3],0.103325159338067,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[2 1 3],0.112395284045028,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[3 1 3],0.111040876900226,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[1 2 3],0.101455979278536,16,1
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[2 2 3],0.10838118570403,16,0
+local_order_retuning,Local order retuning,ARX,I,[2 1 2],[3 2 3],0.108732816720768,16,0

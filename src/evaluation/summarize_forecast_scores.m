@@ -20,7 +20,7 @@ function summaries = summarize_forecast_scores(window_scores, pointwise_scores, 
 %       summaries - Structure with scenario, horizon, model, calibration,
 %                   and WIS-component summary tables.
 %
-%   See also COMPUTE_WIS, COMPUTE_RMSE, COMPUTE_COVERAGE.
+%   See also COMPUTE_WIS, EVALUATE_FORECAST_WINDOW_METRICS.
 %
 % A. M. Kaahin 2026-06-01
 
