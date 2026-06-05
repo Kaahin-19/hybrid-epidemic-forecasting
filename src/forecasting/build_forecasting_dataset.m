@@ -52,10 +52,10 @@ function scenario_data = build_forecasting_dataset(cfg, exo_mode)
         scaled_I = loaded.I_true(:) / cfg.sirs.pop_size;
 
         switch exo_mode
-            case 'None', U_true = [];
-            case 'S',    U_true = scaled_S;
-            case 'I',    U_true = scaled_I;
-            case 'Both', U_true = [scaled_S, scaled_I];
+            case "None", U_true = [];
+            case "S",    U_true = scaled_S;
+            case "I",    U_true = scaled_I;
+            case "Both", U_true = [scaled_S, scaled_I];
             otherwise
                 error('FORECAST:UnknownExoMode', ...
                     'Unsupported EXO_MODE: %s', exo_mode);

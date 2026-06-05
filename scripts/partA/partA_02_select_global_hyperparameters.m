@@ -71,8 +71,8 @@ clear pool_cleanup
 
 %% 4. Artifact Generation
 wis_alphas = cfg.forecast.wis_alphas;
-aggregation_mode = 'equal_scenario_mean_wis';
-failure_policy = 'inf_on_invalid';
+aggregation_mode = "equal_scenario_mean_wis";
+failure_policy = "inf_on_invalid";
 cfg_snapshot = cfg.run_snapshot;
 
 file_prefix = sprintf('partA_02_global_hyperparameters_%s_%s', model_type, exo_mode);

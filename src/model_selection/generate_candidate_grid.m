@@ -55,17 +55,17 @@ end
 function candidate_grid = local_full_grid(cfg, model_type)
 %LOCAL_FULL_GRID Build the full Part A candidate grid.
     switch model_type
-        case 'AR'
+        case "AR"
             candidate_grid = (1:cfg.forecast.max_ar_order)';
 
-        case 'ARX'
+        case "ARX"
             [P, NB, NK] = ndgrid( ...
                 1:cfg.forecast.max_ar_order, ...
                 1:cfg.forecast.max_exo_order, ...
                 1:cfg.forecast.max_exo_delay);
             candidate_grid = [P(:), NB(:), NK(:)];
 
-        case {'N4SID', 'SSEST'}
+        case {"N4SID", "SSEST"}
             [N_order, D_order] = ndgrid( ...
                 1:cfg.forecast.max_state_order, ...
                 cfg.forecast.state_diff_orders);
@@ -80,9 +80,9 @@ end
 function candidate_grid = local_centered_grid(grid_cfg, model_type, center_order)
 %LOCAL_CENTERED_GRID Build a small grid centered on a selected order.
     switch model_type
-        case 'AR'
+        case "AR"
             candidate_grid = local_ar_grid(center_order, grid_cfg.ar);
-        case 'ARX'
+        case "ARX"
             candidate_grid = local_arx_grid(center_order, grid_cfg.arx);
         otherwise
             error('MODEL_SELECTION:UnsupportedLocalGridModel', ...

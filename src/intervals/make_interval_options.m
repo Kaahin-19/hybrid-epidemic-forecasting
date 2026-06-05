@@ -35,16 +35,16 @@ function interval_options = make_interval_options(intervals_cfg, context)
 % A. M. Kaahin 2026-06-01
 
     %% 1. Input Validation
-    stage = char(string(context.stage));
-    if ~any(strcmp(stage, {'selection', 'final'}))
+    stage = string(context.stage);
+    if ~any(stage == ["selection", "final"])
         error('INTERVALS:InvalidStage', 'context.stage must be selection or final.');
     end
 
     base_seed = double(intervals_cfg.seed);
 
     %% 2. Stage-Specific Budget and Mode
-    if strcmp(stage, 'selection')
-        method = string(intervals_cfg.selection_method);
+    if stage == "selection"
+        method = intervals_cfg.selection_method;
         num_draws = double(intervals_cfg.selection_num_draws);
         epidemic_mode = "frozen";
         include_epidemic_seed_variation = false;
@@ -54,7 +54,7 @@ function interval_options = make_interval_options(intervals_cfg, context)
             {context.scenario_key, context.window_index});
         epidemic_base_seed = double(context.sim_seed);
     else
-        method = string(intervals_cfg.final_method);
+        method = intervals_cfg.final_method;
         num_draws = double(intervals_cfg.final_num_draws);
         epidemic_mode = "resimulate";
         include_epidemic_seed_variation = logical(intervals_cfg.include_epidemic_seed_variation);
@@ -70,7 +70,7 @@ function interval_options = make_interval_options(intervals_cfg, context)
     %% 3. Output Assembly
     interval_options = struct();
     interval_options.enabled = logical(intervals_cfg.enabled);
-    interval_options.stage = string(stage);
+    interval_options.stage = stage;
     interval_options.method = method;
     interval_options.num_draws = num_draws;
     interval_options.alphas = reshape(double(context.alphas), 1, []);

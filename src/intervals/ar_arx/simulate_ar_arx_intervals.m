@@ -41,7 +41,7 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
 % A. M. Kaahin 2026-06-01
 
     %% 1. Setup
-    model_type = char(model_type);
+    model_type = string(model_type);
     params = reshape(double(params), 1, []);
     out_alphas = reshape(double(interval_options.alphas), 1, []);
     horizon = double(interval_options.horizon);
@@ -53,7 +53,7 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
 
     %% 2. Family Dispatch
     switch model_type
-        case 'AR'
+        case "AR"
             model = fit_ar_model(Rt_past, params(1));
             aicc = model.aicc;
             if local_is_persistence(model)
@@ -70,7 +70,7 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
             ensemble = simulate_ar_residual_bootstrap_paths( ...
                 model.coefficients.a_values, model.log_history, innovations);
 
-        case 'ARX'
+        case "ARX"
             nb_vec = repmat(params(2), 1, num_exo);
             nk_vec = repmat(params(3), 1, num_exo);
             model = fit_arx_model(Rt_past, U_past, params(1), nb_vec, nk_vec);
@@ -204,15 +204,15 @@ end
 function [Rt_pred, aicc, lower_bounds, upper_bounds] = local_deterministic_fallback( ...
     model_type, model, Rt_past, U_past, sirs_state, interval_options, alphas, horizon)
 %LOCAL_DETERMINISTIC_FALLBACK Reuse analytic forecasts when draws are invalid.
-    exo_mode = char(interval_options.exo_mode);
+    exo_mode = interval_options.exo_mode;
     sirs_cfg = interval_options.sirs_cfg;
     sim_seed = interval_options.sim_seed;
 
     switch model_type
-        case 'AR'
+        case "AR"
             [Rt_pred, aicc, ~, lower_bounds, upper_bounds] = ...
                 forecast_ar_model(model, horizon, alphas);
-        case 'ARX'
+        case "ARX"
             [Rt_pred, aicc, ~, lower_bounds, upper_bounds] = ...
                 forecast_arx_closed_loop(model, Rt_past, U_past, sirs_state, ...
                 sirs_cfg, exo_mode, horizon, alphas, sim_seed);

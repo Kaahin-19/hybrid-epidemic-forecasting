@@ -44,7 +44,7 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
 % A. M. Kaahin 2026-06-01
 
     %% 1. Setup
-    model_type = char(model_type);
+    model_type = string(model_type);
     params = reshape(double(params), 1, []);
     n = params(1);
     d = params(2);
@@ -127,10 +127,10 @@ function [ss, aicc, x_origin, residuals] = local_estimate_statespace( ...
     data = iddata(y, fit_u, 1);
 
     switch model_type
-        case 'N4SID'
+        case "N4SID"
             opt = n4sidOptions('Display', 'off');
             sys = n4sid(data, n, opt);
-        case 'SSEST'
+        case "SSEST"
             opt = ssestOptions('Display', 'off');
             sys = ssest(data, n, opt);
         otherwise
@@ -223,16 +223,16 @@ end
 function [Rt_pred, aicc, lower_bounds, upper_bounds] = local_deterministic_fallback( ...
     model_type, Rt_past, U_past, sirs_state, params, interval_options, alphas, horizon)
 %LOCAL_DETERMINISTIC_FALLBACK Reuse the analytic SS forecast when needed.
-    exo_mode = char(interval_options.exo_mode);
+    exo_mode = interval_options.exo_mode;
     sirs_cfg = interval_options.sirs_cfg;
     sim_seed = interval_options.sim_seed;
 
     switch model_type
-        case 'N4SID'
+        case "N4SID"
             [Rt_pred, aicc, ~, lower_bounds, upper_bounds] = fit_n4sid_model( ...
                 Rt_past, U_past, [], params(1), params(2), horizon, alphas, ...
                 sirs_state, sirs_cfg, exo_mode, sim_seed);
-        case 'SSEST'
+        case "SSEST"
             [Rt_pred, aicc, ~, lower_bounds, upper_bounds] = fit_ssest_model( ...
                 Rt_past, U_past, [], params(1), params(2), horizon, alphas, ...
                 sirs_state, sirs_cfg, exo_mode, sim_seed);
