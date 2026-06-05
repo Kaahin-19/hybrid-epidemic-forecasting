@@ -1,9 +1,9 @@
-function [candidate_grid, parameter_names] = generate_candidate_grid(cfg, model_type, options)
+function candidate_grid = generate_candidate_grid(cfg, model_type, options)
 %GENERATE_CANDIDATE_GRID Construct model-configuration candidate grids.
 %
 %   Syntax:
-%       [candidate_grid, parameter_names] = generate_candidate_grid(cfg, model_type)
-%       [candidate_grid, parameter_names] = generate_candidate_grid(cfg, model_type, options)
+%       candidate_grid = generate_candidate_grid(cfg, model_type)
+%       candidate_grid = generate_candidate_grid(cfg, model_type, options)
 %
 %   Description:
 %       Creates a candidate hyperparameter grid for the requested model
@@ -22,8 +22,7 @@ function [candidate_grid, parameter_names] = generate_candidate_grid(cfg, model_
 %                      center_order - Center order for local mode.
 %
 %   Outputs:
-%       candidate_grid  - Numeric matrix with one candidate per row.
-%       parameter_names - Cell array of parameter labels matching columns.
+%       candidate_grid - Numeric matrix with one candidate per row.
 %
 %   See also PARTA_CONFIG, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, ...
 %            SELECT_PARTC_LOCAL_ORDERS.
@@ -37,15 +36,15 @@ function [candidate_grid, parameter_names] = generate_candidate_grid(cfg, model_
     end
 
     mode = "full";
-    if isfield(options, 'mode') && strlength(string(options.mode)) > 0
+    if isfield(options, 'mode')
         mode = string(options.mode);
     end
 
     switch mode
         case "full"
-            [candidate_grid, parameter_names] = local_full_grid(cfg, model_type);
+            candidate_grid = local_full_grid(cfg, model_type);
         case "local"
-            [candidate_grid, parameter_names] = local_centered_grid( ...
+            candidate_grid = local_centered_grid( ...
                 cfg.local_order_grid, model_type, options.center_order);
         otherwise
             error('MODEL_SELECTION:UnknownGridMode', ...
@@ -53,12 +52,11 @@ function [candidate_grid, parameter_names] = generate_candidate_grid(cfg, model_
     end
 end
 
-function [candidate_grid, parameter_names] = local_full_grid(cfg, model_type)
+function candidate_grid = local_full_grid(cfg, model_type)
 %LOCAL_FULL_GRID Build the full Part A candidate grid.
     switch char(model_type)
         case 'AR'
             candidate_grid = (1:cfg.forecast.max_ar_order)';
-            parameter_names = {'p'};
 
         case 'ARX'
             [P, NB, NK] = ndgrid( ...
@@ -66,14 +64,12 @@ function [candidate_grid, parameter_names] = local_full_grid(cfg, model_type)
                 1:cfg.forecast.max_exo_order, ...
                 1:cfg.forecast.max_exo_delay);
             candidate_grid = [P(:), NB(:), NK(:)];
-            parameter_names = {'na', 'nb', 'nk'};
 
         case {'N4SID', 'SSEST'}
             [N_order, D_order] = ndgrid( ...
                 1:cfg.forecast.max_state_order, ...
                 cfg.forecast.state_diff_orders);
             candidate_grid = [N_order(:), D_order(:)];
-            parameter_names = {'State_Order_n', 'Differencing_d'};
 
         otherwise
             error('MODEL_SELECTION:UnknownModel', ...
@@ -81,16 +77,14 @@ function [candidate_grid, parameter_names] = local_full_grid(cfg, model_type)
     end
 end
 
-function [candidate_grid, parameter_names] = local_centered_grid(grid_cfg, model_type, center_order)
+function candidate_grid = local_centered_grid(grid_cfg, model_type, center_order)
 %LOCAL_CENTERED_GRID Build a small grid centered on a selected order.
     center_order = reshape(double(center_order), 1, []);
-    switch char(string(model_type))
+    switch char(model_type)
         case 'AR'
             candidate_grid = local_ar_grid(center_order, grid_cfg.ar);
-            parameter_names = {'p'};
         case 'ARX'
             candidate_grid = local_arx_grid(center_order, grid_cfg.arx);
-            parameter_names = {'na', 'nb', 'nk'};
         otherwise
             error('MODEL_SELECTION:UnsupportedLocalGridModel', ...
                 'Local candidate grids support only AR and ARX.');
@@ -99,27 +93,18 @@ end
 
 function candidate_orders = local_ar_grid(center_order, ar_cfg)
 %LOCAL_AR_GRID Build candidate p values around the selected AR order.
-    if numel(center_order) ~= 1
-        error('MODEL_SELECTION:InvalidCenterOrder', 'AR center_order must be scalar p.');
-    end
-
-    p0 = round(double(center_order(1)));
+    p0 = round(center_order(1));
     p_values = (p0 - ar_cfg.p_radius):(p0 + ar_cfg.p_radius);
     p_values = p_values(p_values >= ar_cfg.min_p & p_values <= ar_cfg.max_p);
     p_values = unique([p_values(:); p0], 'stable');
     p_values = p_values(p_values >= ar_cfg.min_p & p_values <= ar_cfg.max_p);
 
-    candidate_orders = reshape(double(p_values), [], 1);
+    candidate_orders = reshape(p_values, [], 1);
 end
 
 function candidate_orders = local_arx_grid(center_order, arx_cfg)
 %LOCAL_ARX_GRID Build candidate [na nb nk] values around selected ARX order.
-    if numel(center_order) ~= 3
-        error('MODEL_SELECTION:InvalidCenterOrder', ...
-            'ARX center_order must be [na nb nk].');
-    end
-
-    center_order = round(double(center_order));
+    center_order = round(center_order);
     na_values = local_axis(center_order(1), arx_cfg.na_radius, ...
         arx_cfg.min_na, arx_cfg.max_na);
     nb_values = local_axis(center_order(2), arx_cfg.nb_radius, ...
@@ -138,5 +123,5 @@ function values = local_axis(center_value, radius, min_value, max_value)
     values = values(values >= min_value & values <= max_value);
     values = unique([values(:); center_value], 'stable');
     values = values(values >= min_value & values <= max_value);
-    values = reshape(double(values), [], 1);
+    values = reshape(values, [], 1);
 end

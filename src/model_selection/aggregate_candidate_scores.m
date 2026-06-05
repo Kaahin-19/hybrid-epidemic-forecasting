@@ -1,9 +1,9 @@
-function [candidate_scores, scenario_mean_wis, global_mean_wis] = ...
+function [candidate_scores, global_mean_wis] = ...
     aggregate_candidate_scores(candidate_grid, scenario_data, evaluation_options)
 %AGGREGATE_CANDIDATE_SCORES Evaluate and aggregate Part A candidate scores.
 %
 %   Syntax:
-%       [candidate_scores, scenario_mean_wis, global_mean_wis] = ...
+%       [candidate_scores, global_mean_wis] = ...
 %           aggregate_candidate_scores(candidate_grid, scenario_data, evaluation_options)
 %
 %   Description:
@@ -17,14 +17,13 @@ function [candidate_scores, scenario_mean_wis, global_mean_wis] = ...
 %       evaluation_options - Structure consumed by evaluate_candidate.
 %
 %   Outputs:
-%       candidate_scores  - Candidate-by-scenario mean WIS matrix.
-%       scenario_mean_wis - Alias for candidate_scores.
-%       global_mean_wis   - Mean WIS across scenarios for each candidate.
+%       candidate_scores - Candidate-by-scenario mean WIS matrix.
+%       global_mean_wis  - Mean WIS across scenarios for each candidate.
 %
 %   See also EVALUATE_CANDIDATE, SELECT_BEST_CONFIGURATION.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-02
+% Modified: 2026-06-05
 
 %% 1. Candidate Scoring
 num_candidates = size(candidate_grid, 1);
@@ -41,17 +40,10 @@ afterEach(progress_queue, @(~) local_report_candidate_progress( ...
 model_type = evaluation_options.model_type;
 
 if num_candidates == 0
-    scenario_mean_wis = candidate_scores;
     return;
 end
 
-first_scores = evaluate_candidate( ...
-    model_type, candidate_grid(1, :), scenario_data, evaluation_options);
-candidate_scores(1, :) = first_scores;
-global_mean_wis(1) = mean(first_scores);
-send(progress_queue, 1);
-
-parfor idx = 2:num_candidates
+parfor idx = 1:num_candidates
     scenario_scores = evaluate_candidate( ...
         model_type, candidate_grid(idx, :), ...
         scenario_data, evaluation_options);
@@ -60,8 +52,6 @@ parfor idx = 2:num_candidates
     global_mean_wis(idx) = mean(scenario_scores);
     send(progress_queue, idx);
 end
-
-scenario_mean_wis = candidate_scores;
 end
 
 function local_report_candidate_progress(~, total_models, report_interval, reset_flag)

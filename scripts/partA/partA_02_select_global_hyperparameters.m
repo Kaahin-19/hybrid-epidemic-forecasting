@@ -16,7 +16,7 @@
 %            EVALUATE_CANDIDATE, AGGREGATE_CANDIDATE_SCORES, SELECT_BEST_CONFIGURATION.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-04
+% Modified: 2026-06-05
 
 %% 1. Initialization
 clear; close all; clc;
@@ -24,10 +24,10 @@ clear; close all; clc;
 fprintf('=== Global Model-Configuration Selection ===\n');
 
 cfg = partA_config();
-MODEL_TYPE = char(cfg.run.model_type);
-EXO_MODE   = char(cfg.run.exo_mode);
+model_type = char(cfg.run.model_type);
+exo_mode   = char(cfg.run.exo_mode);
 
-fprintf('Configuration: Model = %s | Exogenous Mode = %s\n', MODEL_TYPE, EXO_MODE);
+fprintf('Configuration: Model = %s | Exogenous Mode = %s\n', model_type, exo_mode);
 
 selectionDir = cfg.output.model_selection_dir;
 if ~exist(selectionDir, 'dir')
@@ -35,16 +35,16 @@ if ~exist(selectionDir, 'dir')
 end
 
 %% 2. Candidate and Scenario Setup
-candidate_grid = generate_candidate_grid(cfg, MODEL_TYPE);
+candidate_grid = generate_candidate_grid(cfg, model_type);
 num_candidates = size(candidate_grid, 1);
 
-scenario_data = build_forecasting_dataset(cfg, EXO_MODE);
+scenario_data = build_forecasting_dataset(cfg, exo_mode);
 scenario_ids = reshape(string({scenario_data.scenario_id}), 1, []);
 window_counts = arrayfun(@(s) numel(s.windows), scenario_data(:)');
 
-pool_cleanup = onCleanup(@local_shutdown_parallel_pool);
 if isempty(gcp('nocreate'))
     parpool('Processes', cfg.run.num_workers);
+    pool_cleanup = onCleanup(@local_shutdown_parallel_pool);
 end
 
 %% 3. Candidate Evaluation
@@ -52,37 +52,35 @@ fprintf('Stage: Evaluating %d candidate configurations across %d scenarios\n', .
     num_candidates, length(scenario_data));
 
 evaluation_options = struct( ...
-    'model_type', MODEL_TYPE, ...
-    'exo_mode', EXO_MODE, ...
+    'model_type', model_type, ...
+    'exo_mode', exo_mode, ...
     'sirs_cfg', cfg.sirs, ...
     'sim_seed', cfg.sim.seed, ...
     'horizon', cfg.forecast.horizon, ...
     'wis_alphas', cfg.forecast.wis_alphas, ...
     'intervals', cfg.intervals);
 
-[candidate_scores, scenario_mean_wis, global_mean_wis] = ...
+[candidate_scores, global_mean_wis] = ...
     aggregate_candidate_scores(candidate_grid, scenario_data, evaluation_options);
 
 fprintf('Stage: Candidate evaluation complete\n');
+clear pool_cleanup
 
 [selected_configuration, selected_index, best_global_wis] = ...
     select_best_configuration(candidate_grid, global_mean_wis);
 
 %% 4. Artifact Generation
-model_type = MODEL_TYPE;
-exo_mode = EXO_MODE;
 wis_alphas = cfg.forecast.wis_alphas;
 aggregation_mode = 'equal_scenario_mean_wis';
 failure_policy = 'inf_on_invalid';
 cfg_snapshot = cfg.run_snapshot;
 
-file_prefix = sprintf('partA_02_global_hyperparameters_%s_%s', MODEL_TYPE, EXO_MODE);
+file_prefix = sprintf('partA_02_global_hyperparameters_%s_%s', model_type, exo_mode);
 artifact_path = fullfile(selectionDir, [file_prefix, '.mat']);
 
 save(artifact_path, ...
     'model_type', 'exo_mode', ...
-    'candidate_grid', 'candidate_scores', ...
-    'scenario_mean_wis', 'global_mean_wis', ...
+    'candidate_grid', 'candidate_scores', 'global_mean_wis', ...
     'selected_configuration', 'selected_index', ...
     'scenario_ids', 'window_counts', 'cfg_snapshot', ...
     'wis_alphas', 'aggregation_mode', 'failure_policy', 'best_global_wis');
