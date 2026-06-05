@@ -47,6 +47,7 @@ function ensemble_Rt = simulate_arx_closed_loop_bootstrap_paths( ...
 %            INITIALIZE_SIRS_STEPPER, ADVANCE_SIRS_STEPPER.
 %
 % A. M. Kaahin 2026-06-01
+% Modified: 2026-06-05
 
     %% 1. Input Preparation
     log_history = double(log_history(:));
@@ -61,7 +62,7 @@ function ensemble_Rt = simulate_arx_closed_loop_bootstrap_paths( ...
     end
 
     [horizon, num_draws] = size(innovations);
-    exo_mode = char(interval_options.exo_mode);
+    exo_mode = interval_options.exo_mode;
     sirs_cfg = interval_options.sirs_cfg;
     pop_size = sirs_cfg.pop_size;
     [log_lo, log_hi] = local_log_clip_range();
@@ -73,7 +74,7 @@ function ensemble_Rt = simulate_arx_closed_loop_bootstrap_paths( ...
 
     ensemble_Rt = nan(horizon, num_draws);
 
-    if strcmp(char(interval_options.epidemic_mode), 'frozen')
+    if interval_options.epidemic_mode == "frozen"
         %% 3a. Frozen Exogenous Path (deterministic single epidemic pass)
         future_U = local_deterministic_future_exogenous( ...
             coefficients, log_history, U_history, sirs_state, ...

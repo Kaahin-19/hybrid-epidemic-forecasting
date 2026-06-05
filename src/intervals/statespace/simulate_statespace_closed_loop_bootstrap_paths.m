@@ -41,6 +41,7 @@ function ensemble_Rt = simulate_statespace_closed_loop_bootstrap_paths( ...
 %            ADVANCE_SIRS_STEPPER, EXTRACT_EXOGENOUS_FROM_STATE.
 %
 % A. M. Kaahin 2026-06-01
+% Modified: 2026-06-05
 
     %% 1. Input Preparation
     A = double(ss.A); B = double(ss.B); C = double(ss.C);
@@ -66,7 +67,7 @@ function ensemble_Rt = simulate_statespace_closed_loop_bootstrap_paths( ...
     if isvector(U_history)
         U_history = U_history(:);
     end
-    exo_mode = char(interval_options.exo_mode);
+    exo_mode = interval_options.exo_mode;
     sirs_cfg = interval_options.sirs_cfg;
     pop_size = sirs_cfg.pop_size;
 
@@ -74,7 +75,7 @@ function ensemble_Rt = simulate_statespace_closed_loop_bootstrap_paths( ...
         'seed', local_valid_seed(interval_options.epidemic_base_seed));
     stepper = initialize_sirs_stepper(sirs_cfg, sim_options);
 
-    if strcmp(char(interval_options.epidemic_mode), 'frozen')
+    if interval_options.epidemic_mode == "frozen"
         future_U = local_deterministic_future_exogenous( ...
             A, B, C, D, x_origin, U_history, sirs_state, stepper, ...
             exo_mode, pop_size, horizon, log_lo, log_hi);

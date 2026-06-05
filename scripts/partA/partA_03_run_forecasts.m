@@ -29,10 +29,10 @@ clear; close all; clc;
 fprintf('=== Forecast Pipeline Execution ===\n');
 
 cfg = partA_config();
-MODEL_TYPE = char(cfg.run.model_type);
-EXO_MODE   = char(cfg.run.exo_mode);
+model_type = cfg.run.model_type;
+exo_mode   = cfg.run.exo_mode;
 
-fprintf('Configuration: Model = %s | Exogenous Mode = %s\n', MODEL_TYPE, EXO_MODE);
+fprintf('Configuration: Model = %s | Exogenous Mode = %s\n', model_type, exo_mode);
 
 saveDir = cfg.output.forecast_dir;
 if ~exist(saveDir, 'dir')
@@ -41,26 +41,22 @@ end
 
 %% 2. Load Selected Configuration
 selected_configuration = local_load_selected_configuration( ...
-    cfg.output.model_selection_dir, MODEL_TYPE, EXO_MODE, cfg);
+    cfg.output.model_selection_dir, model_type, exo_mode, cfg);
 fprintf('Using global configuration: %s\n', mat2str(selected_configuration));
 
 %% 3. Build Dataset and Run Forecasts
-scenario_data = build_forecasting_dataset(cfg, EXO_MODE);
+scenario_data = build_forecasting_dataset(cfg, exo_mode);
 num_scenarios = numel(scenario_data);
 
 forecast_options = struct( ...
     'horizon', cfg.forecast.horizon, ...
     'wis_alphas', cfg.forecast.wis_alphas, ...
     'sirs_cfg', cfg.sirs, ...
-    'exo_mode', EXO_MODE, ...
+    'exo_mode', exo_mode, ...
     'sim_seed', cfg.sim.seed, ...
-    'num_exo', 0, ...
     'intervals', cfg.intervals);
 
 cfg_snapshot = cfg.run_snapshot;
-
-model_type = MODEL_TYPE;
-exo_mode = EXO_MODE;
 
 pool_cleanup = local_start_parallel_pool(cfg.run.num_workers, num_scenarios); %#ok<NASGU>
 
@@ -72,11 +68,11 @@ fprintf('Running forecasts for %d scenarios.\n', num_scenarios);
 
 parfor i = 1:num_scenarios
     scenario_entry = scenario_data(i);
-    scenario_ids(i) = string(scenario_entry.scenario_id);
-    scenario_names(i) = string(scenario_entry.scenario_name);
+    scenario_ids(i) = scenario_entry.scenario_id;
+    scenario_names(i) = scenario_entry.scenario_name;
 
     forecast_results_by_scenario{i} = run_expanding_window_forecast(scenario_entry, ...
-        MODEL_TYPE, selected_configuration, forecast_options);
+        model_type, selected_configuration, forecast_options);
 end
 
 clear pool_cleanup
@@ -84,7 +80,7 @@ clear pool_cleanup
 fprintf('Saving forecast artifacts to: %s\n', saveDir);
 
 for i = 1:num_scenarios
-    scenario_id = char(scenario_ids(i));
+    scenario_id = scenario_ids(i);
     scenario_name = scenario_names(i);
     forecast_results = forecast_results_by_scenario{i};
 
@@ -94,7 +90,7 @@ for i = 1:num_scenarios
     end
 
     %% 4. Persist Forecast Artifact
-    file_prefix = sprintf('partA_03_forecast_%s_%s_%s', scenario_id, MODEL_TYPE, EXO_MODE);
+    file_prefix = sprintf('partA_03_forecast_%s_%s_%s', scenario_id, model_type, exo_mode);
     outName = fullfile(saveDir, [file_prefix, '.mat']);
 
     save(outName, ...
@@ -158,5 +154,5 @@ if ~isfield(selection, 'cfg_snapshot') || ~isequal(selection.cfg_snapshot, cfg.r
         artifact_path);
 end
 
-selected_configuration = reshape(double(selection.selected_configuration), 1, []);
+selected_configuration = selection.selected_configuration;
 end

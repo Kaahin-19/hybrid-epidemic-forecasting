@@ -20,6 +20,7 @@ function U_next = extract_exogenous_from_state(state, exo_mode, pop_size)
 %   See also FORECAST_ARX_CLOSED_LOOP, ADVANCE_EPIDEMIC_STATE.
 %
 % A. M. Kaahin 2026-05-31
+% Modified: 2026-06-05
 
     %% 1. Input Validation
     state = reshape(double(state), 1, []);
@@ -31,12 +32,13 @@ function U_next = extract_exogenous_from_state(state, exo_mode, pop_size)
     end
 
     %% 2. Covariate Extraction
-    switch char(string(exo_mode))
-        case 'S'
+    exo_mode = string(exo_mode);
+    switch exo_mode
+        case "S"
             U_next = state(1) / pop_size;
-        case 'I'
+        case "I"
             U_next = state(2) / pop_size;
-        case 'Both'
+        case "Both"
             U_next = state(1:2) / pop_size;
         otherwise
             error('ARX:InvalidExogenousMode', ...

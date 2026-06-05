@@ -33,6 +33,7 @@ function interval_options = make_interval_options(intervals_cfg, context)
 %   See also SIMULATE_AR_ARX_INTERVALS, SIMULATE_STATESPACE_INTERVALS.
 %
 % A. M. Kaahin 2026-06-01
+% Modified: 2026-06-05
 
     %% 1. Input Validation
     stage = string(context.stage);
@@ -48,8 +49,6 @@ function interval_options = make_interval_options(intervals_cfg, context)
         num_draws = double(intervals_cfg.selection_num_draws);
         epidemic_mode = "frozen";
         include_epidemic_seed_variation = false;
-        % Common random numbers across candidates: the residual-resampling
-        % seed depends only on the scenario and window, not the candidate.
         resample_seed = local_hash_seed(base_seed, ...
             {context.scenario_key, context.window_index});
         epidemic_base_seed = double(context.sim_seed);
@@ -58,7 +57,6 @@ function interval_options = make_interval_options(intervals_cfg, context)
         num_draws = double(intervals_cfg.final_num_draws);
         epidemic_mode = "resimulate";
         include_epidemic_seed_variation = logical(intervals_cfg.include_epidemic_seed_variation);
-        % Distinct deterministic seeds per scenario, window, model, and exo mode.
         resample_seed = local_hash_seed(base_seed, ...
             {context.scenario_key, context.window_index, ...
             context.model_type, context.exo_mode});
