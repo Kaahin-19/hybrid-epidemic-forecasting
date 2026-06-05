@@ -24,8 +24,8 @@ clear; close all; clc;
 fprintf('=== Global Model-Configuration Selection ===\n');
 
 cfg = partA_config();
-model_type = char(cfg.run.model_type);
-exo_mode   = char(cfg.run.exo_mode);
+model_type = cfg.run.model_type;
+exo_mode   = cfg.run.exo_mode;
 
 fprintf('Configuration: Model = %s | Exogenous Mode = %s\n', model_type, exo_mode);
 
@@ -39,7 +39,7 @@ candidate_grid = generate_candidate_grid(cfg, model_type);
 num_candidates = size(candidate_grid, 1);
 
 scenario_data = build_forecasting_dataset(cfg, exo_mode);
-scenario_ids = reshape(string({scenario_data.scenario_id}), 1, []);
+scenario_ids = [scenario_data.scenario_id];
 window_counts = arrayfun(@(s) numel(s.windows), scenario_data(:)');
 
 if isempty(gcp('nocreate'))

@@ -30,13 +30,13 @@ function scenario_scores = evaluate_candidate(model_type, candidate_configuratio
 % Modified: 2026-06-05
 
     %% 1. Candidate Evaluation
-    params = reshape(double(candidate_configuration), 1, []);
+    params = candidate_configuration;
     scenario_scores = inf(1, length(scenario_data));
 
     for s = 1:length(scenario_data)
         data = scenario_data(s);
         window_wis = inf(numel(data.window_data), 1);
-        scenario_key = string(data.scenario_id);
+        scenario_key = data.scenario_id;
 
         for w = 1:numel(data.window_data)
             window_entry = data.window_data(w);
@@ -76,10 +76,10 @@ function [Rt_pred, out_alphas, Rt_lower, Rt_upper] = local_window_forecast( ...
         'sim_seed', evaluation_options.sim_seed, ...
         'scenario_key', scenario_key, ...
         'window_index', w, ...
-        'model_type', string(model_type));
+        'model_type', model_type);
     interval_options = make_interval_options(evaluation_options.intervals, context);
 
-    switch char(model_type)
+    switch model_type
         case {'AR', 'ARX'}
             [Rt_pred, ~, out_alphas, Rt_lower, Rt_upper] = ...
                 simulate_ar_arx_intervals(model_type, params, ...
@@ -92,6 +92,6 @@ function [Rt_pred, out_alphas, Rt_lower, Rt_upper] = local_window_forecast( ...
                 window_entry.sirs_state, num_exo, interval_options);
         otherwise
             error('MODEL_SELECTION:UnknownModel', ...
-                'Unsupported MODEL_TYPE: %s', string(model_type));
+                'Unsupported MODEL_TYPE: %s', model_type);
     end
 end

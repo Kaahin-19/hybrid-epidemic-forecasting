@@ -51,14 +51,14 @@ function scenario_data = build_forecasting_dataset(cfg, exo_mode)
         scaled_S = loaded.S_true(:) / cfg.sirs.pop_size;
         scaled_I = loaded.I_true(:) / cfg.sirs.pop_size;
 
-        switch char(exo_mode)
+        switch exo_mode
             case 'None', U_true = [];
             case 'S',    U_true = scaled_S;
             case 'I',    U_true = scaled_I;
             case 'Both', U_true = [scaled_S, scaled_I];
             otherwise
                 error('FORECAST:UnknownExoMode', ...
-                    'Unsupported EXO_MODE: %s', string(exo_mode));
+                    'Unsupported EXO_MODE: %s', exo_mode);
         end
 
         scenario_inputs = struct( ...
@@ -79,13 +79,13 @@ function scenario_data = build_forecasting_dataset(cfg, exo_mode)
                 windows(w), horizon, sirs_cfg);
         end
 
-        scenario_data(i).scenario_id   = string(loaded.scenario_id);
-        scenario_data(i).scenario_name = string(loaded.scenario_name);
+        scenario_data(i).scenario_id   = loaded.scenario_id;
+        scenario_data(i).scenario_name = loaded.scenario_name;
         scenario_data(i).num_exo       = size(U_true, 2);
         scenario_data(i).windows       = windows;
         scenario_data(i).window_data   = window_data;
 
         fprintf('Prepared scenario %d/%d (%s)\n', ...
-            i, length(file_list), char(loaded.scenario_id));
+            i, length(file_list), loaded.scenario_id);
     end
 end

@@ -37,7 +37,7 @@ function candidate_grid = generate_candidate_grid(cfg, model_type, options)
 
     mode = "full";
     if isfield(options, 'mode')
-        mode = string(options.mode);
+        mode = options.mode;
     end
 
     switch mode
@@ -54,7 +54,7 @@ end
 
 function candidate_grid = local_full_grid(cfg, model_type)
 %LOCAL_FULL_GRID Build the full Part A candidate grid.
-    switch char(model_type)
+    switch model_type
         case 'AR'
             candidate_grid = (1:cfg.forecast.max_ar_order)';
 
@@ -73,14 +73,13 @@ function candidate_grid = local_full_grid(cfg, model_type)
 
         otherwise
             error('MODEL_SELECTION:UnknownModel', ...
-                'Unsupported MODEL_TYPE: %s', string(model_type));
+                'Unsupported MODEL_TYPE: %s', model_type);
     end
 end
 
 function candidate_grid = local_centered_grid(grid_cfg, model_type, center_order)
 %LOCAL_CENTERED_GRID Build a small grid centered on a selected order.
-    center_order = reshape(double(center_order), 1, []);
-    switch char(model_type)
+    switch model_type
         case 'AR'
             candidate_grid = local_ar_grid(center_order, grid_cfg.ar);
         case 'ARX'

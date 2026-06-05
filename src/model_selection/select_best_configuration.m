@@ -24,7 +24,6 @@ function [selected_configuration, selected_index, best_global_wis] = ...
 % A. M. Kaahin 2026-05-31
 
     %% 1. Selection
-    global_mean_wis = double(global_mean_wis(:));
     [best_global_wis, selected_index] = min(global_mean_wis);
 
     if ~isfinite(best_global_wis)
