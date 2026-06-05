@@ -22,8 +22,8 @@ function truth = simulate_ground_truth_epidemic(model_type, tspan, Rt_true, mode
 %       sim_options  - Project-defined URDME simulation options.
 %
 %   Outputs:
-%       truth - Structure containing states, Rt_true, beta_curve, metadata,
-%               model parameters, and simulation options.
+%       truth - Structure with tspan, Rt_true, the compartment trajectories
+%               (S/I/R or S/E/I/R), beta_curve, and model_params.
 %
 %   See also PARTA_CONFIG, PARTB_CONFIG, PARTA_01_GENERATE_TRUTH.
 %
@@ -90,34 +90,13 @@ function truth = local_simulate_sirs(tspan, Rt_true, params, options, build_dir)
         Rt_true(end), U(1, end), params.gamma, params.pop_size);
 
     truth = struct();
-    truth.model_type = "SIRS";
-    truth.solver = string(options.solver);
-    truth.seed = options.seed;
     truth.tspan = tspan;
     truth.Rt_true = Rt_true;
     truth.S_true = U(1, :);
     truth.I_true = U(2, :);
     truth.R_true = U(3, :);
-    truth.states = U;
     truth.beta_curve = beta_curve;
     truth.model_params = params;
-    truth.sim_options = options;
-
-    metadata = struct();
-    metadata.state_order = ["S", "I", "R"];
-    metadata.effective_rt_definition = "Rt(k) = beta(k) / gamma * S(k) / N";
-    metadata.beta_formula = "beta_k = Rt_true(k) * gamma * N / S_k";
-    metadata.num_intervals = numel(tspan) - 1;
-    metadata.initial_state = U(:, 1);
-    metadata.waning_immunity = params.xi > 0;
-
-    if params.xi > 0
-        metadata.compartment_model_effective = "SIRS";
-    else
-        metadata.compartment_model_effective = "SIR";
-    end
-
-    truth.metadata = metadata;
 end
 
 function umod = local_advance_sirs_interval(tspan, state0, beta_value, params, ...
@@ -226,29 +205,14 @@ function truth = local_simulate_seir(tspan, Rt_true, params, options, build_dir)
         Rt_true(end), U(1, end), params.gamma, params.pop_size);
 
     truth = struct();
-    truth.model_type = "SEIR";
-    truth.solver = string(options.solver);
-    truth.seed = options.seed;
     truth.tspan = tspan;
     truth.Rt_true = Rt_true;
     truth.S_true = U(1, :);
     truth.E_true = U(2, :);
     truth.I_true = U(3, :);
     truth.R_true = U(4, :);
-    truth.states = U;
     truth.beta_curve = beta_curve;
     truth.model_params = params;
-    truth.sim_options = options;
-
-    metadata = struct();
-    metadata.state_order = ["S", "E", "I", "R"];
-    metadata.effective_rt_definition = "Rt(k) = beta(k) / gamma * S(k) / N";
-    metadata.beta_formula = "beta_k = Rt_true(k) * gamma * N / S_k";
-    metadata.num_intervals = numel(tspan) - 1;
-    metadata.initial_state = U(:, 1);
-    metadata.latent_period_days = 1 / params.sigma;
-
-    truth.metadata = metadata;
 end
 
 function umod = local_advance_seir_interval(tspan, state0, beta_value, params, ...

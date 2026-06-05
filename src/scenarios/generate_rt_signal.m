@@ -46,12 +46,7 @@ function Rt = generate_rt_signal(tspan, scenario)
     end
 
     %% 3. Scientific Sanity Check
-        Rt = reshape(double(Rt), 1, []);
-
-    if numel(Rt) ~= numel(t)
-        error('SCENARIO:SignalLengthMismatch', ...
-            'Generated Rt signal must have the same length as tspan.');
-    end
+    Rt = reshape(Rt, 1, []);
 
     if any(~isfinite(Rt)) || any(Rt <= 0)
         error('SCENARIO:InvalidRtSignal', ...
