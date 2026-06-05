@@ -113,8 +113,6 @@ function panel_spec = local_panel_plot_spec(panel_data, plot_spec, idx)
     panel_spec.title = local_panel_title(panel_data, plot_spec, idx);
     panel_spec.panel_label = local_panel_label(panel_data, plot_spec, idx);
 
-    % Shared labels are drawn once on the layout, so suppress the per-panel
-    % copies to avoid repeating long axis labels on every tile.
     if strlength(string(local_spec_field(plot_spec, 'shared_x_label', ""))) > 0
         panel_spec.x_label = "";
     end
