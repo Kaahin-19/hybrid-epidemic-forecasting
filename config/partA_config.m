@@ -28,7 +28,7 @@ function cfg = partA_config()
 %            PARTA_03_RUN_FORECASTS, PARTA_04_EVALUATE_FORECASTS.
 
 % A. M. Kaahin 2026-02-18
-% Modified: 2026-06-04
+% Modified: 2026-06-07
 
 cfg = struct();
 
@@ -164,7 +164,6 @@ cfg.run_snapshot = struct( ...
     'sim_seed',   cfg.sim.seed);
 
 %% 9. Predictive Interval Settings
-cfg.intervals.enabled = true;
 cfg.intervals.seed = 1234;
 cfg.intervals.selection_method = "closed_loop_residual_bootstrap";
 cfg.intervals.final_method = "closed_loop_monte_carlo";

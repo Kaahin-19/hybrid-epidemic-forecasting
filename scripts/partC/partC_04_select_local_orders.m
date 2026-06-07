@@ -18,7 +18,7 @@
 %            GENERATE_CANDIDATE_GRID, PARTC_02_RUN_FORECASTS.
 %
 % A. M. Kaahin 2026-06-03
-% Modified: 2026-06-05
+% Modified: 2026-06-07
 
 %% 1. Initialization
 clear; close all; clc;
@@ -143,8 +143,7 @@ function selection = select_partC_local_orders(cfg, processed, fixed_configs)
             'calibration_end_idx', calibration_end_idx, ...
             'calibration_window_days', [calibration_entry.window_data.window_day], ...
             'calibration_windows', numel(calibration_entry.window_data), ...
-            'candidate_count', size(candidate_orders, 1), ...
-            'selection_interval_mode', local_selection_interval_mode(cfg));
+            'candidate_count', size(candidate_orders, 1));
     end
 
     %% 3. Output Assembly
@@ -172,7 +171,7 @@ function [candidate_scores, selected_order, selected_mean_wis] = ...
 
     for i = 1:num_candidates
         candidate_order = candidate_orders(i, :);
-        forecast_results = run_expanding_window_forecast(calibration_entry, ...
+        forecast_results = local_analytic_calibration_forecast(calibration_entry, ...
             model_cfg.model_type, candidate_order, forecast_options);
         [mean_wis(i), calibration_windows(i)] = ...
             local_mean_calibration_wis(forecast_results);
@@ -194,13 +193,78 @@ function [candidate_scores, selected_order, selected_mean_wis] = ...
     candidate_scores.Selected(selected_idx) = true;
 end
 
-function forecast_options = local_forecast_options(cfg, exo_mode, scenario_entry)
-%LOCAL_FORECAST_OPTIONS Build local-order selection forecast options.
-    intervals_cfg = cfg.intervals;
-    if isfield(cfg.local_order_grid, 'selection_intervals_enabled')
-        intervals_cfg.enabled = logical(cfg.local_order_grid.selection_intervals_enabled);
+function forecast_results = local_analytic_calibration_forecast(scenario_entry, ...
+    model_type, candidate_order, forecast_options)
+%LOCAL_ANALYTIC_CALIBRATION_FORECAST Cheap analytic expanding-window scoring forecast.
+%   Runs the point/analytic model dispatch (no closed-loop interval Monte
+%   Carlo) over the calibration windows and returns only the fields consumed
+%   by local_mean_calibration_wis. This is Part C local-order selection's own
+%   lightweight scoring loop, deliberately separate from the shared final
+%   closed-loop interval forecast in run_model_forecast.
+    model_type = string(model_type);
+    params     = reshape(double(candidate_order), 1, []);
+    horizon    = forecast_options.horizon;
+    wis_alphas = forecast_options.wis_alphas;
+    sirs_cfg   = forecast_options.sirs_cfg;
+    exo_mode   = forecast_options.exo_mode;
+    sim_seed   = forecast_options.sim_seed;
+    num_exo    = scenario_entry.num_exo;
+
+    window_data = scenario_entry.window_data;
+    num_windows = numel(window_data);
+    forecast_results = repmat(struct('Rt_true_future', [], 'Rt_pred', [], ...
+        'lower_bounds', [], 'upper_bounds', [], 'interval_alphas', []), ...
+        num_windows, 1);
+    count = 0;
+
+    for w = 1:num_windows
+        window_entry = window_data(w);
+        if ~window_entry.is_valid_window
+            continue;
+        end
+
+        Rt_past    = window_entry.Rt_past;
+        U_past     = window_entry.U_past;
+        sirs_state = window_entry.sirs_state;
+
+        switch model_type
+            case "AR"
+                ar_model = fit_ar_model(Rt_past, params(1));
+                [Rt_pred, ~, out_alphas, Rt_lower, Rt_upper] = ...
+                    forecast_ar_model(ar_model, horizon, wis_alphas);
+            case "ARX"
+                nb_vec = repmat(params(2), 1, num_exo);
+                nk_vec = repmat(params(3), 1, num_exo);
+                arx_model = fit_arx_model(Rt_past, U_past, params(1), nb_vec, nk_vec);
+                [Rt_pred, ~, out_alphas, Rt_lower, Rt_upper] = ...
+                    forecast_arx_closed_loop(arx_model, Rt_past, U_past, ...
+                    sirs_state, sirs_cfg, exo_mode, horizon, wis_alphas, sim_seed);
+            case "N4SID"
+                [Rt_pred, ~, out_alphas, Rt_lower, Rt_upper] = ...
+                    fit_n4sid_model(Rt_past, U_past, [], params(1), params(2), ...
+                    horizon, wis_alphas, sirs_state, sirs_cfg, exo_mode, sim_seed);
+            case "SSEST"
+                [Rt_pred, ~, out_alphas, Rt_lower, Rt_upper] = ...
+                    fit_ssest_model(Rt_past, U_past, [], params(1), params(2), ...
+                    horizon, wis_alphas, sirs_state, sirs_cfg, exo_mode, sim_seed);
+            otherwise
+                error('LOCALORDER:UnknownModel', ...
+                    'Unsupported MODEL_TYPE: %s', model_type);
+        end
+
+        count = count + 1;
+        forecast_results(count).Rt_true_future  = window_entry.truth_Rt;
+        forecast_results(count).Rt_pred         = Rt_pred(:);
+        forecast_results(count).lower_bounds    = Rt_lower;
+        forecast_results(count).upper_bounds    = Rt_upper;
+        forecast_results(count).interval_alphas = reshape(double(out_alphas), 1, []);
     end
 
+    forecast_results = forecast_results(1:count);
+end
+
+function forecast_options = local_forecast_options(cfg, exo_mode, scenario_entry)
+%LOCAL_FORECAST_OPTIONS Build local-order selection forecast options.
     forecast_options = struct( ...
         'horizon', cfg.forecast.horizon, ...
         'wis_alphas', cfg.forecast.wis_alphas, ...
@@ -208,7 +272,7 @@ function forecast_options = local_forecast_options(cfg, exo_mode, scenario_entry
         'exo_mode', char(exo_mode), ...
         'sim_seed', cfg.sim.seed, ...
         'num_exo', scenario_entry.num_exo, ...
-        'intervals', intervals_cfg, ...
+        'intervals', cfg.intervals, ...
         'scenario_id', scenario_entry.scenario_id);
 end
 
@@ -278,16 +342,6 @@ function calibration_end_idx = local_calibration_end_index(scenario_entry, cfg, 
     if calibration_end_idx <= min_idx || calibration_end_idx >= n
         error('PARTC:InvalidCalibrationSplit', ...
             'Part C calibration split leaves no usable calibration/evaluation span.');
-    end
-end
-
-function mode = local_selection_interval_mode(cfg)
-%LOCAL_SELECTION_INTERVAL_MODE Describe local-order selection interval mode.
-    if isfield(cfg.local_order_grid, 'selection_intervals_enabled') && ...
-            ~cfg.local_order_grid.selection_intervals_enabled
-        mode = "analytic_dispatcher_intervals";
-    else
-        mode = string(cfg.intervals.selection_method);
     end
 end
 

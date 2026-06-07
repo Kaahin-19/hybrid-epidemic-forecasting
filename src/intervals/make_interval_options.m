@@ -33,7 +33,7 @@ function interval_options = make_interval_options(intervals_cfg, context)
 %   See also SIMULATE_AR_ARX_INTERVALS, SIMULATE_STATESPACE_INTERVALS.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-05
+% Modified: 2026-06-07
 
     %% 1. Input Validation
     stage = string(context.stage);
@@ -67,7 +67,6 @@ function interval_options = make_interval_options(intervals_cfg, context)
 
     %% 3. Output Assembly
     interval_options = struct();
-    interval_options.enabled = logical(intervals_cfg.enabled);
     interval_options.stage = stage;
     interval_options.method = method;
     interval_options.num_draws = num_draws;

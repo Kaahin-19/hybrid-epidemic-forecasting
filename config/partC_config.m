@@ -24,7 +24,7 @@ function cfg = partC_config()
 %   See also PARTA_CONFIG, PARTC_01_PREPARE_REAL_DATA.
 
 % A. M. Kaahin 2026-05-18
-% Modified: 2026-06-03
+% Modified: 2026-06-07
 
     cfg = partA_config();
     partA_output = cfg.output;
@@ -137,7 +137,6 @@ function cfg = partC_config()
     %% 6. Local Order Retuning Grid
     cfg.local_order_grid = struct();
     cfg.local_order_grid.max_calibration_windows = 16;
-    cfg.local_order_grid.selection_intervals_enabled = false;
 
     cfg.local_order_grid.ar = struct();
     cfg.local_order_grid.ar.p_radius = 1;
