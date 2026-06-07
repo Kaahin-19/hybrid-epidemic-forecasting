@@ -216,8 +216,6 @@ end
 
 function [log_lo, log_hi] = local_log_clip_range()
 %LOCAL_LOG_CLIP_RANGE Plausibility guard range for log-Rt draws.
-%   Draws that reach these bounds are treated as divergent and are dropped by
-%   the family entry before quantile reduction.
     log_lo = log(1e-2);
     log_hi = log(1e2);
 end
