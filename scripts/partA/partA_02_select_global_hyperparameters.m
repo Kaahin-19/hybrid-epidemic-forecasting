@@ -66,8 +66,14 @@ evaluation_options = struct( ...
 fprintf('Stage: Candidate evaluation complete\n');
 clear pool_cleanup
 
-[selected_configuration, selected_index, best_global_wis] = ...
-    select_best_configuration(candidate_grid, global_mean_wis);
+[best_global_wis, selected_index] = min(global_mean_wis);
+
+if ~isfinite(best_global_wis)
+    error('MODEL_SELECTION:NoValidCandidate', ...
+        'All candidate model configurations produced invalid global WIS scores.');
+end
+
+selected_configuration = candidate_grid(selected_index, :);
 
 %% 4. Artifact Generation
 wis_alphas = cfg.forecast.wis_alphas;

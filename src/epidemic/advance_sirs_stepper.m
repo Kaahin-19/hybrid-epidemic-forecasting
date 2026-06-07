@@ -25,7 +25,7 @@ function [next_state, stepper] = advance_sirs_stepper(stepper, current_state, Rt
 % Modified: 2026-06-05
 
 %% 1. Prepare Inputs
-params = stepper.params;
+params = stepper.model_params;
 state0 = local_prepare_current_state(current_state, params.pop_size);
 
 %% 2. State-Dependent Driver Update
