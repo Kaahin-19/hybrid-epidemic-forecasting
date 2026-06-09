@@ -50,7 +50,7 @@ fprintf('Loaded %d truth artifact(s) and %d forecast artifact(s).\n', ...
 
 %% 3. Case-Level Diagnostics
 local_generate_case_diagnostics(cfg, truth_records, forecast_records, ...
-    window_scores, summary_tables);
+    window_scores);
 
 %% 4. Thesis-Level Figures
 local_draw_observation_noise_example(cfg, figure_dir, truth_records);
