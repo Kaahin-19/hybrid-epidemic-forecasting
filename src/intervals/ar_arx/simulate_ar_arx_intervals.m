@@ -16,7 +16,10 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
 %       horizon trajectories is generated; and the empirical quantiles form the
 %       predictive median and interval bounds. AR uses the output-only
 %       recursion (no epidemic state), while ARX uses the recursive ARX
-%       coefficient machinery with closed-loop SIRS feedback.
+%       coefficient machinery with closed-loop SIRS feedback. If too few
+%       simulated paths remain plausible, the forecast is returned as an
+%       explicit invalid failure rather than being replaced by an unconstrained
+%       deterministic trajectory.
 %
 %   Inputs:
 %       model_type       - "AR" or "ARX".
@@ -100,11 +103,11 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
     min_valid = max(2, ceil(0.2 * num_draws));
 
     if num_valid < min_valid
-        [Rt_pred, aicc, lower_bounds, upper_bounds] = local_deterministic_fallback( ...
-            model_type, model, Rt_past, U_past, sirs_state, ...
-            interval_options, out_alphas, horizon);
-        meta.interval_status = "deterministic_fallback";
+        [Rt_pred, lower_bounds, upper_bounds] = ...
+            local_insufficient_draws_failure(horizon, out_alphas);
+        meta.interval_status = "insufficient_valid_draws";
         meta.num_valid_draws = num_valid;
+        meta.min_valid_draws = min_valid;
         meta.residual_status = residual_status;
         return;
     end
@@ -201,23 +204,10 @@ function [Rt_pred, lower_bounds, upper_bounds] = ...
     upper_bounds = repmat(Rt_pred, 1, numel(alphas));
 end
 
-function [Rt_pred, aicc, lower_bounds, upper_bounds] = local_deterministic_fallback( ...
-    model_type, model, Rt_past, U_past, sirs_state, interval_options, alphas, horizon)
-%LOCAL_DETERMINISTIC_FALLBACK Reuse analytic forecasts when draws are invalid.
-    exo_mode = interval_options.exo_mode;
-    sirs_cfg = interval_options.sirs_cfg;
-    sim_seed = interval_options.sim_seed;
-
-    switch model_type
-        case "AR"
-            [Rt_pred, aicc, ~, lower_bounds, upper_bounds] = ...
-                forecast_ar_model(model, horizon, alphas);
-        case "ARX"
-            [Rt_pred, aicc, ~, lower_bounds, upper_bounds] = ...
-                forecast_arx_closed_loop(model, Rt_past, U_past, sirs_state, ...
-                sirs_cfg, exo_mode, horizon, alphas, sim_seed);
-        otherwise
-            error('INTERVALS:UnknownModel', 'Unsupported model for fallback.');
-    end
-    Rt_pred = double(Rt_pred(:));
+function [Rt_pred, lower_bounds, upper_bounds] = ...
+    local_insufficient_draws_failure(horizon, alphas)
+%LOCAL_INSUFFICIENT_DRAWS_FAILURE Return a shaped invalid forecast failure.
+    Rt_pred = nan(horizon, 1);
+    lower_bounds = nan(horizon, numel(alphas));
+    upper_bounds = nan(horizon, numel(alphas));
 end

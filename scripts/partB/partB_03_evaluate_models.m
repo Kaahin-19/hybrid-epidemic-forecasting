@@ -3,9 +3,9 @@
 %   Description:
 %       Loads Part B forecast artifacts across all active robustness cases,
 %       computes the same Rt metrics used by Part A, summarizes performance
-%       by case/scenario/model/horizon, and writes case-specific
-%       plus cross-case evaluation artifacts and tables. Figure generation is
-%       intentionally delegated to Part B 04.
+%       by case/scenario/model/horizon, records explicit forecast-failure
+%       counts, and writes case-specific plus cross-case evaluation artifacts
+%       and tables. Figure generation is intentionally delegated to Part B 04.
 %
 %   Workflow:
 %       1. Load forecast artifacts from all active case directories.
@@ -496,6 +496,7 @@ function summary_tables = local_summary_tables(window_scores, pointwise_scores, 
     summary_tables.case_wis_component_summary = local_summarize_pointwise_scores( ...
         pointwise_scores, {'CaseID', 'CaseName', 'TruthModel', 'Solver', ...
         'StructuralMismatch', 'ObservationNoise', 'ProcessNoise', 'Model', 'ExoMode'});
+    summary_tables.case_failure_summary = local_summarize_failure_scores(window_scores);
 end
 
 function summary = local_summarize_window_scores(scores, group_vars)
@@ -508,6 +509,8 @@ function summary = local_summarize_window_scores(scores, group_vars)
     summary = keys;
     summary.NumWindows = splitapply(@numel, scores.WindowWIS, G);
     summary.NumValidWindows = splitapply(@(x) sum(logical(x)), scores.IsValid, G);
+    summary.NumFailedWindows = summary.NumWindows - summary.NumValidWindows;
+    summary.FailureRate = summary.NumFailedWindows ./ summary.NumWindows;
     summary.MeanWIS = splitapply(@local_mean_finite, scores.WindowWIS, G);
     summary.MedianWIS = splitapply(@local_median_finite, scores.WindowWIS, G);
     summary.StdWIS = splitapply(@local_std_finite, scores.WindowWIS, G);
@@ -528,6 +531,22 @@ function summary = local_summarize_window_scores(scores, group_vars)
         scores.MeanWISUnderpredictionComponent, G);
     summary.MeanWISOverpredictionComponent = splitapply(@local_mean_finite, ...
         scores.MeanWISOverpredictionComponent, G);
+end
+
+function summary = local_summarize_failure_scores(scores)
+%LOCAL_SUMMARIZE_FAILURE_SCORES Count forecast statuses by case/model/window.
+    if isempty(scores) || height(scores) == 0
+        summary = table();
+        return;
+    end
+
+    group_vars = {'CaseID', 'CaseName', 'TruthModel', 'Solver', ...
+        'StructuralMismatch', 'ObservationNoise', 'ProcessNoise', ...
+        'Scenario', 'ScenarioName', 'Model', 'ExoMode', 'IntervalStatus', ...
+        'RecordedStatus', 'IsValid'};
+    [G, keys] = findgroups(scores(:, group_vars));
+    summary = keys;
+    summary.NumWindows = splitapply(@numel, scores.WindowWIS, G);
 end
 
 function summary = local_summarize_pointwise_scores(scores, group_vars)
@@ -699,6 +718,9 @@ function outputs = local_write_cross_tables(table_dir, metrics, summary_tables, 
     outputs(end + 1, 1) = local_write_table(table_dir, ...
         sprintf('%s_case_wis_component_summary.csv', prefix), ...
         summary_tables.case_wis_component_summary);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_case_failure_summary.csv', prefix), ...
+        summary_tables.case_failure_summary);
     outputs(end + 1, 1) = local_write_table(table_dir, ...
         sprintf('%s_degradation_summary.csv', prefix), summary_tables.degradation_summary);
     outputs(end + 1, 1) = local_write_table(table_dir, ...

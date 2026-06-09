@@ -89,8 +89,11 @@ function local_generate_case_diagnostics(cfg, truth_records, ...
         case_scores = window_scores(window_scores.CaseID == case_id, :);
         local_draw_case_wis_distribution(case_dir, case_id, case_scores);
         local_draw_case_horizon_wis(case_dir, case_id, summary_tables);
-        local_draw_case_representative_forecast(cfg, case_dir, case_id, ...
-            truth_records, forecast_records);
+        model_cases = local_fixed_model_cases(cfg);
+        for m = 1:numel(model_cases)
+            local_draw_case_representative_forecast(cfg, case_dir, case_id, ...
+                model_cases(m), truth_records, forecast_records);
+        end
     end
 end
 
@@ -156,10 +159,13 @@ function output_path = local_draw_case_horizon_wis(case_dir, case_id, summary_ta
 end
 
 function output_path = local_draw_case_representative_forecast(cfg, case_dir, ...
-    case_id, truth_records, forecast_records)
-%LOCAL_DRAW_CASE_REPRESENTATIVE_FORECAST Draw one representative forecast.
+    case_id, model_case, truth_records, forecast_records)
+%LOCAL_DRAW_CASE_REPRESENTATIVE_FORECAST Draw fixed-lead forecasts across windows.
+    model_label = local_model_case_label(model_case);
+    model_token = local_model_case_token(model_case);
     spec = build_plot_spec( ...
-        'figure_name', sprintf('Part B %s representative forecast', char(case_id)), ...
+        'figure_name', sprintf('Part B %s %s representative forecast', ...
+            char(case_id), char(model_label)), ...
         'title', "", ...
         'x_label', "Time, $t$ (days)", ...
         'y_label', "Effective reproduction number, $R_t$", ...
@@ -169,11 +175,14 @@ function output_path = local_draw_case_representative_forecast(cfg, case_dir, ..
         'y_limits', cfg.Rt.bounds, ...
         'legend', struct('location', "northoutside", ...
             'orientation', "horizontal", 'box', "off", 'font_size', 8), ...
-        'output_path', fullfile(case_dir, sprintf('partB_%s_representative_rt_forecast.png', ...
-            char(case_id))), ...
+        'output_path', fullfile(case_dir, ...
+            sprintf('partB_%s_representative_rt_forecast_%s.png', ...
+            char(case_id), char(model_token))), ...
         'size_cm', [16.0, 8.5]);
 
-    forecast_idx = find([forecast_records.case_id] == case_id, 1);
+    forecast_idx = find([forecast_records.case_id] == case_id & ...
+        [forecast_records.model_type] == model_case.model_type & ...
+        [forecast_records.exo_mode] == model_case.exo_mode, 1);
     if isempty(forecast_idx)
         output_path = local_export_empty_panel(spec, "No forecast artifact");
         return;
@@ -194,7 +203,7 @@ function output_path = local_draw_case_representative_forecast(cfg, case_dir, ..
     end
 
     panel.series = local_representative_forecast_series( ...
-        loaded_forecast.forecast_results, truth_records(truth_idx), cfg);
+        loaded_forecast.forecast_results, truth_records(truth_idx), cfg, model_label);
     fig = plot_single_panel(panel, spec);
     output_path = export_figure(fig, spec);
     close(fig);
@@ -615,44 +624,45 @@ function idx = local_match_truth_record(truth_records, forecast_record)
         [truth_records.scenario_id] == forecast_record.scenario_id, 1);
 end
 
-function series = local_representative_forecast_series(forecast_results, truth_record, cfg)
-%LOCAL_REPRESENTATIVE_FORECAST_SERIES Build one forecast-window panel.
+function series = local_representative_forecast_series(forecast_results, truth_record, cfg, model_label)
+%LOCAL_REPRESENTATIVE_FORECAST_SERIES Build a fixed-lead comparison panel.
     colors = local_thesis_color_order();
     series = local_empty_series(0);
 
     series(end + 1, 1) = local_line_series(truth_record.tspan, ...
-        truth_record.Rt_true, "Evaluation target", ...
+        truth_record.Rt_true, "Target", ...
         struct('Color', colors(1, :), 'LineWidth', 1.6), 1);
 
     if any(abs(truth_record.Rt_model_input - truth_record.Rt_true) > 1e-12)
         series(end + 1, 1) = local_line_series(truth_record.tspan, ...
-            truth_record.Rt_model_input, "Model input", ...
+            truth_record.Rt_model_input, "Input", ...
             struct('Color', [0.55, 0.55, 0.55], 'LineWidth', 0.9, ...
             'LineStyle', ':'), 2);
     end
 
-    window_idx = local_first_valid_forecast_window(forecast_results);
-    if isempty(window_idx)
+    if isempty(forecast_results)
         return;
     end
 
-    window = forecast_results(window_idx);
-    t_future = local_struct_vector(window, 't_future');
-    pred = local_struct_vector(window, 'Rt_pred');
-    lower = local_struct_matrix(window, 'lower_bounds');
-    upper = local_struct_matrix(window, 'upper_bounds');
-    alphas = local_struct_vector(window, 'interval_alphas');
+    lead_time = local_plot_lead_time(cfg);
+    alphas = local_struct_vector(forecast_results(1), 'interval_alphas');
     plot_alphas = local_plot_alphas(cfg, alphas);
+    [target_days, pred, lower, upper] = local_extract_fixed_lead( ...
+        forecast_results, lead_time, plot_alphas);
+    labels = local_interval_labels(plot_alphas);
+    interval_colors = local_interval_colors(numel(plot_alphas));
 
-    [alpha_idx, labels] = local_interval_indices(alphas, plot_alphas);
-    interval_colors = local_interval_colors(numel(alpha_idx));
-    for i = 1:numel(alpha_idx)
-        j = alpha_idx(i);
+    for i = 1:numel(plot_alphas)
+        valid_interval = isfinite(target_days) & isfinite(lower(:, i)) & ...
+            isfinite(upper(:, i));
+        if nnz(valid_interval) < 2
+            continue;
+        end
         interval_series = local_empty_series(1);
         interval_series.type = "ribbon";
-        interval_series.x = t_future;
-        interval_series.lower = lower(:, j);
-        interval_series.upper = upper(:, j);
+        interval_series.x = target_days(valid_interval);
+        interval_series.lower = lower(valid_interval, i);
+        interval_series.upper = upper(valid_interval, i);
         interval_series.label = labels(i);
         interval_series.style = struct('FaceColor', interval_colors(i, :), ...
             'FaceAlpha', 0.16 + 0.08 * i, 'EdgeColor', 'none');
@@ -660,20 +670,47 @@ function series = local_representative_forecast_series(forecast_results, truth_r
         series(end + 1, 1) = interval_series; %#ok<AGROW>
     end
 
-    series(end + 1, 1) = local_line_series(t_future, pred, ...
-        "Median forecast", struct('Color', colors(2, :), 'LineWidth', 1.5), 4);
+    valid_median = isfinite(target_days) & isfinite(pred);
+    if any(valid_median)
+        series(end + 1, 1) = local_line_series(target_days(valid_median), ...
+            pred(valid_median), sprintf('%s h = %d', model_label, lead_time), ...
+            struct('Color', colors(2, :), 'LineWidth', 1.5, ...
+            'LineStyle', '--', 'Marker', 'o', 'MarkerSize', 3.0), 4);
+    end
 end
 
-function idx = local_first_valid_forecast_window(forecast_results)
-%LOCAL_FIRST_VALID_FORECAST_WINDOW Return first window with a median path.
-    idx = [];
-    for i = 1:numel(forecast_results)
-        if isfield(forecast_results(i), 'Rt_pred') && ...
-                ~isempty(forecast_results(i).Rt_pred)
-            pred = double(forecast_results(i).Rt_pred(:));
-            if any(isfinite(pred))
-                idx = i;
-                return;
+function [target_days, median_forecast, lower_forecast, upper_forecast] = ...
+    local_extract_fixed_lead(forecast_results, lead_time, plot_alphas)
+%LOCAL_EXTRACT_FIXED_LEAD Extract one forecast lead across all windows.
+    num_results = numel(forecast_results);
+    num_alphas = numel(plot_alphas);
+    target_days = nan(num_results, 1);
+    median_forecast = nan(num_results, 1);
+    lower_forecast = nan(num_results, num_alphas);
+    upper_forecast = nan(num_results, num_alphas);
+
+    for i = 1:num_results
+        pred = local_struct_vector(forecast_results(i), 'Rt_pred');
+        t_future = local_struct_vector(forecast_results(i), 't_future');
+        lower = local_struct_matrix(forecast_results(i), 'lower_bounds');
+        upper = local_struct_matrix(forecast_results(i), 'upper_bounds');
+        alphas = local_struct_vector(forecast_results(i), 'interval_alphas');
+
+        if numel(pred) < lead_time || numel(t_future) < lead_time
+            continue;
+        end
+
+        target_days(i) = t_future(lead_time);
+        median_forecast(i) = pred(lead_time);
+        for j = 1:num_alphas
+            alpha_idx = local_alpha_index(alphas, plot_alphas(j));
+            if isempty(alpha_idx)
+                continue;
+            end
+            if size(lower, 1) >= lead_time && size(upper, 1) >= lead_time && ...
+                    size(lower, 2) >= alpha_idx && size(upper, 2) >= alpha_idx
+                lower_forecast(i, j) = lower(lead_time, alpha_idx);
+                upper_forecast(i, j) = upper(lead_time, alpha_idx);
             end
         end
     end
@@ -779,7 +816,7 @@ end
 function [x_positions, x_labels] = local_robustness_axis(cfg)
 %LOCAL_ROBUSTNESS_AXIS Return x-axis positions for Part A plus Part B cases.
     x_positions = (1:(numel(cfg.robustness_cases) + 1))';
-    x_labels = ["Part A" + newline + "clean"; local_case_axis_labels(cfg)];
+    x_labels = ["Part A"; local_case_axis_labels(cfg)];
 end
 
 function [x_positions, x_labels] = local_case_only_axis(cfg)
@@ -830,6 +867,12 @@ function label = local_model_case_label(model_case)
     label = local_model_exo_label(model_case.model_type, model_case.exo_mode);
 end
 
+function token = local_model_case_token(model_case)
+%LOCAL_MODEL_CASE_TOKEN Return filename token for a configured model case.
+    token = string(model_case.model_type) + "_" + string(model_case.exo_mode);
+    token = regexprep(token, '[^A-Za-z0-9_]+', '_');
+end
+
 function label = local_model_exo_label(model_type, exo_mode)
 %LOCAL_MODEL_EXO_LABEL Return compact model/exogenous label text.
     model_type = string(model_type);
@@ -841,13 +884,13 @@ function label = local_case_short_label(case_id)
 %LOCAL_CASE_SHORT_LABEL Return compact robustness-case label.
     switch char(string(case_id))
         case 'observation_noise'
-            label = "Observation" + newline + "noise";
+            label = "Obs. noise";
         case 'process_noise'
-            label = "Process" + newline + "noise";
+            label = "Process";
         case 'structural_mismatch'
-            label = "SEIR" + newline + "mismatch";
+            label = "SEIR";
         case 'combined_stress'
-            label = "Combined" + newline + "stress";
+            label = "Combined";
         otherwise
             label = string(case_id);
     end
@@ -1068,26 +1111,30 @@ function plot_alphas = local_plot_alphas(cfg, available_alphas)
     end
 end
 
-function [idx, labels] = local_interval_indices(available_alphas, requested_alphas)
-%LOCAL_INTERVAL_INDICES Match requested interval levels to available alphas.
-    available_alphas = double(available_alphas(:));
-    requested_alphas = double(requested_alphas(:));
-    idx = zeros(0, 1);
-    labels = strings(0, 1);
-    for i = 1:numel(requested_alphas)
-        [distance, j] = min(abs(available_alphas - requested_alphas(i)));
-        if isempty(j) || ~isfinite(distance)
-            continue;
-        end
-        if distance < 1e-8 && ~ismember(j, idx)
-            idx(end + 1, 1) = j; %#ok<AGROW>
-            labels(end + 1, 1) = sprintf('%d%% PI', ...
-                round((1 - available_alphas(j)) * 100)); %#ok<AGROW>
-        end
+function lead_time = local_plot_lead_time(cfg)
+%LOCAL_PLOT_LEAD_TIME Return the displayed fixed forecast lead.
+    if isfield(cfg.forecast, 'plot_lead_time') && ~isempty(cfg.forecast.plot_lead_time)
+        lead_time = round(double(cfg.forecast.plot_lead_time));
+    else
+        lead_time = min(7, round(double(cfg.forecast.horizon)));
     end
-    if isempty(idx) && ~isempty(available_alphas)
-        idx = numel(available_alphas);
-        labels = sprintf('%d%% PI', round((1 - available_alphas(idx)) * 100));
+    lead_time = max(1, min(lead_time, round(double(cfg.forecast.horizon))));
+end
+
+function labels = local_interval_labels(plot_alphas)
+%LOCAL_INTERVAL_LABELS Build interval labels for selected alphas.
+    labels = strings(numel(plot_alphas), 1);
+    for i = 1:numel(plot_alphas)
+        labels(i) = sprintf('%d%% PI', round((1 - plot_alphas(i)) * 100));
+    end
+end
+
+function idx = local_alpha_index(stored_alphas, target_alpha)
+%LOCAL_ALPHA_INDEX Match a requested alpha to a stored alpha.
+    stored_alphas = double(stored_alphas(:));
+    [distance, idx] = min(abs(stored_alphas - double(target_alpha)));
+    if isempty(idx) || ~isfinite(distance) || distance > 1e-8
+        idx = [];
     end
 end
 
