@@ -15,7 +15,7 @@
 %            PLOT_SINGLE_PANEL, PLOT_MULTI_PANEL_FIGURE, EXPORT_FIGURE.
 %
 % A. M. Kaahin 2026-06-02
-% Modified: 2026-06-05
+% Modified: 2026-06-09
 
 %% 1. Initialization
 clear; close all; clc;
@@ -84,8 +84,7 @@ function local_generate_case_diagnostics(cfg, truth_records, ...
     case_ids = unique(window_scores.CaseID, 'stable');
     for i = 1:numel(case_ids)
         case_id = case_ids(i);
-        case_dir = fullfile(cfg.output.root_dir, char(case_id), "figures");
-        if ~exist(case_dir, 'dir'), mkdir(case_dir); end
+        case_dir = cfg.output.fig_dir;
 
         case_scores = window_scores(window_scores.CaseID == case_id, :);
         local_draw_case_wis_distribution(case_dir, case_id, case_scores);
@@ -332,7 +331,7 @@ function output_path = local_draw_process_noise_example(~, figure_dir, truth_rec
     for i = 1:min(numel(ssa_idx), 4)
         rec = truth_records(ssa_idx(i));
         series(end + 1, 1) = local_line_series(rec.tspan, rec.I_true, ...
-            sprintf('SSA replicate %d', rec.replicate_id), ...
+            "SSA stochastic trajectory", ...
             struct('Color', colors(1 + mod(i, size(colors, 1) - 1), :), ...
             'LineWidth', 1.0), 1 + i); %#ok<AGROW>
     end
@@ -523,16 +522,13 @@ function truth_records = local_load_truth_records(cfg)
     truth_records = local_empty_truth_record(0);
     for i = 1:numel(cases)
         case_id = string(cases(i).case_id);
-        data_dir = fullfile(cfg.output.data_root_dir, char(case_id));
-        files = dir(fullfile(data_dir, sprintf('partB_%s_truth_*_rep*.mat', ...
-            char(case_id))));
-        files = local_sort_dir_by_name(files);
-        active_replicates = local_active_replicates(cfg, cases(i));
-        for j = 1:numel(files)
-            artifact_path = string(fullfile(files(j).folder, files(j).name));
-            loaded = load(artifact_path);
-            record = local_truth_record_from_loaded(loaded, artifact_path);
-            if local_truth_record_is_active(record, active_scenarios, active_replicates)
+        for j = 1:numel(active_scenarios)
+            artifact_path = fullfile(cfg.output.data_root_dir, ...
+                sprintf('partB_%s_truth_%s.mat', char(case_id), ...
+                char(active_scenarios(j))));
+            if exist(artifact_path, 'file') == 2
+                loaded = load(artifact_path);
+                record = local_truth_record_from_loaded(loaded, artifact_path);
                 truth_records(end + 1, 1) = record; %#ok<AGROW>
             end
         end
@@ -547,18 +543,18 @@ function forecast_records = local_load_forecast_records(cfg)
     forecast_records = local_empty_forecast_record(0);
     for i = 1:numel(cases)
         case_id = string(cases(i).case_id);
-        forecast_dir = fullfile(cfg.output.root_dir, char(case_id), "forecasts");
-        files = dir(fullfile(forecast_dir, sprintf('partB_%s_forecast_*_rep*.mat', ...
-            char(case_id))));
-        files = local_sort_dir_by_name(files);
-        active_replicates = local_active_replicates(cfg, cases(i));
-        for j = 1:numel(files)
-            artifact_path = string(fullfile(files(j).folder, files(j).name));
-            loaded = load(artifact_path);
-            record = local_forecast_record_from_loaded(loaded, artifact_path);
-            if local_forecast_record_is_active(record, active_scenarios, ...
-                    active_replicates, active_forecast_cases)
-                forecast_records(end + 1, 1) = record; %#ok<AGROW>
+        for s = 1:numel(active_scenarios)
+            for f = 1:numel(active_forecast_cases)
+                artifact_path = fullfile(cfg.output.forecast_dir, ...
+                    sprintf('partB_%s_forecast_%s_%s_%s.mat', ...
+                    char(case_id), char(active_scenarios(s)), ...
+                    char(active_forecast_cases(f).model_type), ...
+                    char(active_forecast_cases(f).exo_mode)));
+                if exist(artifact_path, 'file') == 2
+                    loaded = load(artifact_path);
+                    record = local_forecast_record_from_loaded(loaded, artifact_path);
+                    forecast_records(end + 1, 1) = record; %#ok<AGROW>
+                end
             end
         end
     end
@@ -578,7 +574,6 @@ function record = local_truth_record_from_loaded(loaded, artifact_path)
         'observation_noise_enabled', false);
     record.process_noise_enabled = local_loaded_logical(loaded, ...
         'process_noise_enabled', false);
-    record.replicate_id = local_loaded_double(loaded, 'replicate_id', 1);
     record.scenario_id = local_loaded_string(loaded, 'scenario_id', "");
     record.scenario_name = local_loaded_string(loaded, 'scenario_name', "");
     record.tspan = local_loaded_vector(loaded, 'tspan');
@@ -597,7 +592,6 @@ function record = local_forecast_record_from_loaded(loaded, artifact_path)
     record.path = artifact_path;
     record.case_id = local_loaded_string(loaded, 'case_id', "");
     record.scenario_id = local_loaded_string(loaded, 'scenario_id', "");
-    record.replicate_id = local_loaded_double(loaded, 'replicate_id', 1);
     record.model_type = local_loaded_string(loaded, 'model_type', "");
     record.exo_mode = local_loaded_string(loaded, 'exo_mode', "");
     record.source_truth_artifact = local_loaded_string(loaded, ...
@@ -618,8 +612,7 @@ function idx = local_match_truth_record(truth_records, forecast_record)
     end
 
     idx = find([truth_records.case_id] == forecast_record.case_id & ...
-        [truth_records.scenario_id] == forecast_record.scenario_id & ...
-        [truth_records.replicate_id] == forecast_record.replicate_id, 1);
+        [truth_records.scenario_id] == forecast_record.scenario_id, 1);
 end
 
 function series = local_representative_forecast_series(forecast_results, truth_record, cfg)
@@ -922,14 +915,6 @@ function scenario_ids = local_active_scenario_ids(cfg)
     end
 end
 
-function n = local_active_replicates(cfg, case_cfg)
-%LOCAL_ACTIVE_REPLICATES Return active replicate count for one case.
-    n = max(1, floor(double(case_cfg.num_replicates)));
-    if cfg.smoke_test.enabled
-        n = min(n, cfg.smoke_test.num_replicates);
-    end
-end
-
 function forecast_cases = local_active_forecast_cases(cfg)
 %LOCAL_ACTIVE_FORECAST_CASES Return active fixed forecast cases.
     forecast_cases = cfg.fixed_forecast_cases;
@@ -937,26 +922,6 @@ function forecast_cases = local_active_forecast_cases(cfg)
         forecast_cases = forecast_cases(1:min(numel(forecast_cases), ...
             cfg.smoke_test.num_forecast_cases));
     end
-end
-
-function is_active = local_truth_record_is_active(record, active_scenarios, ...
-    active_replicates)
-%LOCAL_TRUTH_RECORD_IS_ACTIVE Check smoke-filtered truth record metadata.
-    is_active = any(active_scenarios == record.scenario_id) && ...
-        record.replicate_id <= active_replicates;
-end
-
-function is_active = local_forecast_record_is_active(record, active_scenarios, ...
-    active_replicates, active_forecast_cases)
-%LOCAL_FORECAST_RECORD_IS_ACTIVE Check smoke-filtered forecast metadata.
-    case_match = false;
-    for i = 1:numel(active_forecast_cases)
-        case_match = case_match || ...
-            (string(active_forecast_cases(i).model_type) == record.model_type && ...
-            string(active_forecast_cases(i).exo_mode) == record.exo_mode);
-    end
-    is_active = any(active_scenarios == record.scenario_id) && ...
-        record.replicate_id <= active_replicates && case_match;
 end
 
 function record = local_empty_truth_record(n)
@@ -970,7 +935,6 @@ function record = local_empty_truth_record(n)
         'structural_mismatch_enabled', false, ...
         'observation_noise_enabled', false, ...
         'process_noise_enabled', false, ...
-        'replicate_id', nan, ...
         'scenario_id', "", ...
         'scenario_name', "", ...
         'tspan', [], ...
@@ -989,7 +953,6 @@ function record = local_empty_forecast_record(n)
         'path', "", ...
         'case_id', "", ...
         'scenario_id', "", ...
-        'replicate_id', nan, ...
         'model_type', "", ...
         'exo_mode', "", ...
         'source_truth_artifact', ""), n, 1);
@@ -1157,10 +1120,4 @@ function value = local_mean_finite(values)
     else
         value = mean(values);
     end
-end
-
-function files = local_sort_dir_by_name(files)
-%LOCAL_SORT_DIR_BY_NAME Sort a dir struct by filename.
-    [~, order] = sort({files.name});
-    files = files(order);
 end

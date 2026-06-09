@@ -7,16 +7,16 @@
 %       latent truth, observed/model-input signals, and evaluation targets.
 %
 %   Workflow:
-%       1. Load configuration and resolve active cases, scenarios, replicates.
+%       1. Load configuration and resolve active cases and scenarios.
 %       2. Generate analytic Rt, simulate latent epidemic truth, and apply
 %          observation noise when enabled.
-%       3. Save one MATLAB truth artifact per case/scenario/replicate.
+%       3. Save one MATLAB truth artifact per case/scenario.
 %
 %   See also PARTB_CONFIG, GENERATE_RT_SIGNAL, SIMULATE_GROUND_TRUTH_EPIDEMIC,
 %            APPLY_OBSERVATION_NOISE.
 %
 % A. M. Kaahin 2026-05-18
-% Modified: 2026-06-03
+% Modified: 2026-06-09
 
 %% 1. Initialization
 clear; close all; clc;
@@ -40,51 +40,44 @@ for c = 1:numel(cases)
     case_dir = local_case_data_dir(cfg, case_cfg.case_id);
     if ~exist(case_dir, 'dir'), mkdir(case_dir); end
 
-    num_replicates = local_active_replicates(cfg, case_cfg);
-    fprintf('Case %s: %s (%d replicate(s))\n', ...
-        case_cfg.case_id, case_cfg.case_name, num_replicates);
+    fprintf('Case %s: %s\n', case_cfg.case_id, case_cfg.case_name);
 
     for i = 1:numel(scenarios)
         scenario = scenarios(i);
         Rt_signal = generate_rt_signal(tspan, scenario);
 
-        for r = 1:num_replicates
-            replicate_id = r;
-            run_label = sprintf('%s/%s/rep%03d', char(case_cfg.case_id), ...
-                char(scenario.id), replicate_id);
-            fprintf('  - Processing %s... ', run_label);
+        run_label = sprintf('%s/%s', char(case_cfg.case_id), ...
+            char(scenario.id));
+        fprintf('  - Processing %s... ', run_label);
 
-            try
-                model_params = local_model_params_for_case(cfg, case_cfg, scenario);
-                sim_options = local_sim_options_for_case(cfg, case_cfg, ...
-                    i, replicate_id);
-                latent_truth = simulate_ground_truth_epidemic( ...
-                    case_cfg.truth_model, tspan, Rt_signal, ...
-                    model_params, sim_options);
-                local_validate_truth_state(latent_truth, case_cfg, scenario.id);
+        try
+            model_params = local_model_params_for_case(cfg, case_cfg, scenario);
+            sim_options = local_sim_options_for_case(cfg, case_cfg, i);
+            latent_truth = simulate_ground_truth_epidemic( ...
+                case_cfg.truth_model, tspan, Rt_signal, ...
+                model_params, sim_options);
+            local_validate_truth_state(latent_truth, case_cfg, scenario.id);
 
-                noise_seed = local_noise_seed(cfg, c, i, replicate_id);
-                observed = apply_observation_noise(latent_truth, ...
-                    case_cfg.observation_noise, noise_seed, cfg.Rt.bounds);
+            noise_seed = local_noise_seed(cfg, c, i);
+            observed = apply_observation_noise(latent_truth, ...
+                case_cfg.observation_noise, noise_seed, cfg.Rt.bounds);
 
-                artifact = local_truth_artifact(cfg, case_cfg, scenario, ...
-                    replicate_id, latent_truth, observed, model_params, ...
-                    sim_options);
+            artifact = local_truth_artifact(cfg, case_cfg, scenario, ...
+                latent_truth, observed, model_params, sim_options);
 
-                out_path = fullfile(case_dir, sprintf('partB_%s_truth_%s_rep%03d.mat', ...
-                    char(case_cfg.case_id), char(scenario.id), replicate_id));
-                save(out_path, '-struct', 'artifact');
-                generated_artifacts(end + 1, 1) = string(out_path); %#ok<SAGROW>
-            catch ME
-                fprintf('FAILED.\n');
-                warning('SIM:Failure', 'Part B truth generation failed for %s: %s', ...
-                    run_label, ME.message);
-                failed_runs(end + 1, 1) = string(run_label); %#ok<SAGROW>
-                continue;
-            end
-
-            fprintf('Saved\n');
+            out_path = fullfile(case_dir, sprintf('partB_%s_truth_%s.mat', ...
+                char(case_cfg.case_id), char(scenario.id)));
+            save(out_path, '-struct', 'artifact');
+            generated_artifacts(end + 1, 1) = string(out_path); %#ok<SAGROW>
+        catch ME
+            fprintf('FAILED.\n');
+            warning('SIM:Failure', 'Part B truth generation failed for %s: %s', ...
+                run_label, ME.message);
+            failed_runs(end + 1, 1) = string(run_label); %#ok<SAGROW>
+            continue;
         end
+
+        fprintf('Saved\n');
     end
 end
 
@@ -119,18 +112,9 @@ function scenarios = local_active_scenarios(cfg)
     end
 end
 
-function n = local_active_replicates(cfg, case_cfg)
-%LOCAL_ACTIVE_REPLICATES Apply optional smoke-test replicate limiting.
-    n = double(case_cfg.num_replicates);
-    if cfg.smoke_test.enabled
-        n = min(n, cfg.smoke_test.num_replicates);
-    end
-    n = max(1, floor(n));
-end
-
-function data_dir = local_case_data_dir(cfg, case_id)
-%LOCAL_CASE_DATA_DIR Return one case-specific data directory.
-    data_dir = fullfile(cfg.output.data_root_dir, char(case_id));
+function data_dir = local_case_data_dir(cfg, ~)
+%LOCAL_CASE_DATA_DIR Return the shared Part B data directory.
+    data_dir = cfg.output.data_root_dir;
 end
 
 function model_params = local_model_params_for_case(cfg, case_cfg, scenario)
@@ -158,29 +142,28 @@ function model_params = local_model_params_for_case(cfg, case_cfg, scenario)
     end
 end
 
-function sim_options = local_sim_options_for_case(cfg, case_cfg, scenario_idx, replicate_id)
+function sim_options = local_sim_options_for_case(cfg, case_cfg, scenario_idx)
 %LOCAL_SIM_OPTIONS_FOR_CASE Build deterministic or stochastic simulation options.
     sim_options = struct();
     sim_options.model_type = case_cfg.truth_model;
     sim_options.solver = case_cfg.solver;
     sim_options.compile = cfg.truth.compile;
     if logical(case_cfg.process_noise.enabled)
-        sim_options.seed = local_process_seed(cfg, case_cfg, scenario_idx, replicate_id);
+        sim_options.seed = local_process_seed(cfg, case_cfg, scenario_idx);
     else
         sim_options.seed = cfg.sim.seed;
     end
 end
 
-function seed = local_process_seed(cfg, case_cfg, scenario_idx, replicate_id)
+function seed = local_process_seed(cfg, case_cfg, scenario_idx)
 %LOCAL_PROCESS_SEED Generate reproducible process-noise seeds.
     case_offset = local_case_seed_offset(case_cfg.case_id);
-    seed = cfg.sim.seed + case_offset + 1000 * scenario_idx + 37 * replicate_id;
+    seed = cfg.sim.seed + case_offset + 1000 * scenario_idx;
 end
 
-function seed = local_noise_seed(cfg, case_idx, scenario_idx, replicate_id)
+function seed = local_noise_seed(cfg, case_idx, scenario_idx)
 %LOCAL_NOISE_SEED Generate reproducible observation-noise seeds.
-    seed = cfg.sim.seed + 500000 + 10000 * case_idx + 1000 * scenario_idx + ...
-        53 * replicate_id;
+    seed = cfg.sim.seed + 500000 + 10000 * case_idx + 1000 * scenario_idx;
 end
 
 function offset = local_case_seed_offset(case_id)
@@ -221,9 +204,9 @@ function local_validate_truth_state(truth, case_cfg, scenario_id)
     end
 end
 
-function artifact = local_truth_artifact(cfg, case_cfg, scenario, replicate_id, ...
+function artifact = local_truth_artifact(cfg, case_cfg, scenario, ...
     latent_truth, observed, model_params, sim_options)
-%LOCAL_TRUTH_ARTIFACT Assemble one case/scenario/replicate artifact.
+%LOCAL_TRUTH_ARTIFACT Assemble one case/scenario artifact.
     artifact = struct();
     artifact.experiment_id = string(cfg.experiment_id);
     artifact.experiment_name = string(cfg.experiment_name);
@@ -235,7 +218,6 @@ function artifact = local_truth_artifact(cfg, case_cfg, scenario, replicate_id, 
     artifact.structural_mismatch_enabled = logical(case_cfg.structural_mismatch_enabled);
     artifact.observation_noise_enabled = logical(case_cfg.observation_noise.enabled);
     artifact.process_noise_enabled = logical(case_cfg.process_noise.enabled);
-    artifact.replicate_id = double(replicate_id);
     artifact.scenario_id = string(scenario.id);
     artifact.scenario_name = string(scenario.name);
 

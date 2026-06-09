@@ -17,7 +17,7 @@ function cfg = partB_config()
 %   See also PARTA_CONFIG, PARTB_01_GENERATE_TRUTH.
 %
 % A. M. Kaahin 2026-05-18
-% Modified: 2026-06-03
+% Modified: 2026-06-09
 
     cfg = partA_config();
 
@@ -74,8 +74,7 @@ function cfg = partB_config()
         "forecast_assumption", cfg.forecast_assumption, ...
         "structural_mismatch_enabled", false, ...
         "observation_noise", cfg.observation_noise.default, ...
-        "process_noise", cfg.process_noise.disabled, ...
-        "num_replicates", 1), 1, 4);
+        "process_noise", cfg.process_noise.disabled), 1, 4);
 
     cfg.robustness_cases(1).case_id = "observation_noise";
     cfg.robustness_cases(1).case_name = "SIRS with observation noise";
@@ -83,7 +82,6 @@ function cfg = partB_config()
     cfg.robustness_cases(1).solver = "uds";
     cfg.robustness_cases(1).observation_noise = cfg.observation_noise.enabled;
     cfg.robustness_cases(1).process_noise = cfg.process_noise.disabled;
-    cfg.robustness_cases(1).num_replicates = 1;
 
     cfg.robustness_cases(2).case_id = "process_noise";
     cfg.robustness_cases(2).case_name = "SIRS with stochastic process noise";
@@ -91,7 +89,6 @@ function cfg = partB_config()
     cfg.robustness_cases(2).solver = "ssa";
     cfg.robustness_cases(2).observation_noise = cfg.observation_noise.default;
     cfg.robustness_cases(2).process_noise = cfg.process_noise.enabled;
-    cfg.robustness_cases(2).num_replicates = 2;
 
     cfg.robustness_cases(3).case_id = "structural_mismatch";
     cfg.robustness_cases(3).case_name = "SEIR structural mismatch";
@@ -100,7 +97,6 @@ function cfg = partB_config()
     cfg.robustness_cases(3).structural_mismatch_enabled = true;
     cfg.robustness_cases(3).observation_noise = cfg.observation_noise.default;
     cfg.robustness_cases(3).process_noise = cfg.process_noise.disabled;
-    cfg.robustness_cases(3).num_replicates = 1;
 
     cfg.robustness_cases(4).case_id = "combined_stress";
     cfg.robustness_cases(4).case_name = "SEIR with observation and process noise";
@@ -109,7 +105,6 @@ function cfg = partB_config()
     cfg.robustness_cases(4).structural_mismatch_enabled = true;
     cfg.robustness_cases(4).observation_noise = cfg.observation_noise.enabled;
     cfg.robustness_cases(4).process_noise = cfg.process_noise.enabled;
-    cfg.robustness_cases(4).num_replicates = 2;
 
     %% 6. Fixed Part A Forecast Cases
     cfg.fixed_forecast_cases = repmat(struct( ...
@@ -131,8 +126,6 @@ function cfg = partB_config()
         "PARTB_SMOKE_NUM_CASES", numel(cfg.robustness_cases));
     cfg.smoke_test.num_scenarios = local_env_positive_integer( ...
         "PARTB_SMOKE_NUM_SCENARIOS", numel(cfg.scenarios));
-    cfg.smoke_test.num_replicates = local_env_positive_integer( ...
-        "PARTB_SMOKE_NUM_REPLICATES", 1);
     cfg.smoke_test.num_forecast_cases = local_env_positive_integer( ...
         "PARTB_SMOKE_NUM_FORECAST_CASES", numel(cfg.fixed_forecast_cases));
     cfg.smoke_test.max_windows = local_env_positive_integer( ...
@@ -151,6 +144,7 @@ function cfg = partB_config()
     cfg.output.partA_evaluation_dir = partA_output.score_dir;
     cfg.output.data_root_dir = fullfile(repoRoot, "data", "partB");
     cfg.output.root_dir = fullfile(repoRoot, "results", "partB");
+    cfg.output.forecast_dir = fullfile(cfg.output.root_dir, "forecasts");
     cfg.output.evaluation_dir = fullfile(cfg.output.root_dir, "evaluation");
     cfg.output.score_dir = cfg.output.evaluation_dir;
     cfg.output.table_dir = fullfile(cfg.output.root_dir, "tables");

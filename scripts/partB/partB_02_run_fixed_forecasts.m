@@ -10,12 +10,12 @@
 %       1. Load configuration, truth artifacts, and fixed Part A choices.
 %       2. Build generic expanding-window forecast inputs for each artifact.
 %       3. Run forecasts through the reusable Part A forecasting dispatcher.
-%       4. Save one MATLAB forecast artifact per case/scenario/replicate/model.
+%       4. Save one MATLAB forecast artifact per case/scenario/model.
 %
 %   See also PARTB_CONFIG, PREPARE_WINDOW_DATA, RUN_EXPANDING_WINDOW_FORECAST.
 %
 % A. M. Kaahin 2026-05-18
-% Modified: 2026-06-03
+% Modified: 2026-06-09
 
 %% 1. Initialization
 clear; close all; clc;
@@ -45,8 +45,8 @@ for i = 1:numel(truth_paths)
     case_forecast_dir = local_case_forecast_dir(cfg, case_id);
     if ~exist(case_forecast_dir, 'dir'), mkdir(case_forecast_dir); end
 
-    fprintf('  - Forecasting %s / %s / rep%03d\n', ...
-        loaded.case_id, loaded.scenario_id, loaded.replicate_id);
+    fprintf('  - Forecasting %s / %s\n', ...
+        loaded.case_id, loaded.scenario_id);
 
     for c = 1:numel(fixed_configs)
         model_cfg = fixed_configs(c);
@@ -66,8 +66,8 @@ for i = 1:numel(truth_paths)
 
         if isempty(forecast_results)
             warning('FORECAST:NoWindows', ...
-                'No valid forecast windows for %s / %s / rep%03d / %s / %s.', ...
-                loaded.case_id, loaded.scenario_id, loaded.replicate_id, ...
+                'No valid forecast windows for %s / %s / %s / %s.', ...
+                loaded.case_id, loaded.scenario_id, ...
                 model_cfg.model_type, model_cfg.exo_mode);
         end
 
@@ -82,7 +82,6 @@ for i = 1:numel(truth_paths)
         structural_mismatch_enabled = logical(loaded.structural_mismatch_enabled);
         observation_noise_enabled = logical(loaded.observation_noise_enabled);
         process_noise_enabled = logical(loaded.process_noise_enabled);
-        replicate_id = double(loaded.replicate_id);
         scenario_id = string(loaded.scenario_id);
         scenario_name = string(loaded.scenario_name);
         model_type = string(model_cfg.model_type);
@@ -94,8 +93,8 @@ for i = 1:numel(truth_paths)
         source_truth_artifact = string(truth_path);
         cfg_snapshot = local_cfg_snapshot(cfg, loaded, forecast_options);
 
-        file_prefix = sprintf('partB_%s_forecast_%s_rep%03d_%s_%s', ...
-            char(case_id), char(scenario_id), replicate_id, ...
+        file_prefix = sprintf('partB_%s_forecast_%s_%s_%s', ...
+            char(case_id), char(scenario_id), ...
             char(model_type), char(exo_mode));
         out_path = fullfile(case_forecast_dir, [file_prefix, '.mat']);
 
@@ -103,7 +102,7 @@ for i = 1:numel(truth_paths)
             'experiment_id', 'experiment_name', 'case_id', 'case_name', ...
             'truth_model', 'solver', 'forecast_assumption', ...
             'structural_mismatch_enabled', 'observation_noise_enabled', ...
-            'process_noise_enabled', 'replicate_id', 'scenario_id', ...
+            'process_noise_enabled', 'scenario_id', ...
             'scenario_name', 'model_type', 'exo_mode', ...
             'selected_configuration', 'selected_configuration_source', ...
             'selected_configuration_artifact', 'selection_metadata', ...
@@ -121,15 +120,11 @@ function paths = local_truth_artifact_paths(cfg)
     active_scenarios = local_active_scenario_ids(cfg);
     paths = strings(0, 1);
     for i = 1:numel(cases)
-        case_dir = fullfile(cfg.output.data_root_dir, char(cases(i).case_id));
-        files = dir(fullfile(case_dir, sprintf('partB_%s_truth_*_rep*.mat', ...
-            char(cases(i).case_id))));
-        files = local_sort_dir_by_name(files);
-        active_replicates = local_active_replicates(cfg, cases(i));
-        for j = 1:numel(files)
-            artifact_path = string(fullfile(files(j).folder, files(j).name));
-            if local_truth_path_is_active(artifact_path, active_scenarios, ...
-                    active_replicates)
+        for j = 1:numel(active_scenarios)
+            artifact_path = fullfile(cfg.output.data_root_dir, ...
+                sprintf('partB_%s_truth_%s.mat', ...
+                char(cases(i).case_id), char(active_scenarios(j))));
+            if exist(artifact_path, 'file') == 2
                 paths(end + 1, 1) = artifact_path; %#ok<AGROW>
             end
         end
@@ -156,29 +151,9 @@ function scenario_ids = local_active_scenario_ids(cfg)
     end
 end
 
-function n = local_active_replicates(cfg, case_cfg)
-%LOCAL_ACTIVE_REPLICATES Return active replicate count for one case.
-    n = max(1, floor(double(case_cfg.num_replicates)));
-    if cfg.smoke_test.enabled
-        n = min(n, cfg.smoke_test.num_replicates);
-    end
-end
-
-function is_active = local_truth_path_is_active(artifact_path, active_scenarios, ...
-    active_replicates)
-%LOCAL_TRUTH_PATH_IS_ACTIVE Check smoke-filtered truth artifact metadata.
-    is_active = false;
-    loaded = load(artifact_path, 'scenario_id', 'replicate_id');
-    if ~isfield(loaded, 'scenario_id') || ~isfield(loaded, 'replicate_id')
-        return;
-    end
-    is_active = any(active_scenarios == string(loaded.scenario_id)) && ...
-        double(loaded.replicate_id) <= active_replicates;
-end
-
-function forecast_dir = local_case_forecast_dir(cfg, case_id)
-%LOCAL_CASE_FORECAST_DIR Return one case-specific forecast directory.
-    forecast_dir = fullfile(cfg.output.root_dir, char(case_id), "forecasts");
+function forecast_dir = local_case_forecast_dir(cfg, ~)
+%LOCAL_CASE_FORECAST_DIR Return the shared Part B forecast directory.
+    forecast_dir = cfg.output.forecast_dir;
 end
 
 function fixed_configs = local_load_fixed_partA_configs(cfg)
@@ -307,7 +282,7 @@ function local_validate_truth_artifact(loaded, artifact_path)
     required_fields = {'case_id', 'case_name', 'truth_model', 'solver', ...
         'forecast_assumption', 'structural_mismatch_enabled', ...
         'observation_noise_enabled', 'process_noise_enabled', ...
-        'replicate_id', 'scenario_id', 'scenario_name', 'Rt_model_input', ...
+        'scenario_id', 'scenario_name', 'Rt_model_input', ...
         'Rt_evaluation_target', 'S_model_input', 'I_model_input', 'tspan'};
     if ~all(isfield(loaded, required_fields))
         error('FORECAST:InvalidTruthArtifact', ...
@@ -427,10 +402,4 @@ function cfg_snapshot = local_cfg_snapshot(cfg, loaded, forecast_options)
     cfg_snapshot.fixed_forecast_cases = cfg.fixed_forecast_cases;
     cfg_snapshot.smoke_test = cfg.smoke_test;
     cfg_snapshot.sim_seed = cfg.sim.seed;
-end
-
-function files = local_sort_dir_by_name(files)
-%LOCAL_SORT_DIR_BY_NAME Sort a dir struct by name.
-    [~, order] = sort({files.name});
-    files = files(order);
 end

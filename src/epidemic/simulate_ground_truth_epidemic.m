@@ -83,7 +83,7 @@ function truth = local_simulate_sirs(tspan, Rt_true, params, options, build_dir)
             interval_tspan, U(:, k), beta_curve(k), params, ...
             options.solver, interval_compile, interval_seed, build_dir);
 
-        U(:, k + 1) = reshape(interval_umod.U(:, end), 3, 1);
+        U(:, k + 1) = max(reshape(interval_umod.U(:, end), 3, 1), 0);
     end
 
     beta_curve(end) = local_beta_from_effective_rt( ...
@@ -198,7 +198,7 @@ function truth = local_simulate_seir(tspan, Rt_true, params, options, build_dir)
             interval_tspan, U(:, k), beta_curve(k), params, ...
             options.solver, interval_compile, interval_seed, build_dir);
 
-        U(:, k + 1) = reshape(interval_umod.U(:, end), 4, 1);
+        U(:, k + 1) = max(reshape(interval_umod.U(:, end), 4, 1), 0);
     end
 
     beta_curve(end) = local_beta_from_effective_rt( ...
@@ -291,12 +291,11 @@ end
 
 function beta = local_beta_from_effective_rt(Rt_value, susceptible, gamma, pop_size)
 %LOCAL_BETA_FROM_EFFECTIVE_RT Convert effective Rt to mass-action beta.
-    if susceptible <= 0 || ~isfinite(susceptible)
-        error('EPIDEMIC:InvalidSusceptibleState', ...
-            'Cannot compute beta from a nonpositive or nonfinite susceptible state.');
-    end
-
-    beta = Rt_value * gamma * pop_size / susceptible;
+%   When S has reached 0 (SSA full burn-through or UDS integer rounding),
+%   clamp to 1: the propensity beta*S*I/vol is still 0 so no transmissions
+%   occur, but the beta_curve entry remains finite.
+    susceptible_eff = max(double(susceptible), 1);
+    beta = Rt_value * gamma * pop_size / susceptible_eff;
 
     if beta <= 0 || ~isfinite(beta)
         error('EPIDEMIC:InvalidBeta', ...

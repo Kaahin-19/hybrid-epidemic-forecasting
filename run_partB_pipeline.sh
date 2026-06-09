@@ -83,21 +83,11 @@ create_partB_directories() {
   mkdir -p \
     "$REPO_ROOT/data/partB" \
     "$REPO_ROOT/results/partB/evaluation" \
+    "$REPO_ROOT/results/partB/forecasts" \
     "$REPO_ROOT/results/partB/tables" \
     "$REPO_ROOT/results/partB/figures" \
     "$REPO_ROOT/results/partB/logs" \
     "$REPO_ROOT/results/partB/scores"
-
-  local case_id
-  for case_id in "${PARTB_CASES[@]}"; do
-    mkdir -p \
-      "$REPO_ROOT/data/partB/$case_id" \
-      "$REPO_ROOT/results/partB/$case_id/forecasts" \
-      "$REPO_ROOT/results/partB/$case_id/evaluation" \
-      "$REPO_ROOT/results/partB/$case_id/figures" \
-      "$REPO_ROOT/results/partB/$case_id/tables" \
-      "$REPO_ROOT/results/partB/$case_id/logs"
-  done
 }
 
 remove_partB_contents() {
