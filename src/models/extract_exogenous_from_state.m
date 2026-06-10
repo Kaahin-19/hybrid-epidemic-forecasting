@@ -17,10 +17,10 @@ function U_next = extract_exogenous_from_state(state, exo_mode, pop_size)
 %   Outputs:
 %       U_next - Row vector of normalized exogenous covariates.
 %
-%   See also FORECAST_ARX_CLOSED_LOOP, ADVANCE_EPIDEMIC_STATE.
+%   See also FORECAST_ARX_CLOSED_LOOP, ADVANCE_SIRS_STEPPER.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-05
+% Modified: 2026-06-11
 
     %% 1. Input Validation
     state = reshape(double(state), 1, []);

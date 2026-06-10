@@ -18,7 +18,7 @@
 %            SUMMARIZE_FORECAST_SCORES, PARTA_05_GENERATE_FIGURES.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-06-10
+% Modified: 2026-06-11
 
 %% 1. Initialization
 clear; close all; clc;
@@ -177,10 +177,7 @@ selection_summary = vertcat(rows{:});
 end
 
 function aicc_summary = local_load_candidate_aicc_summary(selection_dir)
-%LOCAL_LOAD_CANDIDATE_AICC_SUMMARY Per-candidate AICc complexity diagnostic.
-%   Reads candidate_diagnostics from the Part A 02 selection artifacts and pairs
-%   each candidate order's diagnostic AICc with its selection WIS. AICc is
-%   diagnostic only; the Selected flag reflects the WIS-based choice.
+%LOCAL_LOAD_CANDIDATE_AICC_SUMMARY Load per-candidate AICc diagnostics.
 selection_files = dir(fullfile(selection_dir, 'partA_02_global_hyperparameters_*.mat'));
 selection_files = local_sort_dir_by_name(selection_files);
 aicc_summary = local_empty_candidate_aicc_summary();

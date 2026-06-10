@@ -8,14 +8,14 @@
 %       evaluation, and figure-generation stages.
 %
 %   Workflow:
-%       1. Initialization and WHO CSV schema validation
-%       2. Country/date filtering, case cleaning, smoothing, and Rt estimation
-%       3. Processed artifact persistence
+%       1. Initialization and WHO CSV schema validation.
+%       2. Country/date filtering, case cleaning, smoothing, and Rt estimation.
+%       3. Processed artifact persistence.
 %
 %   See also PARTC_CONFIG, PARTC_05_GENERATE_FIGURES.
-
+%
 % A. M. Kaahin 2026-05-18
-% Modified: 2026-06-03
+% Modified: 2026-06-11
 
 %% 1. Initialization
 clear; close all; clc;

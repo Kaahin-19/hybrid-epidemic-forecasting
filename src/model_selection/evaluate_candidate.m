@@ -25,11 +25,11 @@ function [scenario_scores, scenario_aicc] = evaluate_candidate(model_type, ...
 %       scenario_aicc   - Mean fitted-model AICc over finite windows for each
 %                         scenario. Diagnostic only; never used for selection.
 %
-%   See also AGGREGATE_CANDIDATE_SCORES, SELECT_BEST_CONFIGURATION,
+%   See also AGGREGATE_CANDIDATE_SCORES, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS,
 %            SIMULATE_AR_ARX_INTERVALS, SIMULATE_STATESPACE_INTERVALS.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-10
+% Modified: 2026-06-11
 
     %% 1. Candidate Evaluation
     params = candidate_configuration;
@@ -46,8 +46,7 @@ function [scenario_scores, scenario_aicc] = evaluate_candidate(model_type, ...
         for w = 1:numel(data.window_data)
             window_entry = data.window_data(w);
 
-            % AICc is a property of the fit, captured regardless of forecast
-            % validity; the WIS validity guard below is unchanged.
+            % Capture fit AICc separately from WIS validity.
             [Rt_pred, out_alphas, Rt_lower, Rt_upper, window_aicc(w)] = ...
                 local_window_forecast(model_type, params, window_entry, ...
                 evaluation_options, data.num_exo, scenario_key, w);

@@ -7,7 +7,7 @@ function forecast = run_model_forecast(model_type, selected_configuration, ...
 %           window_entry, forecast_options)
 %
 %   Description:
-%       Dispatches a single expanding-window forecast using the corrected
+%       Dispatches a single expanding-window forecast using the shared
 %       Part A model implementations. The forecast always runs the final
 %       closed-loop Monte Carlo / residual-bootstrap interval mode: the
 %       selected configuration is propagated through the closed-loop interval
@@ -34,7 +34,7 @@ function forecast = run_model_forecast(model_type, selected_configuration, ...
 %            MAKE_INTERVAL_OPTIONS, RUN_EXPANDING_WINDOW_FORECAST.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-07
+% Modified: 2026-06-11
 
     %% 1. Input Preparation
     model_type = string(model_type);

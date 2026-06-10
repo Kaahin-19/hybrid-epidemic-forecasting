@@ -21,22 +21,6 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
 %       explicit invalid failure rather than being replaced by an unconstrained
 %       deterministic trajectory.
 %
-%   Reuse note (future Part B/C; not implemented here):
-%       This entry couples three steps that always run together for Part A and
-%       Part B online forecasting: (1) fit + one-step residual estimation,
-%       (2) innovation resampling, and (3) closed-loop path simulation plus
-%       ensemble reduction. To let a fit-once caller reuse these same bootstrap
-%       intervals - e.g. the Part C fixed-parameter strategy, which currently
-%       uses analytic log-normal intervals - step (1) could be factored into a
-%       separate function returning a {fitted model, residuals} bundle, with
-%       steps (2)-(3) accepting that bundle plus the per-window history,
-%       sirs_state, and interval_options. Part A/B would call both halves per
-%       window (re-fit each origin); a fit-once caller would call step (1) once
-%       and steps (2)-(3) per origin. This is a deliberate two-explicit-function
-%       split, not a function-handle dispatch seam. Deferred: do not implement
-%       here, since wiring it in would touch Part B/C (out of scope for the
-%       current Part A work).
-%
 %   Inputs:
 %       model_type       - "AR" or "ARX".
 %       params           - Candidate configuration row (AR: [p]; ARX: [na nb nk]).
@@ -58,7 +42,7 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
 %            INITIALIZE_SIRS_STEPPER, ADVANCE_SIRS_STEPPER.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-10
+% Modified: 2026-06-11
 
     %% 1. Setup
     model_type = string(model_type);
@@ -137,7 +121,7 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
     meta.interval_status = local_resolve_status(residual_status, num_valid, num_draws);
 end
 
-%% Local Functions
+%% 4. Local Functions
 function meta = local_base_meta(interval_options)
 %LOCAL_BASE_META Initialize interval metadata fields.
     meta = struct();
@@ -192,8 +176,6 @@ end
 
 function [valid_ensemble, num_valid] = local_valid_columns(ensemble)
 %LOCAL_VALID_COLUMNS Keep finite draws strictly inside the plausibility band.
-%   Draws that reached the divergence clamp (Rt at or beyond 1e-2 / 1e2) are
-%   dropped so unstable trajectories cannot dominate the empirical quantiles.
     Rt_lo = 1e-2;
     Rt_hi = 1e2;
     is_valid = all(isfinite(ensemble), 1) & ...
@@ -229,11 +211,9 @@ function [Rt_pred, lower_bounds, upper_bounds] = ...
     upper_bounds = nan(horizon, numel(alphas));
 end
 
-%% Path Simulators (model-specific mechanics)
+%% 5. Path Simulators
 function ensemble_Rt = local_ar_bootstrap_paths(a_values, log_history, innovations)
 %LOCAL_AR_BOOTSTRAP_PATHS Recursive output-only AR bootstrap Rt trajectories.
-%   Rolls the fitted AR recursion forward on the log-Rt scale, adding one
-%   sampled residual innovation per step; no epidemic state is required.
     a_values = reshape(double(a_values), [], 1);
     p = numel(a_values);
     log_history = double(log_history(:));
@@ -261,9 +241,6 @@ end
 function ensemble_Rt = local_arx_closed_loop_bootstrap_paths( ...
     coefficients, log_history, U_history, sirs_state, innovations, interval_options)
 %LOCAL_ARX_CLOSED_LOOP_BOOTSTRAP_PATHS Closed-loop ARX bootstrap trajectories.
-%   Each draw advances the SIRS state with its own sampled Rt values so
-%   innovation uncertainty propagates through the epidemic feedback. Closed-loop
-%   exogenous propagation uses initialize_sirs_stepper and advance_sirs_stepper.
     log_history = double(log_history(:));
     U_history = double(U_history);
     if isvector(U_history)

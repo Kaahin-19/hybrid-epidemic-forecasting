@@ -18,7 +18,7 @@
 %            GENERATE_CANDIDATE_GRID, PARTC_02_RUN_FORECASTS.
 %
 % A. M. Kaahin 2026-06-03
-% Modified: 2026-06-07
+% Modified: 2026-06-11
 
 %% 1. Initialization
 clear; close all; clc;
@@ -195,12 +195,7 @@ end
 
 function forecast_results = local_analytic_calibration_forecast(scenario_entry, ...
     model_type, candidate_order, forecast_options)
-%LOCAL_ANALYTIC_CALIBRATION_FORECAST Cheap analytic expanding-window scoring forecast.
-%   Runs the point/analytic model dispatch (no closed-loop interval Monte
-%   Carlo) over the calibration windows and returns only the fields consumed
-%   by local_mean_calibration_wis. This is Part C local-order selection's own
-%   lightweight scoring loop, deliberately separate from the shared final
-%   closed-loop interval forecast in run_model_forecast.
+%LOCAL_ANALYTIC_CALIBRATION_FORECAST Score calibration windows analytically.
     model_type = string(model_type);
     params     = reshape(double(candidate_order), 1, []);
     horizon    = forecast_options.horizon;

@@ -24,10 +24,10 @@ function [candidate_scores, global_mean_wis, candidate_aicc, global_mean_aicc] =
 %       candidate_aicc   - Candidate-by-scenario mean AICc matrix (diagnostic).
 %       global_mean_aicc - Mean AICc across scenarios per candidate (diagnostic).
 %
-%   See also EVALUATE_CANDIDATE, SELECT_BEST_CONFIGURATION.
+%   See also EVALUATE_CANDIDATE, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-10
+% Modified: 2026-06-11
 
 %% 1. Candidate Scoring
 num_candidates = size(candidate_grid, 1);

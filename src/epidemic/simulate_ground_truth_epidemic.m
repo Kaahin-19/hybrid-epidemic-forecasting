@@ -28,7 +28,7 @@ function truth = simulate_ground_truth_epidemic(model_type, tspan, Rt_true, mode
 %   See also PARTA_CONFIG, PARTB_CONFIG, PARTA_01_GENERATE_TRUTH.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-05
+% Modified: 2026-06-11
 
     %% 1. Prepare Inputs
     tspan = reshape(tspan, 1, []);
@@ -291,9 +291,7 @@ end
 
 function beta = local_beta_from_effective_rt(Rt_value, susceptible, gamma, pop_size)
 %LOCAL_BETA_FROM_EFFECTIVE_RT Convert effective Rt to mass-action beta.
-%   When S has reached 0 (SSA full burn-through or UDS integer rounding),
-%   clamp to 1: the propensity beta*S*I/vol is still 0 so no transmissions
-%   occur, but the beta_curve entry remains finite.
+    % Keep beta finite when S is depleted; transmission propensity remains zero.
     susceptible_eff = max(double(susceptible), 1);
     beta = Rt_value * gamma * pop_size / susceptible_eff;
 

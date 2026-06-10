@@ -33,7 +33,7 @@ function interval_options = make_interval_options(intervals_cfg, context)
 %   See also SIMULATE_AR_ARX_INTERVALS, SIMULATE_STATESPACE_INTERVALS.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-10
+% Modified: 2026-06-11
 
     %% 1. Input Validation
     stage = string(context.stage);
@@ -43,11 +43,7 @@ function interval_options = make_interval_options(intervals_cfg, context)
 
     base_seed = double(intervals_cfg.seed);
 
-    %% 2. Single Closed-Loop Monte Carlo Protocol
-    % Part A has one interval protocol: closed-loop Monte Carlo with per-draw
-    % epidemic resimulation. cfg.intervals.num_draws is the single path-count
-    % knob, applied identically to selection and final. cfg.intervals.method is
-    % a metadata label recorded with the forecast; it does not switch behavior.
+    %% 2. Protocol Resolution
     method = intervals_cfg.method;
     num_draws = double(intervals_cfg.num_draws);
     if isfield(intervals_cfg, 'final_num_draws') && ~isempty(intervals_cfg.final_num_draws)

@@ -11,9 +11,8 @@ function [Rt_pred, lower_bounds, upper_bounds] = ...
 %       empirical predictive median and central interval bounds. For each WIS
 %       miscoverage rate alpha, the central (1 - alpha) interval uses the
 %       alpha/2 and (1 - alpha/2) empirical quantiles across the ensemble.
-%       This matches the analytic interval convention previously used in the
-%       pipeline, where the same nominal coverage was produced from a
-%       log-normal predictive distribution.
+%       This matches the nominal-coverage convention used elsewhere in the
+%       pipeline.
 %
 %   Inputs:
 %       ensemble_Rt - horizon-by-numDraws matrix of positive Rt draws.
@@ -27,6 +26,7 @@ function [Rt_pred, lower_bounds, upper_bounds] = ...
 %   See also SIMULATE_AR_ARX_INTERVALS, SIMULATE_STATESPACE_INTERVALS.
 %
 % A. M. Kaahin 2026-06-01
+% Modified: 2026-06-11
 
     %% 1. Input Validation
     ensemble_Rt = double(ensemble_Rt);

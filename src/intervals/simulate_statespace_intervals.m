@@ -21,13 +21,6 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
 %       MATLAB forecast loop; the existing fit_n4sid_model / fit_ssest_model
 %       analytic forecast is used only as a fallback.
 %
-%   Reuse note (future Part B/C; not implemented here):
-%       Same fit/simulate seam as the AR/ARX family entry: the estimate +
-%       predictor-residual step could be split from innovation resampling and
-%       path simulation so a fit-once caller can reuse the bootstrap intervals.
-%       See simulate_ar_arx_intervals for the full note. Deferred (would touch
-%       Part B/C).
-%
 %   Inputs:
 %       model_type       - "N4SID" or "SSEST".
 %       params           - Candidate configuration row [n d].
@@ -49,7 +42,7 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
 %            INITIALIZE_SIRS_STEPPER, ADVANCE_SIRS_STEPPER.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-10
+% Modified: 2026-06-11
 
     %% 1. Setup
     model_type = string(model_type);
@@ -66,7 +59,7 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
 
     meta = local_base_meta(interval_options);
 
-    %% 2. Estimation and Bootstrap (with deterministic fallback)
+    %% 2. Estimation and Bootstrap
     use_bootstrap = (d == 0) && (std(y) >= 1e-8);
     if use_bootstrap
         try
@@ -105,7 +98,7 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
     meta.num_valid_draws = 0;
 end
 
-%% Local Functions
+%% 4. Local Functions
 function meta = local_base_meta(interval_options)
 %LOCAL_BASE_META Initialize interval metadata fields.
     meta = struct();
@@ -206,9 +199,6 @@ end
 
 function [valid_ensemble, num_valid] = local_valid_columns(ensemble)
 %LOCAL_VALID_COLUMNS Keep finite draws strictly inside the plausibility band.
-%   Draws that reached the divergence clamp (Rt at or beyond 1e-2 / 1e2) are
-%   dropped so unstable identified state-space trajectories cannot dominate the
-%   empirical quantiles; too few valid draws trigger the analytic fallback.
     Rt_lo = 1e-2;
     Rt_hi = 1e2;
     is_valid = all(isfinite(ensemble), 1) & ...
@@ -253,11 +243,6 @@ end
 function ensemble_Rt = local_closed_loop_bootstrap_paths( ...
     ss, x_origin, U_history, sirs_state, innovations, interval_options)
 %LOCAL_CLOSED_LOOP_BOOTSTRAP_PATHS Closed-loop N4SID/SSEST bootstrap trajectories.
-%   Each draw predicts log-Rt from the current state and exogenous input, adds a
-%   sampled innovation, and propagates the latent state through the
-%   innovations-form update x(t+1) = A x + B u + K e. Exogenous models advance
-%   the SIRS state per draw with sampled Rt; output-only models use the pure
-%   latent recursion with no epidemic step. Failed draws return NaN columns.
     A = double(ss.A); B = double(ss.B); C = double(ss.C);
     D = double(ss.D); K = double(ss.K);
     x_origin = double(x_origin(:));

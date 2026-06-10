@@ -270,10 +270,6 @@ end
 
 function coefficients = local_extract_arx_coefficients(sys, nb_vec, nk_vec)
 %LOCAL_EXTRACT_ARX_COEFFICIENTS Extract recursive ARX polynomial coefficients.
-%   Extracts A and B polynomials from a fitted MATLAB ARX idpoly model under the
-%   convention A(q)y(t) = B(q)u(t) + e(t), storing active B coefficients
-%   separately from delay zeros. The returned structure is consumed by
-%   recursive_arx_step.
     nb_vec = reshape(double(nb_vec), 1, []);
     nk_vec = reshape(double(nk_vec), 1, []);
     if numel(nb_vec) ~= numel(nk_vec) || isempty(nb_vec)

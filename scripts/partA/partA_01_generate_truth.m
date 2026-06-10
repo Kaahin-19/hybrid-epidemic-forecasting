@@ -15,7 +15,7 @@
 %   See also PARTA_CONFIG, GENERATE_RT_SIGNAL, SIMULATE_GROUND_TRUTH_EPIDEMIC.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-04
+% Modified: 2026-06-11
 
 %% 1. Initialization
 clear; close all; clc;
@@ -70,4 +70,5 @@ for i = 1:numel(cfg.scenarios)
     fprintf('Saved\n');
 end
 
+%% 3. Completion
 fprintf('=== Part A Synthetic Truth Generation Complete ===\n\n');

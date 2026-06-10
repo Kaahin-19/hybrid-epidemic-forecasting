@@ -39,9 +39,9 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_sse
 %       upper_bounds   - Matrix of upper predictive interval bounds.
 %
 %   See also FIT_AR_MODEL, FIT_ARX_MODEL, FIT_N4SID_MODEL, PARTA_03_RUN_FORECASTS.
-
+%
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-06-01
+% Modified: 2026-06-11
 
     %% 1. Preprocessing
     if nargin < 7 || isempty(interval_alphas)
@@ -151,6 +151,7 @@ end
 
 %% 6. Local Helpers
 function values = local_extract_output(data)
+%LOCAL_EXTRACT_OUTPUT Return numeric output data from iddata or arrays.
     if isa(data, 'iddata')
         values = double(data.OutputData(:));
     else
@@ -159,6 +160,7 @@ function values = local_extract_output(data)
 end
 
 function [lower_bounds, upper_bounds] = local_interval_bounds(pred_y, pred_sd, interval_alphas)
+%LOCAL_INTERVAL_BOUNDS Convert log-scale forecast uncertainty to Rt bounds.
     horizon = numel(pred_y);
     num_alphas = numel(interval_alphas);
 
@@ -173,6 +175,7 @@ function [lower_bounds, upper_bounds] = local_interval_bounds(pred_y, pred_sd, i
 end
 
 function enabled = local_use_closed_loop(U_hist, sirs_state, sirs_params, exo_mode)
+%LOCAL_USE_CLOSED_LOOP Decide whether recursive SIRS inputs are available.
     if isempty(exo_mode)
         enabled = false;
         return;
@@ -186,6 +189,7 @@ end
 
 function [pred_y, pred_sd] = local_closed_loop_forecast( ...
     sys, Rt_hist, U_hist, d, horizon, sirs_state, sirs_params, exo_mode, sim_seed, opt, origin_data)
+%LOCAL_CLOSED_LOOP_FORECAST Forecast recursively with SIRS-updated inputs.
     initial_Rt = double(Rt_hist(:));
     initial_U  = double(U_hist);
     num_history = numel(initial_Rt);
@@ -364,6 +368,7 @@ function tolerance = local_state_space_match_tolerance(reference)
 end
 
 function [data_step, fit_u_next] = local_build_forecast_data(rolling_Rt, rolling_U, d)
+%LOCAL_BUILD_FORECAST_DATA Build one-step state-space forecast data.
     y_step = log(max(rolling_Rt(:), eps));
 
     if d == 1
@@ -380,10 +385,12 @@ function [data_step, fit_u_next] = local_build_forecast_data(rolling_Rt, rolling
 end
 
 function U_next = local_state_to_exogenous(state, exo_mode, pop_size)
+%LOCAL_STATE_TO_EXOGENOUS Convert a SIRS state to model inputs.
     U_next = extract_exogenous_from_state(state, exo_mode, pop_size);
 end
 
 function state = local_sanitize_sirs_state(raw_state, pop_size)
+%LOCAL_SANITIZE_SIRS_STATE Normalize a SIRS state before advancement.
     state = reshape(double(raw_state), [], 1);
     if numel(state) ~= 3 || any(~isfinite(state))
         error('FIT:InvalidSirsState', 'SIRS state must contain three finite compartment values.');
@@ -403,12 +410,14 @@ function state = local_sanitize_sirs_state(raw_state, pop_size)
 end
 
 function [Rt_curve, lower_bounds, upper_bounds] = local_persistence_forecast(last_value, horizon, interval_alphas)
+%LOCAL_PERSISTENCE_FORECAST Return deterministic persistence intervals.
     Rt_curve = repmat(last_value, horizon, 1);
     lower_bounds = repmat(Rt_curve, 1, numel(interval_alphas));
     upper_bounds = repmat(Rt_curve, 1, numel(interval_alphas));
 end
 
 function seed = local_resolve_sim_seed(sim_seed)
+%LOCAL_RESOLVE_SIM_SEED Validate or generate a URDME seed.
     if isempty(sim_seed)
         rng('shuffle');
         seed = randi(intmax('uint32'));

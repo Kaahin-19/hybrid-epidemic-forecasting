@@ -9,7 +9,7 @@ function forecast_results = run_expanding_window_forecast(scenario_entry, ...
 %   Description:
 %       Executes the expanding-window forecast loop for a single scenario
 %       using the globally selected configuration. Each valid window is
-%       forecast with the corrected Part A model dispatch and stored together
+%       forecast with the shared Part A model dispatch and stored together
 %       with the matching future truth and predictive intervals.
 %
 %   Inputs:
@@ -28,6 +28,7 @@ function forecast_results = run_expanding_window_forecast(scenario_entry, ...
 %   See also RUN_MODEL_FORECAST, BUILD_FORECASTING_DATASET, PREPARE_WINDOW_DATA.
 %
 % A. M. Kaahin 2026-06-01
+% Modified: 2026-06-11
 
     %% 1. Setup
     forecast_options.num_exo = scenario_entry.num_exo;

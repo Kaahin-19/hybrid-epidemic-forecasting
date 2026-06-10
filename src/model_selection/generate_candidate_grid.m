@@ -9,7 +9,7 @@ function candidate_grid = generate_candidate_grid(cfg, model_type, options)
 %       Creates a candidate hyperparameter grid for the requested model
 %       family. The default "full" mode builds the Part A model-selection grid
 %       from the forecast-grid settings in partA_config.m. The optional "local"
-%       mode builds a small grid centered on a previously selected order using
+%       mode builds a small grid centered on options.center_order using
 %       cfg.local_order_grid, as used by the Part C local-order retuning stage.
 %
 %   Inputs:
@@ -25,10 +25,10 @@ function candidate_grid = generate_candidate_grid(cfg, model_type, options)
 %       candidate_grid - Numeric matrix with one candidate per row.
 %
 %   See also PARTA_CONFIG, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, ...
-%            SELECT_PARTC_LOCAL_ORDERS.
+%            PARTC_04_SELECT_LOCAL_ORDERS.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-05
+% Modified: 2026-06-11
 
     %% 1. Mode Dispatch
     if nargin < 3 || isempty(options)

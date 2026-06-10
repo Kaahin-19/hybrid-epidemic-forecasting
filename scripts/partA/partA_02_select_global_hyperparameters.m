@@ -76,9 +76,7 @@ if ~isfinite(best_global_wis)
         'All candidate model configurations produced invalid global WIS scores.');
 end
 
-% One-standard-error parsimony rule: choose the simplest candidate whose global
-% mean WIS is within one empirical standard error of the raw best. WIS remains
-% the only metric; complexity only breaks ties inside the SE band.
+% Apply one-SE parsimony within the finite-WIS candidate set.
 one_se_threshold = best_global_wis + local_one_se(candidate_scores(raw_best_index, :));
 candidate_complexity = local_candidate_complexity(model_type, candidate_grid, ...
     scenario_data(1).num_exo);
@@ -94,8 +92,7 @@ aggregation_mode = "equal_scenario_mean_wis";
 failure_policy = "inf_on_invalid";
 cfg_snapshot = cfg.run_snapshot;
 
-% Fitted-model AICc complexity diagnostic. WIS remains the sole selector; AICc
-% is stored only as metadata and never used to choose the configuration.
+% Store AICc diagnostics separately from the WIS selector.
 candidate_diagnostics = struct( ...
     'description', "Fitted-model AICc complexity diagnostic; not a selection criterion.", ...
     'scenario_ids', scenario_ids, ...

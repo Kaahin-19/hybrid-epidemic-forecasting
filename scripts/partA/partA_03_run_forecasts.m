@@ -4,7 +4,7 @@
 %       Generates the final Part A forecasts using the globally selected model
 %       configuration for the active model family and exogenous-input setting.
 %       The forecast dataset, expanding-window protocol, and model dispatch
-%       reproduce the corrected Part A model-selection behaviour so that final
+%       reproduce the current Part A model-selection behaviour so that final
 %       forecasts and selection share identical model logic. The script is a
 %       thin orchestration layer over the reusable forecasting helpers and
 %       saves only MATLAB forecast artifacts.
@@ -21,7 +21,7 @@
 %            PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_04_EVALUATE_FORECASTS.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-06-05
+% Modified: 2026-06-11
 
 %% 1. Initialization
 clear; close all; clc;
