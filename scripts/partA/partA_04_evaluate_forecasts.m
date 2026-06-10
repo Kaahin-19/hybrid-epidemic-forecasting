@@ -18,7 +18,7 @@
 %            SUMMARIZE_FORECAST_SCORES, PARTA_05_GENERATE_FIGURES.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-06-05
+% Modified: 2026-06-10
 
 %% 1. Initialization
 clear; close all; clc;
@@ -46,6 +46,7 @@ fprintf('Found %d forecast artifacts in %s\n', numel(forecast_files), forecast_d
 %% 2. Selection Artifact Summary
 [selection_summary, missing_selection_artifacts] = ...
     local_load_selection_summary(selection_dir);
+candidate_aicc_summary = local_load_candidate_aicc_summary(selection_dir);
 
 %% 3. Forecast Evaluation
 window_blocks = cell(numel(forecast_files), 1);
@@ -122,7 +123,8 @@ fprintf('Evaluation artifact saved to: %s\n', evaluation_artifact);
 
 %% 5. Save Tables
 table_outputs = local_write_tables(table_dir, window_scores, pointwise_scores, ...
-    interval_scores, summaries, selection_summary, missing_selection_artifacts, cfg);
+    interval_scores, summaries, selection_summary, missing_selection_artifacts, ...
+    candidate_aicc_summary, cfg);
 
 fprintf('Saved %d table files under %s\n', numel(table_outputs), table_dir);
 fprintf('=== Part A Forecast Evaluation Complete ===\n\n');
@@ -172,6 +174,74 @@ for i = 1:numel(selection_files)
 end
 
 selection_summary = vertcat(rows{:});
+end
+
+function aicc_summary = local_load_candidate_aicc_summary(selection_dir)
+%LOCAL_LOAD_CANDIDATE_AICC_SUMMARY Per-candidate AICc complexity diagnostic.
+%   Reads candidate_diagnostics from the Part A 02 selection artifacts and pairs
+%   each candidate order's diagnostic AICc with its selection WIS. AICc is
+%   diagnostic only; the Selected flag reflects the WIS-based choice.
+selection_files = dir(fullfile(selection_dir, 'partA_02_global_hyperparameters_*.mat'));
+selection_files = local_sort_dir_by_name(selection_files);
+aicc_summary = local_empty_candidate_aicc_summary();
+if isempty(selection_files)
+    return;
+end
+
+blocks = cell(numel(selection_files), 1);
+for i = 1:numel(selection_files)
+    loaded = load(fullfile(selection_files(i).folder, selection_files(i).name));
+    if ~isfield(loaded, 'candidate_diagnostics') || ~isfield(loaded, 'candidate_grid') ...
+            || isempty(loaded.candidate_grid)
+        continue;
+    end
+
+    grid = double(loaded.candidate_grid);
+    n = size(grid, 1);
+    global_aicc = local_column_or_nan(loaded.candidate_diagnostics, 'global_mean_aicc', n);
+    global_wis = local_column_or_nan(loaded, 'global_mean_wis', n);
+
+    selected = false(n, 1);
+    selected_index = local_numeric_field(loaded, 'selected_index');
+    if ~isnan(selected_index) && selected_index >= 1 && selected_index <= n
+        selected(round(selected_index)) = true;
+    end
+
+    [model_type, exo_mode] = local_parse_selection_filename(selection_files(i).name);
+    if isfield(loaded, 'model_type') && ~isempty(loaded.model_type)
+        model_type = string(loaded.model_type);
+    end
+    if isfield(loaded, 'exo_mode') && ~isempty(loaded.exo_mode)
+        exo_mode = string(loaded.exo_mode);
+    end
+
+    candidate_text = strings(n, 1);
+    for r = 1:n
+        candidate_text(r) = string(mat2str(grid(r, :)));
+    end
+
+    blocks{i} = table(repmat(string(model_type), n, 1), ...
+        repmat(string(exo_mode), n, 1), candidate_text, ...
+        global_wis(:), global_aicc(:), selected, ...
+        'VariableNames', {'Model', 'ExoMode', 'Candidate', ...
+        'GlobalMeanWIS', 'GlobalMeanAICc', 'Selected'});
+end
+
+blocks = blocks(~cellfun('isempty', blocks));
+if ~isempty(blocks)
+    aicc_summary = vertcat(blocks{:});
+end
+end
+
+function col = local_column_or_nan(s, field_name, n)
+%LOCAL_COLUMN_OR_NAN Read an n-length numeric field or return NaNs.
+col = nan(n, 1);
+if isfield(s, field_name) && ~isempty(s.(field_name))
+    raw = double(s.(field_name)(:));
+    if numel(raw) == n
+        col = raw;
+    end
+end
 end
 
 function [forecast_results, result_source] = local_get_forecast_results(loaded)
@@ -458,6 +528,14 @@ table_data = table(strings(0, 1), strings(0, 1), strings(0, 1), ...
     'SelectedIndex', 'BestGlobalWIS', 'SelectionArtifact'});
 end
 
+function table_data = local_empty_candidate_aicc_summary()
+%LOCAL_EMPTY_CANDIDATE_AICC_SUMMARY Create an empty per-candidate AICc table.
+table_data = table(strings(0, 1), strings(0, 1), strings(0, 1), ...
+    zeros(0, 1), zeros(0, 1), false(0, 1), ...
+    'VariableNames', {'Model', 'ExoMode', 'Candidate', ...
+    'GlobalMeanWIS', 'GlobalMeanAICc', 'Selected'});
+end
+
 %% 9. Local Functions - Output: Tables and Snapshot
 function table_data = local_vertcat_or_empty(blocks, empty_table)
 %LOCAL_VERTCAT_OR_EMPTY Vertically concatenate nonempty table blocks.
@@ -471,7 +549,7 @@ end
 
 function table_outputs = local_write_tables(table_dir, window_scores, ...
     pointwise_scores, interval_scores, summaries, selection_summary, ...
-    missing_selection_artifacts, cfg)
+    missing_selection_artifacts, candidate_aicc_summary, cfg)
 %LOCAL_WRITE_TABLES Persist Part A 04 CSV tables and a self-describing manifest.
 missing_tbl = table(missing_selection_artifacts, ...
     'VariableNames', {'MissingSelectionArtifact'});
@@ -492,6 +570,7 @@ spec = {
     'partA_04_scenario_calibration_summary.csv',   summaries.scenario_calibration_summary,  'Interval scores by Scenario+Model+ExoMode+Alpha'
     'partA_04_wis_component_summary.csv',          summaries.wis_component_summary,         'WIS decomposition shares by Model+ExoMode'
     'partA_04_selection_summary.csv',              selection_summary,                       'Selected configuration per Model+ExoMode'
+    'partA_04_candidate_aicc.csv',                 candidate_aicc_summary,                  'Per-candidate AICc complexity diagnostic with selection WIS (AICc is not a selector)'
     'partA_04_missing_selection_artifacts.csv',    missing_tbl,                             'Selection artifacts that were missing'
     'partA_04_evaluation_settings.csv',            local_settings_table(cfg),               'Forecast horizon / window / alpha settings'
     };

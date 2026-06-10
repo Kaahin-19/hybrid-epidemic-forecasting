@@ -1,15 +1,17 @@
-function [candidate_scores, global_mean_wis] = ...
+function [candidate_scores, global_mean_wis, candidate_aicc, global_mean_aicc] = ...
     aggregate_candidate_scores(candidate_grid, scenario_data, evaluation_options)
 %AGGREGATE_CANDIDATE_SCORES Evaluate and aggregate Part A candidate scores.
 %
 %   Syntax:
-%       [candidate_scores, global_mean_wis] = ...
+%       [candidate_scores, global_mean_wis, candidate_aicc, global_mean_aicc] = ...
 %           aggregate_candidate_scores(candidate_grid, scenario_data, evaluation_options)
 %
 %   Description:
 %       Evaluates each candidate model configuration across all prepared Part A
 %       scenarios and computes the global mean WIS using equal weighting across
-%       scenario means.
+%       scenario means. Per-candidate fitted-model AICc is also aggregated as a
+%       complexity diagnostic; AICc never influences selection (WIS is the sole
+%       criterion).
 %
 %   Inputs:
 %       candidate_grid     - Numeric matrix with one candidate per row.
@@ -19,17 +21,21 @@ function [candidate_scores, global_mean_wis] = ...
 %   Outputs:
 %       candidate_scores - Candidate-by-scenario mean WIS matrix.
 %       global_mean_wis  - Mean WIS across scenarios for each candidate.
+%       candidate_aicc   - Candidate-by-scenario mean AICc matrix (diagnostic).
+%       global_mean_aicc - Mean AICc across scenarios per candidate (diagnostic).
 %
 %   See also EVALUATE_CANDIDATE, SELECT_BEST_CONFIGURATION.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-05
+% Modified: 2026-06-10
 
 %% 1. Candidate Scoring
 num_candidates = size(candidate_grid, 1);
 num_scenarios = length(scenario_data);
 candidate_scores = inf(num_candidates, num_scenarios);
 global_mean_wis = inf(num_candidates, 1);
+candidate_aicc = nan(num_candidates, num_scenarios);   % diagnostic only
+global_mean_aicc = nan(num_candidates, 1);
 
 report_interval = max(1, ceil(num_candidates / 20));
 progress_queue = parallel.pool.DataQueue;
@@ -44,14 +50,27 @@ if num_candidates == 0
 end
 
 parfor idx = 1:num_candidates
-    scenario_scores = evaluate_candidate( ...
+    [scenario_scores, scenario_aicc] = evaluate_candidate( ...
         model_type, candidate_grid(idx, :), ...
         scenario_data, evaluation_options);
 
     candidate_scores(idx, :) = scenario_scores;
     global_mean_wis(idx) = mean(scenario_scores);
+    candidate_aicc(idx, :) = scenario_aicc;
+    global_mean_aicc(idx) = local_mean_finite(scenario_aicc);
     send(progress_queue, idx);
 end
+end
+
+function value = local_mean_finite(values)
+%LOCAL_MEAN_FINITE Mean over finite values only (diagnostic AICc aggregation).
+    values = double(values(:));
+    values = values(isfinite(values));
+    if isempty(values)
+        value = nan;
+    else
+        value = mean(values);
+    end
 end
 
 function local_report_candidate_progress(~, total_models, report_interval, reset_flag)

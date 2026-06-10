@@ -7,12 +7,12 @@ function interval_options = make_interval_options(intervals_cfg, context)
 %   Description:
 %       Translates the global cfg.intervals settings and a per-window context
 %       into a concrete option set consumed by the AR/ARX and state-space
-%       interval simulators. The selection stage produces the lightweight
-%       closed-loop residual-bootstrap configuration used by Part A 02, while
-%       the final stage produces the fuller closed-loop Monte Carlo
-%       configuration used by Part A 03. Both stages target the same
-%       closed-loop predictive uncertainty definition; only the computational
-%       budget and the epidemic-propagation mode differ.
+%       interval simulators. Model selection and final forecasting share one
+%       closed-loop Monte Carlo protocol: the same number of draws, the same
+%       per-draw epidemic resimulation, and the same per-draw seed variation.
+%       The stage field is retained only for traceability and does not change
+%       the probabilistic protocol, so an order is selected under the same
+%       predictive forecast it is deployed with.
 %
 %   Inputs:
 %       intervals_cfg - cfg.intervals settings structure.
@@ -33,7 +33,7 @@ function interval_options = make_interval_options(intervals_cfg, context)
 %   See also SIMULATE_AR_ARX_INTERVALS, SIMULATE_STATESPACE_INTERVALS.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-07
+% Modified: 2026-06-10
 
     %% 1. Input Validation
     stage = string(context.stage);
@@ -43,27 +43,24 @@ function interval_options = make_interval_options(intervals_cfg, context)
 
     base_seed = double(intervals_cfg.seed);
 
-    %% 2. Stage-Specific Budget and Mode
-    if stage == "selection"
-        method = intervals_cfg.selection_method;
-        num_draws = double(intervals_cfg.selection_num_draws);
-        epidemic_mode = "frozen";
-        include_epidemic_seed_variation = false;
-        resample_seed = local_hash_seed(base_seed, ...
-            {context.scenario_key, context.window_index});
-        epidemic_base_seed = double(context.sim_seed);
-    else
-        method = intervals_cfg.final_method;
-        num_draws = double(intervals_cfg.final_num_draws);
-        epidemic_mode = "resimulate";
-        include_epidemic_seed_variation = logical(intervals_cfg.include_epidemic_seed_variation);
-        resample_seed = local_hash_seed(base_seed, ...
-            {context.scenario_key, context.window_index, ...
-            context.model_type, context.exo_mode});
-        epidemic_base_seed = local_hash_seed(base_seed + 7919, ...
-            {context.scenario_key, context.window_index, ...
-            context.model_type, context.exo_mode});
+    %% 2. Single Closed-Loop Monte Carlo Protocol
+    % Part A has one interval protocol: closed-loop Monte Carlo with per-draw
+    % epidemic resimulation. cfg.intervals.num_draws is the single path-count
+    % knob, applied identically to selection and final. cfg.intervals.method is
+    % a metadata label recorded with the forecast; it does not switch behavior.
+    method = intervals_cfg.method;
+    num_draws = double(intervals_cfg.num_draws);
+    if isfield(intervals_cfg, 'final_num_draws') && ~isempty(intervals_cfg.final_num_draws)
+        % Honor an optional smaller caller-supplied draw cap (Part B smoke test).
+        num_draws = min(num_draws, double(intervals_cfg.final_num_draws));
     end
+    include_epidemic_seed_variation = logical(intervals_cfg.include_epidemic_seed_variation);
+    resample_seed = local_hash_seed(base_seed, ...
+        {context.scenario_key, context.window_index, ...
+        context.model_type, context.exo_mode});
+    epidemic_base_seed = local_hash_seed(base_seed + 7919, ...
+        {context.scenario_key, context.window_index, ...
+        context.model_type, context.exo_mode});
 
     %% 3. Output Assembly
     interval_options = struct();
@@ -74,7 +71,6 @@ function interval_options = make_interval_options(intervals_cfg, context)
     interval_options.min_residual_std = double(intervals_cfg.min_residual_std);
     interval_options.use_common_random_numbers = logical(intervals_cfg.use_common_random_numbers);
     interval_options.include_epidemic_seed_variation = include_epidemic_seed_variation;
-    interval_options.epidemic_mode = epidemic_mode;
     interval_options.exo_mode = string(context.exo_mode);
     interval_options.sirs_cfg = context.sirs_cfg;
     interval_options.horizon = double(context.horizon);

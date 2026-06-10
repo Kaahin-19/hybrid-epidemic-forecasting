@@ -1,10 +1,10 @@
-function scenario_scores = evaluate_candidate(model_type, candidate_configuration, ...
-    scenario_data, evaluation_options)
+function [scenario_scores, scenario_aicc] = evaluate_candidate(model_type, ...
+    candidate_configuration, scenario_data, evaluation_options)
 %EVALUATE_CANDIDATE Score one Part A model configuration across scenarios.
 %
 %   Syntax:
-%       scenario_scores = evaluate_candidate(model_type, candidate_configuration, ...
-%           scenario_data, evaluation_options)
+%       [scenario_scores, scenario_aicc] = evaluate_candidate(model_type, ...
+%           candidate_configuration, scenario_data, evaluation_options)
 %
 %   Description:
 %       Evaluates one candidate configuration over all prepared Part A scenario
@@ -21,29 +21,36 @@ function scenario_scores = evaluate_candidate(model_type, candidate_configuratio
 %                                 horizon, WIS alpha levels, and interval settings.
 %
 %   Outputs:
-%       scenario_scores - Mean window WIS for each scenario.
+%       scenario_scores - Mean window WIS for each scenario (selection metric).
+%       scenario_aicc   - Mean fitted-model AICc over finite windows for each
+%                         scenario. Diagnostic only; never used for selection.
 %
 %   See also AGGREGATE_CANDIDATE_SCORES, SELECT_BEST_CONFIGURATION,
 %            SIMULATE_AR_ARX_INTERVALS, SIMULATE_STATESPACE_INTERVALS.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-05
+% Modified: 2026-06-10
 
     %% 1. Candidate Evaluation
     params = candidate_configuration;
-    scenario_scores = inf(1, length(scenario_data));
+    num_scenarios = length(scenario_data);
+    scenario_scores = inf(1, num_scenarios);
+    scenario_aicc = nan(1, num_scenarios);   % diagnostic only; not a selector
 
-    for s = 1:length(scenario_data)
+    for s = 1:num_scenarios
         data = scenario_data(s);
         window_wis = inf(numel(data.window_data), 1);
+        window_aicc = nan(numel(data.window_data), 1);
         scenario_key = data.scenario_id;
 
         for w = 1:numel(data.window_data)
             window_entry = data.window_data(w);
 
-            [Rt_pred, out_alphas, Rt_lower, Rt_upper] = local_window_forecast( ...
-                model_type, params, window_entry, evaluation_options, ...
-                data.num_exo, scenario_key, w);
+            % AICc is a property of the fit, captured regardless of forecast
+            % validity; the WIS validity guard below is unchanged.
+            [Rt_pred, out_alphas, Rt_lower, Rt_upper, window_aicc(w)] = ...
+                local_window_forecast(model_type, params, window_entry, ...
+                evaluation_options, data.num_exo, scenario_key, w);
 
             if ~is_valid_forecast(Rt_pred, out_alphas, Rt_lower, Rt_upper, ...
                     window_entry.truth_Rt)
@@ -61,10 +68,11 @@ function scenario_scores = evaluate_candidate(model_type, candidate_configuratio
         end
 
         scenario_scores(s) = mean(window_wis);
+        scenario_aicc(s) = local_mean_finite(window_aicc);
     end
 end
 
-function [Rt_pred, out_alphas, Rt_lower, Rt_upper] = local_window_forecast( ...
+function [Rt_pred, out_alphas, Rt_lower, Rt_upper, aicc] = local_window_forecast( ...
     model_type, params, window_entry, evaluation_options, num_exo, scenario_key, w)
 %LOCAL_WINDOW_FORECAST Forecast one window with closed-loop residual-bootstrap intervals.
     context = struct( ...
@@ -81,17 +89,28 @@ function [Rt_pred, out_alphas, Rt_lower, Rt_upper] = local_window_forecast( ...
 
     switch model_type
         case {"AR", "ARX"}
-            [Rt_pred, ~, out_alphas, Rt_lower, Rt_upper] = ...
+            [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = ...
                 simulate_ar_arx_intervals(model_type, params, ...
                 window_entry.Rt_past, window_entry.U_past, ...
                 window_entry.sirs_state, num_exo, interval_options);
         case {"N4SID", "SSEST"}
-            [Rt_pred, ~, out_alphas, Rt_lower, Rt_upper] = ...
+            [Rt_pred, aicc, out_alphas, Rt_lower, Rt_upper] = ...
                 simulate_statespace_intervals(model_type, params, ...
                 window_entry.Rt_past, window_entry.U_past, ...
                 window_entry.sirs_state, num_exo, interval_options);
         otherwise
             error('MODEL_SELECTION:UnknownModel', ...
                 'Unsupported MODEL_TYPE: %s', model_type);
+    end
+end
+
+function value = local_mean_finite(values)
+%LOCAL_MEAN_FINITE Mean over finite values only (diagnostic AICc aggregation).
+    values = double(values(:));
+    values = values(isfinite(values));
+    if isempty(values)
+        value = nan;
+    else
+        value = mean(values);
     end
 end

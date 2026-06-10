@@ -15,7 +15,7 @@
 %   See also PARTB_CONFIG, PREPARE_WINDOW_DATA, RUN_EXPANDING_WINDOW_FORECAST.
 %
 % A. M. Kaahin 2026-05-18
-% Modified: 2026-06-09
+% Modified: 2026-06-11
 
 %% 1. Initialization
 clear; close all; clc;
@@ -361,7 +361,10 @@ function forecast_options = local_forecast_options(cfg, exo_mode, scenario_entry
 %LOCAL_FORECAST_OPTIONS Build reusable forecast options for Part B.
     intervals = cfg.intervals;
     if cfg.smoke_test.enabled
-        intervals.final_num_draws = min(intervals.final_num_draws, ...
+        % Cap the canonical interval path count for fast smoke runs. Part A
+        % unified the protocol on cfg.intervals.num_draws; final_num_draws is
+        % only a deprecated compatibility mirror and is no longer relied on here.
+        intervals.num_draws = min(intervals.num_draws, ...
             cfg.smoke_test.interval_draws);
     end
 

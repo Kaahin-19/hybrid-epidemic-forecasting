@@ -11,14 +11,14 @@ function next_log_Rt = recursive_arx_step(coefficients, rolling_log_Rt, rolling_
 %       System Identification object.
 %
 %   Inputs:
-%       coefficients   - Structure returned by extract_arx_coefficients.
+%       coefficients   - ARX coefficient structure produced by fit_arx_model.
 %       rolling_log_Rt - Historical log-Rt values available up to now.
 %       rolling_U      - Historical exogenous values available up to now.
 %
 %   Outputs:
 %       next_log_Rt - One-step recursive ARX prediction on the log scale.
 %
-%   See also EXTRACT_ARX_COEFFICIENTS, FORECAST_ARX_CLOSED_LOOP.
+%   See also FIT_ARX_MODEL, FORECAST_ARX_CLOSED_LOOP.
 %
 % A. M. Kaahin 2026-05-31
 

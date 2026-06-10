@@ -28,7 +28,7 @@ function cfg = partA_config()
 %            PARTA_03_RUN_FORECASTS, PARTA_04_EVALUATE_FORECASTS.
 
 % A. M. Kaahin 2026-02-18
-% Modified: 2026-06-07
+% Modified: 2026-06-10
 
 cfg = struct();
 
@@ -164,14 +164,25 @@ cfg.run_snapshot = struct( ...
     'sim_seed',   cfg.sim.seed);
 
 %% 9. Predictive Interval Settings
+% Part A has a single interval protocol: closed-loop Monte Carlo with per-draw
+% epidemic resimulation, applied identically to model selection and final
+% forecasting, so a model order is selected under the same probabilistic
+% forecast it is later deployed with. num_draws is the single knob controlling
+% the Monte Carlo path count for both stages; change it here (e.g., 40, 60, 80)
+% to trade interval precision against runtime.
 cfg.intervals.seed = 1234;
-cfg.intervals.selection_method = "closed_loop_residual_bootstrap";
-cfg.intervals.final_method = "closed_loop_monte_carlo";
-cfg.intervals.selection_num_draws = 40;
-cfg.intervals.final_num_draws = 80;
+% Metadata label recorded with each forecast; not a behavior switch (there is
+% no alternative interval method to select).
+cfg.intervals.method = "closed_loop_monte_carlo";
+cfg.intervals.num_draws = 60;
 cfg.intervals.min_residual_std = 1e-6;
 cfg.intervals.use_common_random_numbers = true;
 cfg.intervals.include_epidemic_seed_variation = true;
+
+% Compatibility mirror for the not-yet-migrated Part B fixed-forecast script,
+% which still reads (and smoke-test caps) cfg.intervals.final_num_draws
+% directly. Derived from num_draws so num_draws stays the single source of truth.
+cfg.intervals.final_num_draws = cfg.intervals.num_draws;
 
 %% 10. Output Artifacts
 thisDir  = fileparts(mfilename('fullpath'));

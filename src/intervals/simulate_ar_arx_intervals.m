@@ -21,6 +21,22 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
 %       explicit invalid failure rather than being replaced by an unconstrained
 %       deterministic trajectory.
 %
+%   Reuse note (future Part B/C; not implemented here):
+%       This entry couples three steps that always run together for Part A and
+%       Part B online forecasting: (1) fit + one-step residual estimation,
+%       (2) innovation resampling, and (3) closed-loop path simulation plus
+%       ensemble reduction. To let a fit-once caller reuse these same bootstrap
+%       intervals - e.g. the Part C fixed-parameter strategy, which currently
+%       uses analytic log-normal intervals - step (1) could be factored into a
+%       separate function returning a {fitted model, residuals} bundle, with
+%       steps (2)-(3) accepting that bundle plus the per-window history,
+%       sirs_state, and interval_options. Part A/B would call both halves per
+%       window (re-fit each origin); a fit-once caller would call step (1) once
+%       and steps (2)-(3) per origin. This is a deliberate two-explicit-function
+%       split, not a function-handle dispatch seam. Deferred: do not implement
+%       here, since wiring it in would touch Part B/C (out of scope for the
+%       current Part A work).
+%
 %   Inputs:
 %       model_type       - "AR" or "ARX".
 %       params           - Candidate configuration row (AR: [p]; ARX: [na nb nk]).
@@ -38,10 +54,11 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
 %       upper_bounds - horizon-by-numAlphas upper interval matrix.
 %       meta         - Interval metadata structure (method, draws, seed, status).
 %
-%   See also SIMULATE_AR_RESIDUAL_BOOTSTRAP_PATHS, ...
-%            SIMULATE_ARX_CLOSED_LOOP_BOOTSTRAP_PATHS, FIT_AR_MODEL, FIT_ARX_MODEL.
+%   See also FIT_AR_MODEL, FIT_ARX_MODEL, RECURSIVE_ARX_STEP, ...
+%            INITIALIZE_SIRS_STEPPER, ADVANCE_SIRS_STEPPER.
 %
 % A. M. Kaahin 2026-06-01
+% Modified: 2026-06-10
 
     %% 1. Setup
     model_type = string(model_type);
@@ -70,7 +87,7 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
             [innovations, residual_status] = sample_centered_residuals( ...
                 residuals, num_draws, horizon, interval_options.resample_seed, ...
                 interval_options.min_residual_std);
-            ensemble = simulate_ar_residual_bootstrap_paths( ...
+            ensemble = local_ar_bootstrap_paths( ...
                 model.coefficients.a_values, model.log_history, innovations);
 
         case "ARX"
@@ -89,7 +106,7 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
             [innovations, residual_status] = sample_centered_residuals( ...
                 residuals, num_draws, horizon, interval_options.resample_seed, ...
                 interval_options.min_residual_std);
-            ensemble = simulate_arx_closed_loop_bootstrap_paths( ...
+            ensemble = local_arx_closed_loop_bootstrap_paths( ...
                 model.coefficients, log_past, U_past, sirs_state, ...
                 innovations, interval_options);
 
@@ -210,4 +227,146 @@ function [Rt_pred, lower_bounds, upper_bounds] = ...
     Rt_pred = nan(horizon, 1);
     lower_bounds = nan(horizon, numel(alphas));
     upper_bounds = nan(horizon, numel(alphas));
+end
+
+%% Path Simulators (model-specific mechanics)
+function ensemble_Rt = local_ar_bootstrap_paths(a_values, log_history, innovations)
+%LOCAL_AR_BOOTSTRAP_PATHS Recursive output-only AR bootstrap Rt trajectories.
+%   Rolls the fitted AR recursion forward on the log-Rt scale, adding one
+%   sampled residual innovation per step; no epidemic state is required.
+    a_values = reshape(double(a_values), [], 1);
+    p = numel(a_values);
+    log_history = double(log_history(:));
+    if numel(log_history) < p
+        error('INTERVALS:InsufficientHistory', ...
+            'log_history is too short for the requested AR order.');
+    end
+
+    [horizon, num_draws] = size(innovations);
+    [log_lo, log_hi] = local_log_clip_range();
+    roll = repmat(log_history, 1, num_draws);
+    ensemble_Rt = zeros(horizon, num_draws);
+
+    for h = 1:horizon
+        recent = roll(end - p + 1:end, :);     % oldest..newest by row
+        recent_newest_first = flipud(recent);  % newest first, aligns with a_values
+        y_hat = -(a_values.' * recent_newest_first);
+        y_next = y_hat + innovations(h, :);
+        y_next = min(max(y_next, log_lo), log_hi);
+        ensemble_Rt(h, :) = exp(y_next);
+        roll = [roll; y_next]; %#ok<AGROW>
+    end
+end
+
+function ensemble_Rt = local_arx_closed_loop_bootstrap_paths( ...
+    coefficients, log_history, U_history, sirs_state, innovations, interval_options)
+%LOCAL_ARX_CLOSED_LOOP_BOOTSTRAP_PATHS Closed-loop ARX bootstrap trajectories.
+%   Each draw advances the SIRS state with its own sampled Rt values so
+%   innovation uncertainty propagates through the epidemic feedback. Closed-loop
+%   exogenous propagation uses initialize_sirs_stepper and advance_sirs_stepper.
+    log_history = double(log_history(:));
+    U_history = double(U_history);
+    if isvector(U_history)
+        U_history = U_history(:);
+    end
+    num_inputs = coefficients.num_inputs;
+    if size(U_history, 2) ~= num_inputs
+        error('INTERVALS:InvalidExogenousHistory', ...
+            'U_history column count does not match ARX input count.');
+    end
+
+    [horizon, num_draws] = size(innovations);
+    exo_mode = interval_options.exo_mode;
+    sirs_cfg = interval_options.sirs_cfg;
+    pop_size = sirs_cfg.pop_size;
+    [log_lo, log_hi] = local_log_clip_range();
+
+    sim_options = struct('solver', 'uds', 'compile', false, ...
+        'seed', local_valid_seed(interval_options.epidemic_base_seed));
+    stepper = initialize_sirs_stepper(sirs_cfg, sim_options);
+
+    ensemble_Rt = nan(horizon, num_draws);
+    for d = 1:num_draws
+        draw_seed = local_draw_epidemic_seed(interval_options, d, horizon);
+        ensemble_Rt(:, d) = local_resimulate_draw( ...
+            coefficients, log_history, U_history, sirs_state, ...
+            innovations(:, d), stepper, draw_seed, exo_mode, pop_size, ...
+            horizon, log_lo, log_hi);
+    end
+end
+
+function column = local_resimulate_draw( ...
+    coefficients, log_history, U_history, sirs_state, innovation_column, ...
+    stepper, draw_seed, exo_mode, pop_size, horizon, log_lo, log_hi)
+%LOCAL_RESIMULATE_DRAW One Monte Carlo draw with per-draw epidemic advances.
+    column = nan(horizon, 1);
+    try
+        rolling_log = log_history;
+        rolling_U = U_history;
+        state = local_sanitize_state(sirs_state, pop_size);
+        stepper.seed = draw_seed;
+        stepper.call_count = 0;
+
+        for h = 1:horizon
+            y_hat = recursive_arx_step(coefficients, rolling_log, rolling_U);
+            y_next = min(max(y_hat + innovation_column(h), log_lo), log_hi);
+            Rt_next = exp(y_next);
+            if ~isfinite(Rt_next) || Rt_next <= 0
+                column = nan(horizon, 1);
+                return;
+            end
+
+            [state, stepper] = advance_sirs_stepper(stepper, state, Rt_next);
+            U_next = extract_exogenous_from_state(state, exo_mode, pop_size);
+
+            column(h) = Rt_next;
+            rolling_log = [rolling_log; y_next]; %#ok<AGROW>
+            rolling_U = [rolling_U; U_next]; %#ok<AGROW>
+        end
+    catch
+        column = nan(horizon, 1);
+    end
+end
+
+function seed = local_draw_epidemic_seed(interval_options, draw_index, horizon)
+%LOCAL_DRAW_EPIDEMIC_SEED Resolve the epidemic seed schedule base for a draw.
+    base = local_valid_seed(interval_options.epidemic_base_seed);
+    if interval_options.include_epidemic_seed_variation
+        seed = local_valid_seed(base + (draw_index - 1) * (horizon + 1));
+    else
+        seed = base;
+    end
+end
+
+function state = local_sanitize_state(raw_state, pop_size)
+%LOCAL_SANITIZE_STATE Normalize an [S, I, R] state to the population size.
+    state = reshape(double(raw_state), 1, []);
+    if numel(state) ~= 3 || any(~isfinite(state))
+        error('INTERVALS:InvalidSirsState', ...
+            'sirs_state must contain three finite compartment values.');
+    end
+    tolerance = max(1e-7 * pop_size, 1e-9);
+    state(abs(state) < tolerance) = 0;
+    state = max(state, 0);
+    state(1) = max(state(1), max(1, 1e-6 * pop_size));
+    total = sum(state);
+    if total <= 0
+        error('INTERVALS:InvalidSirsState', 'sirs_state must be positive.');
+    end
+    state = state * (pop_size / total);
+end
+
+function seed = local_valid_seed(seed)
+%LOCAL_VALID_SEED Coerce a seed into a valid nonnegative integer.
+    seed = double(seed);
+    if ~isscalar(seed) || ~isfinite(seed) || seed < 0
+        seed = 0;
+    end
+    seed = mod(floor(seed), 2^32);
+end
+
+function [log_lo, log_hi] = local_log_clip_range()
+%LOCAL_LOG_CLIP_RANGE Plausibility guard range for log-Rt draws.
+    log_lo = log(1e-2);
+    log_hi = log(1e2);
 end
