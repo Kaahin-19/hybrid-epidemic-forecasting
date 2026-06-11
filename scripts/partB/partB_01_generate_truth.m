@@ -2,21 +2,26 @@
 %
 %   Description:
 %       Executes the Part B truth stage for all active robustness cases. Each
-%       case uses the configured compartment model and solver, then applies
-%       observation noise only when requested. The saved artifacts separate
-%       latent truth, observed/model-input signals, and evaluation targets.
+%       case uses the configured compartment model and solver. Latent Rt_true
+%       is preserved as the evaluation target. Under observation noise the
+%       model-visible Rt is not perturbed from Rt_true directly: latent
+%       incidence is observed under a count model, smoothed, and re-estimated
+%       with the shared renewal estimator. The saved artifacts separate latent
+%       truth, observed incidence, model-input signals, and evaluation targets.
 %
 %   Workflow:
 %       1. Load configuration and resolve active cases and scenarios.
-%       2. Generate analytic Rt, simulate latent epidemic truth, and apply
-%          observation noise when enabled.
-%       3. Save one MATLAB truth artifact per case/scenario.
+%       2. Generate analytic Rt and simulate latent epidemic truth.
+%       3. Derive latent incidence, observed incidence, smoothed model-input
+%          incidence, and the renewal-estimated Rt_model_input when observation
+%          noise is enabled; validate the observation design.
+%       4. Save one MATLAB truth artifact per case/scenario.
 %
 %   See also PARTB_CONFIG, GENERATE_RT_SIGNAL, SIMULATE_GROUND_TRUTH_EPIDEMIC,
-%            APPLY_OBSERVATION_NOISE.
+%            APPLY_OBSERVATION_NOISE, ESTIMATE_RT_RENEWAL.
 %
 % A. M. Kaahin 2026-05-18
-% Modified: 2026-06-09
+% Modified: 2026-06-11
 
 %% 1. Initialization
 clear; close all; clc;
@@ -64,6 +69,7 @@ for c = 1:numel(cases)
 
             artifact = local_truth_artifact(cfg, case_cfg, scenario, ...
                 latent_truth, observed, model_params, sim_options);
+            local_validate_observation_model(artifact, case_cfg, scenario.id);
 
             out_path = fullfile(case_dir, sprintf('partB_%s_truth_%s.mat', ...
                 char(case_cfg.case_id), char(scenario.id)));
@@ -204,6 +210,55 @@ function local_validate_truth_state(truth, case_cfg, scenario_id)
     end
 end
 
+function local_validate_observation_model(artifact, case_cfg, scenario_id)
+%LOCAL_VALIDATE_OBSERVATION_MODEL Verify the incidence-based observation design.
+    incidence_fields = {'incidence_true', 'incidence_observed', ...
+        'incidence_model_input', 'renewal_lambda_model_input', ...
+        'serial_interval_weights'};
+    if ~all(isfield(artifact, incidence_fields))
+        error('SIM:MissingIncidenceFields', ...
+            'Truth artifact for %s/%s is missing incidence observation fields.', ...
+            case_cfg.case_id, scenario_id);
+    end
+
+    if ~isfield(artifact, 'observation_metadata') || ...
+            ~isfield(artifact.observation_metadata, 'direct_Rt_noise_used') || ...
+            logical(artifact.observation_metadata.direct_Rt_noise_used)
+        error('SIM:DirectRtNoise', ...
+            'direct_Rt_noise_used must be false for %s/%s.', ...
+            case_cfg.case_id, scenario_id);
+    end
+
+    if any(~isfinite(artifact.Rt_evaluation_target(:))) || ...
+            ~isequal(artifact.Rt_evaluation_target(:), artifact.Rt_true(:))
+        error('SIM:EvaluationTargetDrift', ...
+            'Rt_evaluation_target must equal latent Rt_true for %s/%s.', ...
+            case_cfg.case_id, scenario_id);
+    end
+
+    incidence_true = artifact.incidence_true(:);
+    if any(~isfinite(incidence_true)) || any(incidence_true < 0)
+        error('SIM:InvalidIncidence', ...
+            'incidence_true must be finite and nonnegative for %s/%s.', ...
+            case_cfg.case_id, scenario_id);
+    end
+
+    if logical(case_cfg.observation_noise.enabled)
+        Rt_model_input = artifact.Rt_model_input(:);
+        if any(~isfinite(Rt_model_input)) || any(Rt_model_input <= 0)
+            error('SIM:InvalidRtModelInput', ...
+                'Rt_model_input must be finite and strictly positive for %s/%s.', ...
+                case_cfg.case_id, scenario_id);
+        end
+        if isequal(Rt_model_input, artifact.Rt_true(:))
+            error('SIM:RtModelInputNotEstimated', ...
+                ['Rt_model_input equals latent Rt_true for observation-noise ' ...
+                'case %s/%s; it must be estimated from observed incidence.'], ...
+                case_cfg.case_id, scenario_id);
+        end
+    end
+end
+
 function artifact = local_truth_artifact(cfg, case_cfg, scenario, ...
     latent_truth, observed, model_params, sim_options)
 %LOCAL_TRUTH_ARTIFACT Assemble one case/scenario artifact.
@@ -226,6 +281,12 @@ function artifact = local_truth_artifact(cfg, case_cfg, scenario, ...
     artifact.Rt_model_input = observed.Rt_model_input;
     artifact.Rt_evaluation_target = observed.Rt_evaluation_target;
 
+    artifact.incidence_true = observed.incidence_true;
+    artifact.incidence_observed = observed.incidence_observed;
+    artifact.incidence_model_input = observed.incidence_model_input;
+    artifact.renewal_lambda_model_input = observed.renewal_lambda_model_input;
+    artifact.serial_interval_weights = observed.serial_interval_weights;
+
     artifact.S_true = observed.S_true;
     artifact.I_true = observed.I_true;
     artifact.R_true = observed.R_true;
@@ -243,6 +304,7 @@ function artifact = local_truth_artifact(cfg, case_cfg, scenario, ...
     artifact.model_params = model_params;
     artifact.noise_parameters = observed.noise_parameters;
     artifact.noise_seed = observed.noise_seed;
+    artifact.observation_metadata = observed.observation_metadata;
     artifact.sim_options = sim_options;
     artifact.source_case_config = case_cfg;
     artifact.cfg_snapshot = local_cfg_snapshot(cfg, case_cfg, scenario, ...

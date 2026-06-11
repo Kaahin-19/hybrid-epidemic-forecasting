@@ -1,41 +1,9 @@
 CaseID,CaseName,TruthModel,Solver,StructuralMismatch,ObservationNoise,ProcessNoise,Scenario,ScenarioName,Model,ExoMode,IntervalStatus,RecordedStatus,IsValid,NumWindows
-combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A1,Seasonal Forcing,AR,None,ok,ok,1,44
-combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A1,Seasonal Forcing,ARX,I,insufficient_valid_draws,invalid,0,1
-combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A1,Seasonal Forcing,ARX,I,ok,ok,1,42
-combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A1,Seasonal Forcing,ARX,I,ok_partial_draws,ok,1,1
-combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A2,Policy Intervention,AR,None,ok,ok,1,44
-combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A2,Policy Intervention,ARX,I,ok,ok,1,44
-combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A3,Damping Resurgence,AR,None,ok,ok,1,44
-combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A3,Damping Resurgence,ARX,I,ok,ok,1,43
-combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A3,Damping Resurgence,ARX,I,ok_partial_draws,ok,1,1
-combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A4,Amplifying Resurgence,AR,None,ok,ok,1,44
-combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A4,Amplifying Resurgence,ARX,I,ok,ok,1,44
-observation_noise,SIRS with observation noise,SIRS,uds,0,1,0,A1,Seasonal Forcing,AR,None,ok,ok,1,44
-observation_noise,SIRS with observation noise,SIRS,uds,0,1,0,A1,Seasonal Forcing,ARX,I,ok,ok,1,44
-observation_noise,SIRS with observation noise,SIRS,uds,0,1,0,A2,Policy Intervention,AR,None,ok,ok,1,44
-observation_noise,SIRS with observation noise,SIRS,uds,0,1,0,A2,Policy Intervention,ARX,I,ok,ok,1,44
-observation_noise,SIRS with observation noise,SIRS,uds,0,1,0,A3,Damping Resurgence,AR,None,ok,ok,1,44
-observation_noise,SIRS with observation noise,SIRS,uds,0,1,0,A3,Damping Resurgence,ARX,I,ok,ok,1,43
-observation_noise,SIRS with observation noise,SIRS,uds,0,1,0,A3,Damping Resurgence,ARX,I,ok_partial_draws,ok,1,1
-observation_noise,SIRS with observation noise,SIRS,uds,0,1,0,A4,Amplifying Resurgence,AR,None,ok,ok,1,44
-observation_noise,SIRS with observation noise,SIRS,uds,0,1,0,A4,Amplifying Resurgence,ARX,I,ok,ok,1,44
-process_noise,SIRS with stochastic process noise,SIRS,ssa,0,0,1,A1,Seasonal Forcing,AR,None,ok,ok,1,44
-process_noise,SIRS with stochastic process noise,SIRS,ssa,0,0,1,A1,Seasonal Forcing,ARX,I,ok,ok,1,44
-process_noise,SIRS with stochastic process noise,SIRS,ssa,0,0,1,A2,Policy Intervention,AR,None,ok,ok,1,38
-process_noise,SIRS with stochastic process noise,SIRS,ssa,0,0,1,A2,Policy Intervention,AR,None,persistence_fallback,ok,1,6
-process_noise,SIRS with stochastic process noise,SIRS,ssa,0,0,1,A2,Policy Intervention,ARX,I,ok,ok,1,38
-process_noise,SIRS with stochastic process noise,SIRS,ssa,0,0,1,A2,Policy Intervention,ARX,I,persistence_fallback,ok,1,6
-process_noise,SIRS with stochastic process noise,SIRS,ssa,0,0,1,A3,Damping Resurgence,AR,None,ok,ok,1,44
-process_noise,SIRS with stochastic process noise,SIRS,ssa,0,0,1,A3,Damping Resurgence,ARX,I,ok,ok,1,44
-process_noise,SIRS with stochastic process noise,SIRS,ssa,0,0,1,A4,Amplifying Resurgence,AR,None,ok,ok,1,44
-process_noise,SIRS with stochastic process noise,SIRS,ssa,0,0,1,A4,Amplifying Resurgence,ARX,I,ok,ok,1,44
-structural_mismatch,SEIR structural mismatch,SEIR,uds,1,0,0,A1,Seasonal Forcing,AR,None,ok,ok,1,44
-structural_mismatch,SEIR structural mismatch,SEIR,uds,1,0,0,A1,Seasonal Forcing,ARX,I,ok,ok,1,44
-structural_mismatch,SEIR structural mismatch,SEIR,uds,1,0,0,A2,Policy Intervention,AR,None,ok,ok,1,38
-structural_mismatch,SEIR structural mismatch,SEIR,uds,1,0,0,A2,Policy Intervention,AR,None,persistence_fallback,ok,1,6
-structural_mismatch,SEIR structural mismatch,SEIR,uds,1,0,0,A2,Policy Intervention,ARX,I,ok,ok,1,38
-structural_mismatch,SEIR structural mismatch,SEIR,uds,1,0,0,A2,Policy Intervention,ARX,I,persistence_fallback,ok,1,6
-structural_mismatch,SEIR structural mismatch,SEIR,uds,1,0,0,A3,Damping Resurgence,AR,None,ok,ok,1,44
-structural_mismatch,SEIR structural mismatch,SEIR,uds,1,0,0,A3,Damping Resurgence,ARX,I,ok,ok,1,44
-structural_mismatch,SEIR structural mismatch,SEIR,uds,1,0,0,A4,Amplifying Resurgence,AR,None,ok,ok,1,44
-structural_mismatch,SEIR structural mismatch,SEIR,uds,1,0,0,A4,Amplifying Resurgence,ARX,I,ok,ok,1,44
+combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A1,Seasonal Forcing,AR,None,ok,ok,1,2
+combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A1,Seasonal Forcing,ARX,I,ok,ok,1,2
+observation_noise,SIRS with observation noise,SIRS,uds,0,1,0,A1,Seasonal Forcing,AR,None,ok,ok,1,2
+observation_noise,SIRS with observation noise,SIRS,uds,0,1,0,A1,Seasonal Forcing,ARX,I,ok,ok,1,2
+process_noise,SIRS with stochastic process noise,SIRS,ssa,0,0,1,A1,Seasonal Forcing,AR,None,ok,ok,1,2
+process_noise,SIRS with stochastic process noise,SIRS,ssa,0,0,1,A1,Seasonal Forcing,ARX,I,ok,ok,1,2
+structural_mismatch,SEIR structural mismatch,SEIR,uds,1,0,0,A1,Seasonal Forcing,AR,None,ok,ok,1,2
+structural_mismatch,SEIR structural mismatch,SEIR,uds,1,0,0,A1,Seasonal Forcing,ARX,I,ok,ok,1,2

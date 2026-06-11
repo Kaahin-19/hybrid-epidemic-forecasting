@@ -163,8 +163,13 @@ end
 
 function scenario_entry = local_build_entry_from_signals(signals)
 %LOCAL_BUILD_ENTRY_FROM_SIGNALS Assemble the shared scenario-entry structure.
+    % Forecast history (Rt_past) is drawn from the model-visible Rt_history_input
+    % (Rt_model_input). The future scoring truth is the separate evaluation
+    % target signals.Rt_evaluation_target, applied to truth_Rt below. For Part B
+    % observation-noise cases these two differ: history is incidence-estimated,
+    % evaluation is latent Rt_true.
     scenario_inputs = struct( ...
-        'Rt_true', signals.Rt_model_input, ...
+        'Rt_history_input', signals.Rt_model_input, ...
         'tspan', signals.tspan, ...
         'S_true', signals.S_model_input, ...
         'I_true', signals.I_model_input, ...
@@ -234,8 +239,10 @@ function window_entry = local_prepare_window_data(scenario_inputs, ...
     window_entry.window_day_idx  = idx_T;
     window_entry.horizon_indices = (idx_T + 1 : idx_end)';
     window_entry.t_future        = scenario_inputs.tspan(idx_T + 1 : idx_end);
-    window_entry.Rt_past         = scenario_inputs.Rt_true(1:idx_T);
-    window_entry.truth_Rt        = scenario_inputs.Rt_true(idx_T + 1 : idx_end);
+    window_entry.Rt_past         = scenario_inputs.Rt_history_input(1:idx_T);
+    % Placeholder future truth; overwritten with the evaluation target in
+    % local_build_window_data for valid windows.
+    window_entry.truth_Rt        = scenario_inputs.Rt_history_input(idx_T + 1 : idx_end);
 
     [window_entry.U_past, window_entry.sirs_state] = ...
         local_prepare_exogenous_inputs(scenario_inputs, idx_T, sirs_cfg);

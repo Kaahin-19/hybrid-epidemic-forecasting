@@ -47,17 +47,36 @@ function cfg = partB_config()
     cfg.sirs_projection.R0_init  = 0;
 
     %% 3. Observation-Noise Model
-    cfg.observation_noise.default.enabled = false;
-    cfg.observation_noise.default.rt_model = "lognormal";
-    cfg.observation_noise.default.rt_sigma_log = 0.08;
-    cfg.observation_noise.default.count_model = "gaussian_count";
-    cfg.observation_noise.default.i_relative_sd = 0.08;
-    cfg.observation_noise.default.i_abs_sd = 25;
-    cfg.observation_noise.default.clip_rt_to_bounds = true;
-    cfg.observation_noise.default.clip_counts_to_population = true;
+    %   The observation model never perturbs latent Rt_true directly. Instead it
+    %   turns latent incidence into noisy reported incidence, smooths it, and
+    %   re-estimates a model-visible Rt with the shared renewal estimator. A
+    %   separate count-noise channel produces the model-visible infected-state
+    %   proxy (I_model_input) used as the ARX/I exogenous history.
+    obs = struct();
+    obs.enabled = false;
 
-    cfg.observation_noise.enabled = cfg.observation_noise.default;
+    % Incidence observation channel (-> incidence_observed -> Rt_model_input).
+    obs.incidence_model = "none";          % "none" | "negative_binomial" | "poisson"
+    obs.reporting_fraction = 1.0;          % expected reported fraction of incidence
+    obs.dispersion = 10;                   % NB dispersion; variance = m + m^2/dispersion
+    obs.incidence_smoothing_method = "trailing_moving_average";
+    obs.incidence_smoothing_window_days = 7;
+    obs.serial_interval_mean_days = 5;
+    obs.serial_interval_sd_days = 2;
+    obs.serial_interval_max_lag_days = 21;
+    obs.warmup_handling_method = "leading_fill_first_finite";
+
+    % Infected-state count channel (-> I_model_input for ARX/I exogenous history).
+    obs.count_model = "gaussian_count";
+    obs.i_relative_sd = 0.08;
+    obs.i_abs_sd = 25;
+    obs.clip_counts_to_population = true;
+
+    cfg.observation_noise.default = obs;
+
+    cfg.observation_noise.enabled = obs;
     cfg.observation_noise.enabled.enabled = true;
+    cfg.observation_noise.enabled.incidence_model = "negative_binomial";
 
     %% 4. Process-Noise Model
     cfg.process_noise.disabled.enabled = false;
