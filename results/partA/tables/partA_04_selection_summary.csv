@@ -1,13 +1,13 @@
 Model,ExoMode,SelectedConfiguration,SelectedIndex,BestGlobalWIS,SelectionArtifact
-ARX,Both,[10 1 1],10,0.00763794868826149,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_ARX_Both.mat
-ARX,I,[10 1 1],10,0.00764839210219758,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_ARX_I.mat
-ARX,S,[10 1 1],10,0.00760201895676668,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_ARX_S.mat
-AR,None,9,9,0.00522297518196812,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_AR_None.mat
-N4SID,Both,[6 0],6,0.191562306175771,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_N4SID_Both.mat
-N4SID,I,[2 0],2,0.0525069871025527,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_N4SID_I.mat
-N4SID,None,[6 0],6,0.0112002444160173,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_N4SID_None.mat
-N4SID,S,[2 0],2,0.0372388400124134,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_N4SID_S.mat
-SSEST,Both,[1 0],1,0.0761046018040513,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_SSEST_Both.mat
-SSEST,I,[1 0],1,0.068732419662246,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_SSEST_I.mat
+ARX,Both,[2 1 1],2,0.0289333498278757,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_ARX_Both.mat
+ARX,I,[2 1 1],2,0.0246191591810908,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_ARX_I.mat
+ARX,S,[2 1 1],2,0.0222273269523428,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_ARX_S.mat
+AR,None,2,2,0.0178672752611593,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_AR_None.mat
+N4SID,Both,[2 0],2,960681708.928166,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_N4SID_Both.mat
+N4SID,I,[2 0],2,0.045117186295638,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_N4SID_I.mat
+N4SID,None,[2 0],2,0.0209834982073067,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_N4SID_None.mat
+N4SID,S,[2 0],2,0.0420816754864271,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_N4SID_S.mat
+SSEST,Both,[1 0],1,0.0761493196790575,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_SSEST_Both.mat
+SSEST,I,[1 0],1,0.0657443303232668,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_SSEST_I.mat
 SSEST,None,[1 0],1,0.0498764845544132,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_SSEST_None.mat
-SSEST,S,[1 0],1,0.0734003742320242,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_SSEST_S.mat
+SSEST,S,[1 0],1,0.0748120522120614,/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_SSEST_S.mat

@@ -57,8 +57,7 @@ The implementation is divided into three major phases as outlined in the project
 * ``advance_epidemic_state.m``: Advances one effective-``R_t``-driven epidemic state for closed-loop covariate projection.
 
 **Forecasting orchestration (``src/forecasting/``)**
-* ``build_forecasting_dataset.m``: Assembles the Part A expanding-window forecast inputs.
-* ``prepare_window_data.m``: Builds a single expanding-window forecast input entry.
+* ``build_forecast_entries.m``: Builds Part A/B/C expanding-window forecast entries.
 * ``run_expanding_window_forecast.m``: Runs all window forecasts for one scenario.
 * ``run_model_forecast.m``: Fits and forecasts one selected configuration for a single window.
 

@@ -12,7 +12,8 @@
 %       3. Run forecasts through the reusable Part A forecasting dispatcher.
 %       4. Save one MATLAB forecast artifact per case/scenario/model.
 %
-%   See also PARTB_CONFIG, PREPARE_WINDOW_DATA, RUN_EXPANDING_WINDOW_FORECAST.
+%   See also PARTB_CONFIG, BUILD_FORECAST_ENTRIES,
+%            RUN_EXPANDING_WINDOW_FORECAST.
 %
 % A. M. Kaahin 2026-05-18
 % Modified: 2026-06-11
@@ -55,8 +56,8 @@ for i = 1:numel(truth_paths)
             model_cfg.selected_configuration_source, ...
             mat2str(model_cfg.selected_configuration));
 
-        scenario_entry = local_build_scenario_entry(loaded, cfg, ...
-            model_cfg.exo_mode);
+        scenario_entry = build_forecast_entries(cfg, model_cfg.exo_mode, ...
+            struct('mode', "partB", 'data', loaded));
         forecast_options = local_forecast_options(cfg, model_cfg.exo_mode, ...
             scenario_entry);
 
@@ -287,73 +288,6 @@ function local_validate_truth_artifact(loaded, artifact_path)
     if ~all(isfield(loaded, required_fields))
         error('FORECAST:InvalidTruthArtifact', ...
             'Truth artifact is missing required fields: %s.', artifact_path);
-    end
-end
-
-function scenario_entry = local_build_scenario_entry(loaded, cfg, exo_mode)
-%LOCAL_BUILD_SCENARIO_ENTRY Build generic forecast input from model inputs.
-    horizon = local_effective_horizon(cfg);
-    Rt_model_input = double(loaded.Rt_model_input(:));
-    Rt_target = double(loaded.Rt_evaluation_target(:));
-    tspan = double(loaded.tspan(:));
-    pop_size = local_population_size(loaded, cfg);
-    I_model_input = double(loaded.I_model_input(:));
-    S_model_input = double(loaded.S_model_input(:));
-
-    switch char(exo_mode)
-        case 'None'
-            U_true = [];
-        case 'I'
-            U_true = I_model_input / pop_size;
-        otherwise
-            error('FORECAST:UnsupportedExoMode', ...
-                'Part B robustness ladder evaluates only None and I exogenous modes.');
-    end
-
-    scenario_inputs = struct( ...
-        'Rt_true', Rt_model_input, ...
-        'tspan', tspan, ...
-        'S_true', S_model_input, ...
-        'I_true', I_model_input, ...
-        'U_true', U_true);
-
-    max_T = numel(Rt_model_input) - horizon;
-    windows = cfg.forecast.min_window : cfg.forecast.step_size : max_T;
-    if cfg.smoke_test.enabled
-        windows = windows(1:min(numel(windows), cfg.smoke_test.max_windows));
-    end
-
-    if isempty(windows)
-        window_data = struct([]);
-    else
-        window_data = repmat(prepare_window_data(scenario_inputs, windows(1), ...
-            horizon, cfg.sirs_projection), numel(windows), 1);
-        for w = 1:numel(windows)
-            window_data(w) = prepare_window_data(scenario_inputs, windows(w), ...
-                horizon, cfg.sirs_projection);
-            if window_data(w).is_valid_window
-                idx = window_data(w).horizon_indices;
-                window_data(w).truth_Rt = Rt_target(idx);
-            end
-        end
-    end
-
-    scenario_entry = struct();
-    scenario_entry.scenario_id = string(loaded.scenario_id);
-    scenario_entry.scenario_name = string(loaded.scenario_name);
-    scenario_entry.num_exo = size(U_true, 2);
-    scenario_entry.windows = windows;
-    scenario_entry.window_data = window_data;
-    scenario_entry.Rt_true = Rt_target;
-    scenario_entry.tspan = tspan;
-end
-
-function pop_size = local_population_size(loaded, cfg)
-%LOCAL_POPULATION_SIZE Resolve scaling population for model inputs.
-    if isfield(loaded, 'model_params') && isfield(loaded.model_params, 'pop_size')
-        pop_size = double(loaded.model_params.pop_size);
-    else
-        pop_size = double(cfg.sirs_projection.pop_size);
     end
 end
 

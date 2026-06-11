@@ -13,11 +13,11 @@
 %       3. Run each strategy/model case on post-calibration forecast windows.
 %       4. Save one canonical forecast artifact per strategy/model case.
 %
-%   See also PARTC_CONFIG, BUILD_PARTC_FORECAST_ENTRY, ...
+%   See also PARTC_CONFIG, BUILD_FORECAST_ENTRIES, ...
 %            RUN_EXPANDING_WINDOW_FORECAST, LOAD_PARTC_FIXED_CONFIGURATIONS.
 %
 % A. M. Kaahin 2026-05-18
-% Modified: 2026-06-05
+% Modified: 2026-06-11
 
 %% 1. Initialization
 clear; close all; clc;
@@ -65,8 +65,8 @@ for s = 1:numel(cfg.strategies)
             base_cfg.model_type, base_cfg.exo_mode, ...
             mat2str(selected_order_for_strategy));
 
-        scenario_entry = build_partC_forecast_entry(loaded, cfg, ...
-            base_cfg.exo_mode);
+        scenario_entry = build_forecast_entries(cfg, base_cfg.exo_mode, ...
+            struct('mode', "partC", 'data', loaded));
         forecast_options = local_forecast_options(cfg, base_cfg.exo_mode, ...
             scenario_entry);
         calibration_end_idx = local_calibration_end_index(scenario_entry, ...

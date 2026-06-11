@@ -16,7 +16,7 @@
 %          forecasts in parallel when multiple workers are configured.
 %       4. Save one MATLAB forecast artifact per scenario.
 %
-%   See also PARTA_CONFIG, BUILD_FORECASTING_DATASET, ...
+%   See also PARTA_CONFIG, BUILD_FORECAST_ENTRIES, ...
 %            RUN_EXPANDING_WINDOW_FORECAST, RUN_MODEL_FORECAST, ...
 %            PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_04_EVALUATE_FORECASTS.
 %
@@ -45,7 +45,7 @@ selected_configuration = local_load_selected_configuration( ...
 fprintf('Using global configuration: %s\n', mat2str(selected_configuration));
 
 %% 3. Build Dataset and Run Forecasts
-scenario_data = build_forecasting_dataset(cfg, exo_mode);
+scenario_data = build_forecast_entries(cfg, exo_mode);
 num_scenarios = numel(scenario_data);
 
 forecast_options = struct( ...

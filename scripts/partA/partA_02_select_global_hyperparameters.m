@@ -15,7 +15,7 @@
 %       3. Evaluate and aggregate candidate WIS scores.
 %       4. Save one MATLAB model-selection artifact.
 %
-%   See also PARTA_CONFIG, BUILD_FORECASTING_DATASET, GENERATE_CANDIDATE_GRID,
+%   See also PARTA_CONFIG, BUILD_FORECAST_ENTRIES, GENERATE_CANDIDATE_GRID,
 %            EVALUATE_CANDIDATE, AGGREGATE_CANDIDATE_SCORES.
 %
 % A. M. Kaahin 2026-05-31
@@ -41,7 +41,7 @@ end
 candidate_grid = generate_candidate_grid(cfg, model_type);
 num_candidates = size(candidate_grid, 1);
 
-scenario_data = build_forecasting_dataset(cfg, exo_mode);
+scenario_data = build_forecast_entries(cfg, exo_mode);
 scenario_ids = [scenario_data.scenario_id];
 window_counts = arrayfun(@(s) numel(s.windows), scenario_data(:)');
 

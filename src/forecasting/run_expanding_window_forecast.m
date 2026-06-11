@@ -14,7 +14,7 @@ function forecast_results = run_expanding_window_forecast(scenario_entry, ...
 %
 %   Inputs:
 %       scenario_entry         - One scenario structure from
-%                                build_forecasting_dataset.
+%                                build_forecast_entries.
 %       model_type             - Model family identifier.
 %       selected_configuration - Numeric row vector of selected parameters.
 %       forecast_options       - Structure consumed by run_model_forecast,
@@ -25,7 +25,7 @@ function forecast_results = run_expanding_window_forecast(scenario_entry, ...
 %                          forecast origin, future indexing, truth, median,
 %                          predictive bounds, interval alphas, and status.
 %
-%   See also RUN_MODEL_FORECAST, BUILD_FORECASTING_DATASET, PREPARE_WINDOW_DATA.
+%   See also RUN_MODEL_FORECAST, BUILD_FORECAST_ENTRIES.
 %
 % A. M. Kaahin 2026-06-01
 % Modified: 2026-06-11
