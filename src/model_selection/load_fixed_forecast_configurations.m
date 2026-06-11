@@ -5,10 +5,9 @@ function fixed_configs = load_fixed_forecast_configurations(cfg, stage_id)
 %       fixed_configs = load_fixed_forecast_configurations(cfg, stage_id)
 %
 %   Description:
-%       Resolves fixed AR/None and ARX/I forecast configurations from the
-%       project configuration. When a matching Part A model-selection artifact
-%       is available, the selected configuration is loaded and validated. When
-%       it is unavailable, the documented fallback configuration is used.
+%       Resolves fixed AR/None and ARX/I forecast configurations from required
+%       Part A model-selection artifacts. Part B and Part C depend on these
+%       Part A-selected orders and do not fall back to configuration defaults.
 %
 %   Inputs:
 %       cfg      - Part B or Part C configuration structure.
@@ -46,39 +45,25 @@ function fixed_configs = load_fixed_forecast_configurations(cfg, stage_id)
 end
 
 function model_cfg = local_load_one_fixed_config(cfg, fixed_case, stage_id)
-%LOCAL_LOAD_ONE_FIXED_CONFIG Load one Part A selection artifact or fallback.
+%LOCAL_LOAD_ONE_FIXED_CONFIG Load one required Part A selection artifact.
     model_type = string(fixed_case.model_type);
     exo_mode = string(fixed_case.exo_mode);
     artifact_path = local_selection_artifact_path(cfg, fixed_case, ...
         model_type, exo_mode);
 
-    if strlength(artifact_path) > 0 && exist(artifact_path, 'file') == 2
-        selection = load(artifact_path);
-        local_validate_selection_artifact(selection, artifact_path, ...
-            model_type, exo_mode);
-        selected_configuration = reshape(double(selection.selected_configuration), 1, []);
-        source = "partA_model_selection";
-        selection_artifact = artifact_path;
-        fallback_used = false;
-        selection_metadata = local_selection_metadata(selection);
-    else
-        selected_configuration = reshape(double(fixed_case.fallback_configuration), 1, []);
-        source = local_fallback_source(stage_id);
-        selection_artifact = "";
-        fallback_used = true;
-        selection_metadata = struct('selected_index', nan, ...
-            'best_global_wis', nan);
-        warning('FORECAST:PartASelectionFallback', ...
-            ['Missing Part A selection artifact for %s / %s: %s. ', ...
-            'Using documented %s fallback %s.'], ...
-            model_type, exo_mode, artifact_path, local_stage_label(stage_id), ...
-            mat2str(selected_configuration));
+    if strlength(artifact_path) == 0 || exist(artifact_path, 'file') ~= 2
+        local_missing_selection_error(stage_id, model_type, exo_mode, artifact_path);
     end
 
+    selection = load(artifact_path);
+    local_validate_selection_artifact(selection, artifact_path, ...
+        model_type, exo_mode);
+    selected_configuration = reshape(double(selection.selected_configuration), 1, []);
+    source = "partA_model_selection";
+    selection_artifact = artifact_path;
+    selection_metadata = local_selection_metadata(selection);
+
     local_validate_configuration_shape(stage_id, model_type, selected_configuration);
-    if stage_id == "partc"
-        selection_metadata.fallback_used = fallback_used;
-    end
 
     model_cfg = local_empty_fixed_config();
     model_cfg.model_type = model_type;
@@ -87,6 +72,25 @@ function model_cfg = local_load_one_fixed_config(cfg, fixed_case, stage_id)
     model_cfg.selected_configuration_source = source;
     model_cfg.selected_configuration_artifact = selection_artifact;
     model_cfg.selection_metadata = selection_metadata;
+end
+
+function local_missing_selection_error(stage_id, model_type, exo_mode, artifact_path)
+%LOCAL_MISSING_SELECTION_ERROR Fail when required Part A order artifact is absent.
+    artifact_path = string(artifact_path);
+    expected_file = local_expected_filename(model_type, exo_mode, artifact_path);
+    relative_path = local_relative_path(artifact_path);
+    stage_label = local_stage_label(stage_id);
+
+    error('FORECAST:MissingPartASelectionArtifact', ...
+        ['%s requires the Part A-selected model-order artifact for %s / %s, ', ...
+        'but it does not exist.\n', ...
+        'Required file: %s\n', ...
+        'Expected relative path: %s\n', ...
+        'Run the Part A model-selection stage first:\n', ...
+        '  matlab -batch "addpath(genpath(''third_party'')); startup; partA_02_select_global_hyperparameters"\n', ...
+        'Then make sure %s exists at %s before rerunning %s.'], ...
+        stage_label, model_type, exo_mode, expected_file, relative_path, ...
+        expected_file, relative_path, stage_label);
 end
 
 function artifact_path = local_selection_artifact_path(cfg, fixed_case, ...
@@ -181,18 +185,6 @@ function stage_id = local_infer_stage_id(cfg)
     end
 end
 
-function source = local_fallback_source(stage_id)
-%LOCAL_FALLBACK_SOURCE Return the stage-specific fallback source label.
-    switch stage_id
-        case "partb"
-            source = "partB_config_fallback";
-        case "partc"
-            source = "partC_config_fallback";
-        otherwise
-            source = "config_fallback";
-    end
-end
-
 function label = local_stage_label(stage_id)
 %LOCAL_STAGE_LABEL Return a human-readable stage label.
     switch stage_id
@@ -202,6 +194,34 @@ function label = local_stage_label(stage_id)
             label = "Part C";
         otherwise
             label = "configuration";
+    end
+end
+
+function filename = local_expected_filename(model_type, exo_mode, artifact_path)
+%LOCAL_EXPECTED_FILENAME Return the required Part A artifact filename.
+    [~, name, ext] = fileparts(char(artifact_path));
+    filename = string([name, ext]);
+    if strlength(filename) == 0
+        filename = string(sprintf('partA_02_global_hyperparameters_%s_%s.mat', ...
+            char(model_type), char(exo_mode)));
+    end
+end
+
+function relative_path = local_relative_path(artifact_path)
+%LOCAL_RELATIVE_PATH Prefer a repository-relative artifact path in messages.
+    artifact_path = string(artifact_path);
+    if strlength(artifact_path) == 0
+        relative_path = artifact_path;
+        return;
+    end
+
+    normalized_path = replace(artifact_path, "\", "/");
+    normalized_root = replace(string(pwd), "\", "/");
+    prefix = normalized_root + "/";
+    if startsWith(normalized_path, prefix)
+        relative_path = extractAfter(normalized_path, strlength(prefix));
+    else
+        relative_path = artifact_path;
     end
 end
 

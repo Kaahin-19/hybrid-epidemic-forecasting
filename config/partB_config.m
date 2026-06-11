@@ -17,7 +17,7 @@ function cfg = partB_config()
 %   See also PARTA_CONFIG, PARTB_01_GENERATE_TRUTH.
 %
 % A. M. Kaahin 2026-05-18
-% Modified: 2026-06-09
+% Modified: 2026-06-11
 
     cfg = partA_config();
 
@@ -109,16 +109,13 @@ function cfg = partB_config()
     %% 6. Fixed Part A Forecast Cases
     cfg.fixed_forecast_cases = repmat(struct( ...
         'model_type', "", ...
-        'exo_mode', "", ...
-        'fallback_configuration', []), 1, 2);
+        'exo_mode', ""), 1, 2);
 
     cfg.fixed_forecast_cases(1).model_type = "AR";
     cfg.fixed_forecast_cases(1).exo_mode = "None";
-    cfg.fixed_forecast_cases(1).fallback_configuration = 2;
 
     cfg.fixed_forecast_cases(2).model_type = "ARX";
     cfg.fixed_forecast_cases(2).exo_mode = "I";
-    cfg.fixed_forecast_cases(2).fallback_configuration = [7, 2, 1];
 
     %% 7. Optional Smoke-Test Controls
     cfg.smoke_test.enabled = local_env_flag("PARTB_SMOKE_TEST", false);
