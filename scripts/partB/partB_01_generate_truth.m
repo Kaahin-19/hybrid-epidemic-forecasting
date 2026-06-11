@@ -2,20 +2,25 @@
 %
 %   Description:
 %       Executes the Part B truth stage for all active robustness cases. Each
-%       case uses the configured compartment model and solver. Latent Rt_true
-%       is preserved as the evaluation target. Under observation noise the
-%       model-visible Rt is not perturbed from Rt_true directly: latent
+%       case uses the configured compartment model and solver. Process-noise
+%       cases are replicated over multiple independent SSA realizations per
+%       scenario so robustness conclusions do not depend on a single random
+%       path; deterministic cases use one replicate. Latent Rt_true is
+%       preserved as each replicate's evaluation target. Under observation noise
+%       the model-visible Rt is not perturbed from Rt_true directly: latent
 %       incidence is observed under a count model, smoothed, and re-estimated
 %       with the shared renewal estimator. The saved artifacts separate latent
-%       truth, observed incidence, model-input signals, and evaluation targets.
+%       truth, observed incidence, model-input signals, and evaluation targets,
+%       and carry replicate identity and seeds.
 %
 %   Workflow:
 %       1. Load configuration and resolve active cases and scenarios.
-%       2. Generate analytic Rt and simulate latent epidemic truth.
+%       2. For each case/scenario/replicate, generate analytic Rt and simulate
+%          latent epidemic truth with a unique reproducible process seed.
 %       3. Derive latent incidence, observed incidence, smoothed model-input
 %          incidence, and the renewal-estimated Rt_model_input when observation
 %          noise is enabled; validate the observation design.
-%       4. Save one MATLAB truth artifact per case/scenario.
+%       4. Save one MATLAB truth artifact per case/scenario/replicate.
 %
 %   See also PARTB_CONFIG, GENERATE_RT_SIGNAL, SIMULATE_GROUND_TRUTH_EPIDEMIC,
 %            APPLY_OBSERVATION_NOISE, ESTIMATE_RT_RENEWAL.
@@ -45,45 +50,58 @@ for c = 1:numel(cases)
     case_dir = local_case_data_dir(cfg, case_cfg.case_id);
     if ~exist(case_dir, 'dir'), mkdir(case_dir); end
 
-    fprintf('Case %s: %s\n', case_cfg.case_id, case_cfg.case_name);
+    num_reps = local_num_replicates(cfg, case_cfg);
+    local_validate_replicate_plan(cfg, case_cfg, num_reps);
+    fprintf('Case %s: %s (%d replicate(s))\n', case_cfg.case_id, ...
+        case_cfg.case_name, num_reps);
 
     for i = 1:numel(scenarios)
         scenario = scenarios(i);
         Rt_signal = generate_rt_signal(tspan, scenario);
+        scenario_process_seeds = nan(num_reps, 1);
 
-        run_label = sprintf('%s/%s', char(case_cfg.case_id), ...
-            char(scenario.id));
-        fprintf('  - Processing %s... ', run_label);
+        for r = 1:num_reps
+            replicate_id = sprintf('rep%03d', r);
+            run_label = sprintf('%s/%s/%s', char(case_cfg.case_id), ...
+                char(scenario.id), replicate_id);
+            fprintf('  - Processing %s... ', run_label);
 
-        try
-            model_params = local_model_params_for_case(cfg, case_cfg, scenario);
-            sim_options = local_sim_options_for_case(cfg, case_cfg, i);
-            latent_truth = simulate_ground_truth_epidemic( ...
-                case_cfg.truth_model, tspan, Rt_signal, ...
-                model_params, sim_options);
-            local_validate_truth_state(latent_truth, case_cfg, scenario.id);
+            try
+                model_params = local_model_params_for_case(cfg, case_cfg, scenario);
+                sim_options = local_sim_options_for_case(cfg, case_cfg, i, r);
+                process_seed = sim_options.seed;
+                scenario_process_seeds(r) = process_seed;
+                latent_truth = simulate_ground_truth_epidemic( ...
+                    case_cfg.truth_model, tspan, Rt_signal, ...
+                    model_params, sim_options);
+                local_validate_truth_state(latent_truth, case_cfg, scenario.id);
 
-            noise_seed = local_noise_seed(cfg, c, i);
-            observed = apply_observation_noise(latent_truth, ...
-                case_cfg.observation_noise, noise_seed, cfg.Rt.bounds);
+                noise_seed = local_noise_seed(cfg, case_cfg, i, r);
+                observed = apply_observation_noise(latent_truth, ...
+                    case_cfg.observation_noise, noise_seed, cfg.Rt.bounds);
 
-            artifact = local_truth_artifact(cfg, case_cfg, scenario, ...
-                latent_truth, observed, model_params, sim_options);
-            local_validate_observation_model(artifact, case_cfg, scenario.id);
+                artifact = local_truth_artifact(cfg, case_cfg, scenario, ...
+                    latent_truth, observed, model_params, sim_options, ...
+                    replicate_id, r, num_reps, process_seed);
+                local_validate_observation_model(artifact, case_cfg, scenario.id);
 
-            out_path = fullfile(case_dir, sprintf('partB_%s_truth_%s.mat', ...
-                char(case_cfg.case_id), char(scenario.id)));
-            save(out_path, '-struct', 'artifact');
-            generated_artifacts(end + 1, 1) = string(out_path); %#ok<SAGROW>
-        catch ME
-            fprintf('FAILED.\n');
-            warning('SIM:Failure', 'Part B truth generation failed for %s: %s', ...
-                run_label, ME.message);
-            failed_runs(end + 1, 1) = string(run_label); %#ok<SAGROW>
-            continue;
+                out_path = fullfile(case_dir, sprintf('partB_%s_truth_%s_%s.mat', ...
+                    char(case_cfg.case_id), char(scenario.id), replicate_id));
+                save(out_path, '-struct', 'artifact');
+                generated_artifacts(end + 1, 1) = string(out_path); %#ok<SAGROW>
+            catch ME
+                fprintf('FAILED.\n');
+                warning('SIM:Failure', 'Part B truth generation failed for %s: %s', ...
+                    run_label, ME.message);
+                failed_runs(end + 1, 1) = string(run_label); %#ok<SAGROW>
+                continue;
+            end
+
+            fprintf('Saved\n');
         end
 
-        fprintf('Saved\n');
+        local_validate_unique_process_seeds(scenario_process_seeds, ...
+            case_cfg, scenario.id, num_reps);
     end
 end
 
@@ -148,39 +166,85 @@ function model_params = local_model_params_for_case(cfg, case_cfg, scenario)
     end
 end
 
-function sim_options = local_sim_options_for_case(cfg, case_cfg, scenario_idx)
+function num_reps = local_num_replicates(cfg, case_cfg)
+%LOCAL_NUM_REPLICATES Resolve replicate count for a case (smoke-aware).
+    if logical(case_cfg.process_noise.enabled)
+        num_reps = cfg.process_noise.num_replicates;
+        if cfg.smoke_test.enabled
+            num_reps = min(num_reps, cfg.smoke_test.num_process_replicates);
+        end
+    else
+        num_reps = 1;
+    end
+    num_reps = max(1, round(double(num_reps)));
+end
+
+function local_validate_replicate_plan(cfg, case_cfg, num_reps)
+%LOCAL_VALIDATE_REPLICATE_PLAN Require >1 replicate for process noise (full run).
+    if logical(case_cfg.process_noise.enabled) && ~cfg.smoke_test.enabled && ...
+            num_reps < 2
+        error('SIM:InsufficientReplicates', ...
+            ['Process-noise case %s must use at least 2 independent SSA ' ...
+            'replicates in a full run.'], case_cfg.case_id);
+    end
+end
+
+function local_validate_unique_process_seeds(seeds, case_cfg, scenario_id, num_reps)
+%LOCAL_VALIDATE_UNIQUE_PROCESS_SEEDS Ensure replicate process seeds are unique.
+    seeds = seeds(isfinite(seeds));
+    if numel(unique(seeds)) ~= num_reps
+        error('SIM:DuplicateProcessSeed', ...
+            'Process seeds for %s/%s are not unique across %d replicate(s).', ...
+            case_cfg.case_id, scenario_id, num_reps);
+    end
+end
+
+function sim_options = local_sim_options_for_case(cfg, case_cfg, scenario_idx, replicate_idx)
 %LOCAL_SIM_OPTIONS_FOR_CASE Build deterministic or stochastic simulation options.
     sim_options = struct();
     sim_options.model_type = case_cfg.truth_model;
     sim_options.solver = case_cfg.solver;
     sim_options.compile = cfg.truth.compile;
     if logical(case_cfg.process_noise.enabled)
-        sim_options.seed = local_process_seed(cfg, case_cfg, scenario_idx);
+        sim_options.seed = local_process_seed(cfg, case_cfg, scenario_idx, replicate_idx);
     else
         sim_options.seed = cfg.sim.seed;
     end
 end
 
-function seed = local_process_seed(cfg, case_cfg, scenario_idx)
-%LOCAL_PROCESS_SEED Generate reproducible process-noise seeds.
-    case_offset = local_case_seed_offset(case_cfg.case_id);
-    seed = cfg.sim.seed + case_offset + 1000 * scenario_idx;
+function seed = local_process_seed(cfg, case_cfg, scenario_idx, replicate_idx)
+%LOCAL_PROCESS_SEED Reproducible, order-independent process-noise seed.
+%   seed = base + case_block*case_index + scenario_block*(scenario-1)
+%               + replicate_stride*(replicate-1).
+%   Block sizes are nested so distinct case/scenario/replicate seeds never
+%   collide and are separated by more than the number of latent time steps,
+%   keeping each replicate's per-interval SSA seed stream disjoint.
+    case_block = 100000000;
+    scenario_block = 1000000;
+    replicate_stride = cfg.process_noise.replicate_seed_stride;
+    seed = cfg.sim.seed + case_block * local_case_seed_index(case_cfg.case_id) + ...
+        scenario_block * (scenario_idx - 1) + replicate_stride * (replicate_idx - 1);
 end
 
-function seed = local_noise_seed(cfg, case_idx, scenario_idx)
-%LOCAL_NOISE_SEED Generate reproducible observation-noise seeds.
-    seed = cfg.sim.seed + 500000 + 10000 * case_idx + 1000 * scenario_idx;
+function seed = local_noise_seed(cfg, case_cfg, scenario_idx, replicate_idx)
+%LOCAL_NOISE_SEED Reproducible, replicate-varying observation-noise seed.
+    noise_space = 500000000;
+    case_block = 100000000;
+    scenario_block = 1000000;
+    replicate_stride = cfg.process_noise.replicate_seed_stride;
+    seed = cfg.sim.seed + noise_space + ...
+        case_block * local_case_seed_index(case_cfg.case_id) + ...
+        scenario_block * (scenario_idx - 1) + replicate_stride * (replicate_idx - 1);
 end
 
-function offset = local_case_seed_offset(case_id)
-%LOCAL_CASE_SEED_OFFSET Stable case-specific seed offset.
+function idx = local_case_seed_index(case_id)
+%LOCAL_CASE_SEED_INDEX Stable case-specific seed index, independent of order.
     ids = ["observation_noise", "process_noise", "structural_mismatch", ...
         "combined_stress"];
     idx = find(ids == string(case_id), 1);
     if isempty(idx)
         idx = 0;
     end
-    offset = 100000 * idx;
 end
 
 function local_validate_truth_state(truth, case_cfg, scenario_id)
@@ -260,8 +324,9 @@ function local_validate_observation_model(artifact, case_cfg, scenario_id)
 end
 
 function artifact = local_truth_artifact(cfg, case_cfg, scenario, ...
-    latent_truth, observed, model_params, sim_options)
-%LOCAL_TRUTH_ARTIFACT Assemble one case/scenario artifact.
+    latent_truth, observed, model_params, sim_options, ...
+    replicate_id, replicate_index, num_replicates_for_case, process_seed)
+%LOCAL_TRUTH_ARTIFACT Assemble one case/scenario/replicate artifact.
     artifact = struct();
     artifact.experiment_id = string(cfg.experiment_id);
     artifact.experiment_name = string(cfg.experiment_name);
@@ -275,6 +340,11 @@ function artifact = local_truth_artifact(cfg, case_cfg, scenario, ...
     artifact.process_noise_enabled = logical(case_cfg.process_noise.enabled);
     artifact.scenario_id = string(scenario.id);
     artifact.scenario_name = string(scenario.name);
+
+    artifact.replicate_id = string(replicate_id);
+    artifact.replicate_index = double(replicate_index);
+    artifact.num_replicates_for_case = double(num_replicates_for_case);
+    artifact.process_seed = double(process_seed);
 
     artifact.Rt_true = observed.Rt_true;
     artifact.Rt_observed = observed.Rt_observed;

@@ -2,9 +2,11 @@
 %
 %   Description:
 %       Loads completed Part B robustness-ladder truth, forecast, and
-%       evaluation artifacts, then generates case-level diagnostics and
-%       thesis-level cross-case figures. Metric computation and table writing
-%       remain isolated in Part B 03.
+%       evaluation artifacts across all process-noise replicates, then generates
+%       case-level diagnostics and thesis-level cross-case figures. The
+%       process-noise example shows multiple independent SSA replicate
+%       trajectories. Metric computation and table writing remain isolated in
+%       Part B 03.
 %
 %   Workflow:
 %       1. Load cross-case evaluation, truth, and forecast artifacts.
@@ -460,10 +462,11 @@ function truth_records = local_load_truth_records(cfg)
     for i = 1:numel(cases)
         case_id = string(cases(i).case_id);
         for j = 1:numel(active_scenarios)
-            artifact_path = fullfile(cfg.output.data_root_dir, ...
-                sprintf('partB_%s_truth_%s.mat', char(case_id), ...
-                char(active_scenarios(j))));
-            if exist(artifact_path, 'file') == 2
+            pattern = sprintf('partB_%s_truth_%s_rep*.mat', char(case_id), ...
+                char(active_scenarios(j)));
+            listing = dir(fullfile(cfg.output.data_root_dir, pattern));
+            for k = 1:numel(listing)
+                artifact_path = fullfile(listing(k).folder, listing(k).name);
                 loaded = load(artifact_path);
                 record = local_truth_record_from_loaded(loaded, artifact_path);
                 truth_records(end + 1, 1) = record; %#ok<AGROW>
@@ -482,12 +485,13 @@ function forecast_records = local_load_forecast_records(cfg)
         case_id = string(cases(i).case_id);
         for s = 1:numel(active_scenarios)
             for f = 1:numel(active_forecast_cases)
-                artifact_path = fullfile(cfg.output.forecast_dir, ...
-                    sprintf('partB_%s_forecast_%s_%s_%s.mat', ...
+                pattern = sprintf('partB_%s_forecast_%s_rep*_%s_%s.mat', ...
                     char(case_id), char(active_scenarios(s)), ...
                     char(active_forecast_cases(f).model_type), ...
-                    char(active_forecast_cases(f).exo_mode)));
-                if exist(artifact_path, 'file') == 2
+                    char(active_forecast_cases(f).exo_mode));
+                listing = dir(fullfile(cfg.output.forecast_dir, pattern));
+                for k = 1:numel(listing)
+                    artifact_path = fullfile(listing(k).folder, listing(k).name);
                     loaded = load(artifact_path);
                     record = local_forecast_record_from_loaded(loaded, artifact_path);
                     forecast_records(end + 1, 1) = record; %#ok<AGROW>
@@ -513,6 +517,8 @@ function record = local_truth_record_from_loaded(loaded, artifact_path)
         'process_noise_enabled', false);
     record.scenario_id = local_loaded_string(loaded, 'scenario_id', "");
     record.scenario_name = local_loaded_string(loaded, 'scenario_name', "");
+    record.replicate_id = local_loaded_string(loaded, 'replicate_id', "rep001");
+    record.replicate_index = local_loaded_scalar(loaded, 'replicate_index', 1);
     record.tspan = local_loaded_vector(loaded, 'tspan');
     record.Rt_true = local_loaded_vector(loaded, 'Rt_true');
     record.Rt_model_input = local_loaded_vector(loaded, 'Rt_model_input');
@@ -529,6 +535,8 @@ function record = local_forecast_record_from_loaded(loaded, artifact_path)
     record.path = artifact_path;
     record.case_id = local_loaded_string(loaded, 'case_id', "");
     record.scenario_id = local_loaded_string(loaded, 'scenario_id', "");
+    record.replicate_id = local_loaded_string(loaded, 'replicate_id', "rep001");
+    record.replicate_index = local_loaded_scalar(loaded, 'replicate_index', 1);
     record.model_type = local_loaded_string(loaded, 'model_type', "");
     record.exo_mode = local_loaded_string(loaded, 'exo_mode', "");
     record.source_truth_artifact = local_loaded_string(loaded, ...
@@ -878,6 +886,8 @@ function record = local_empty_truth_record(n)
         'process_noise_enabled', false, ...
         'scenario_id', "", ...
         'scenario_name', "", ...
+        'replicate_id', "", ...
+        'replicate_index', 1, ...
         'tspan', [], ...
         'Rt_true', [], ...
         'Rt_model_input', [], ...
@@ -894,6 +904,8 @@ function record = local_empty_forecast_record(n)
         'path', "", ...
         'case_id', "", ...
         'scenario_id', "", ...
+        'replicate_id', "", ...
+        'replicate_index', 1, ...
         'model_type', "", ...
         'exo_mode', "", ...
         'source_truth_artifact', ""), n, 1);
@@ -958,6 +970,14 @@ function value = local_loaded_logical(loaded, field_name, default_value)
     value = logical(default_value);
     if isfield(loaded, field_name) && ~isempty(loaded.(field_name))
         value = logical(loaded.(field_name));
+    end
+end
+
+function value = local_loaded_scalar(loaded, field_name, default_value)
+%LOCAL_LOADED_SCALAR Read a numeric scalar field with fallback.
+    value = double(default_value);
+    if isfield(loaded, field_name) && ~isempty(loaded.(field_name))
+        value = double(loaded.(field_name));
     end
 end
 

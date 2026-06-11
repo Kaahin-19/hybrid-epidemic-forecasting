@@ -1,16 +1,18 @@
 %PARTB_02_RUN_FIXED_FORECASTS Run fixed Part A forecasts across Part B cases.
 %
 %   Description:
-%       Loads Part B robustness-ladder truth artifacts and evaluates only the
-%       fixed Part A-selected AR/None and ARX/I configurations. Forecast
-%       histories use Rt_model_input and I_model_input, while stored future
-%       truth for evaluation uses Rt_evaluation_target.
+%       Loads every Part B robustness-ladder truth artifact, including all
+%       process-noise replicates, and evaluates only the fixed Part A-selected
+%       AR/None and ARX/I configurations. Forecast histories use Rt_model_input
+%       and I_model_input, while stored future truth for evaluation uses
+%       Rt_evaluation_target. Replicate identity and seeds are carried into each
+%       forecast artifact and its filename so replicates never overwrite.
 %
 %   Workflow:
 %       1. Load configuration, truth artifacts, and fixed Part A choices.
 %       2. Build generic expanding-window forecast inputs for each artifact.
 %       3. Run forecasts through the reusable Part A forecasting dispatcher.
-%       4. Save one MATLAB forecast artifact per case/scenario/model.
+%       4. Save one MATLAB forecast artifact per case/scenario/replicate/model.
 %
 %   See also PARTB_CONFIG, BUILD_FORECAST_ENTRIES,
 %            LOAD_FIXED_FORECAST_CONFIGURATIONS, RUN_EXPANDING_WINDOW_FORECAST.
@@ -86,6 +88,11 @@ for i = 1:numel(truth_paths)
         process_noise_enabled = logical(loaded.process_noise_enabled);
         scenario_id = string(loaded.scenario_id);
         scenario_name = string(loaded.scenario_name);
+        replicate_id = string(loaded.replicate_id);
+        replicate_index = double(loaded.replicate_index);
+        num_replicates_for_case = double(loaded.num_replicates_for_case);
+        process_seed = double(loaded.process_seed);
+        noise_seed = double(loaded.noise_seed);
         model_type = string(model_cfg.model_type);
         exo_mode = string(model_cfg.exo_mode);
         selected_configuration = model_cfg.selected_configuration;
@@ -95,8 +102,8 @@ for i = 1:numel(truth_paths)
         source_truth_artifact = string(truth_path);
         cfg_snapshot = local_cfg_snapshot(cfg, loaded, forecast_options);
 
-        file_prefix = sprintf('partB_%s_forecast_%s_%s_%s', ...
-            char(case_id), char(scenario_id), ...
+        file_prefix = sprintf('partB_%s_forecast_%s_%s_%s_%s', ...
+            char(case_id), char(scenario_id), char(replicate_id), ...
             char(model_type), char(exo_mode));
         out_path = fullfile(case_forecast_dir, [file_prefix, '.mat']);
 
@@ -105,7 +112,9 @@ for i = 1:numel(truth_paths)
             'truth_model', 'solver', 'forecast_assumption', ...
             'structural_mismatch_enabled', 'observation_noise_enabled', ...
             'process_noise_enabled', 'scenario_id', ...
-            'scenario_name', 'model_type', 'exo_mode', ...
+            'scenario_name', 'replicate_id', 'replicate_index', ...
+            'num_replicates_for_case', 'process_seed', 'noise_seed', ...
+            'model_type', 'exo_mode', ...
             'selected_configuration', 'selected_configuration_source', ...
             'selected_configuration_artifact', 'selection_metadata', ...
             'forecast_results', 'source_truth_artifact', 'cfg_snapshot');
@@ -117,20 +126,22 @@ fprintf('=== Part B Robustness-Ladder Fixed Forecast Execution Complete ===\n\n'
 
 %% 4. Local Functions
 function paths = local_truth_artifact_paths(cfg)
-%LOCAL_TRUTH_ARTIFACT_PATHS Return active truth artifact paths.
+%LOCAL_TRUTH_ARTIFACT_PATHS Return all active truth artifacts, every replicate.
     cases = local_active_cases(cfg);
     active_scenarios = local_active_scenario_ids(cfg);
     paths = strings(0, 1);
     for i = 1:numel(cases)
         for j = 1:numel(active_scenarios)
-            artifact_path = fullfile(cfg.output.data_root_dir, ...
-                sprintf('partB_%s_truth_%s.mat', ...
-                char(cases(i).case_id), char(active_scenarios(j))));
-            if exist(artifact_path, 'file') == 2
-                paths(end + 1, 1) = artifact_path; %#ok<AGROW>
+            pattern = sprintf('partB_%s_truth_%s_rep*.mat', ...
+                char(cases(i).case_id), char(active_scenarios(j)));
+            listing = dir(fullfile(cfg.output.data_root_dir, pattern));
+            for k = 1:numel(listing)
+                paths(end + 1, 1) = string(fullfile(listing(k).folder, ...
+                    listing(k).name)); %#ok<AGROW>
             end
         end
     end
+    paths = sort(paths);
 end
 
 function cases = local_active_cases(cfg)
@@ -163,7 +174,9 @@ function local_validate_truth_artifact(loaded, artifact_path)
     required_fields = {'case_id', 'case_name', 'truth_model', 'solver', ...
         'forecast_assumption', 'structural_mismatch_enabled', ...
         'observation_noise_enabled', 'process_noise_enabled', ...
-        'scenario_id', 'scenario_name', 'Rt_true', 'Rt_model_input', ...
+        'scenario_id', 'scenario_name', 'replicate_id', 'replicate_index', ...
+        'num_replicates_for_case', 'process_seed', 'noise_seed', ...
+        'Rt_true', 'Rt_model_input', ...
         'Rt_evaluation_target', 'S_model_input', 'I_model_input', ...
         'incidence_true', 'incidence_observed', 'incidence_model_input', ...
         'renewal_lambda_model_input', 'serial_interval_weights', ...

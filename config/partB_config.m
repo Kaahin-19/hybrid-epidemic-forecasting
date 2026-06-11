@@ -84,6 +84,14 @@ function cfg = partB_config()
     cfg.process_noise.enabled.enabled = true;
     cfg.process_noise.enabled.description = "Stochastic SSA latent epidemic trajectory.";
 
+    % Replicate controls. Process-noise cases are repeated over independent SSA
+    % realizations so robustness conclusions do not depend on one random path;
+    % deterministic cases use a single replicate. replicate_seed_stride exceeds
+    % the number of latent time steps (T_end + 1) so each replicate's
+    % per-interval SSA seed stream stays disjoint from the others'.
+    cfg.process_noise.num_replicates = 10;
+    cfg.process_noise.replicate_seed_stride = 10000;
+
     %% 5. Robustness Cases
     cfg.robustness_cases = repmat(struct( ...
         "case_id", "", ...
@@ -150,6 +158,8 @@ function cfg = partB_config()
         "PARTB_SMOKE_HORIZON", min(7, cfg.forecast.horizon));
     cfg.smoke_test.interval_draws = local_env_positive_integer( ...
         "PARTB_SMOKE_INTERVAL_DRAWS", 10);
+    cfg.smoke_test.num_process_replicates = local_env_positive_integer( ...
+        "PARTB_SMOKE_NUM_PROCESS_REPLICATES", 2);
 
     %% 8. Output Artifacts
     thisDir  = fileparts(mfilename('fullpath'));

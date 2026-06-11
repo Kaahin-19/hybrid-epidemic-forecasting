@@ -1,9 +1,9 @@
 CaseID,CaseName,TruthModel,Solver,StructuralMismatch,ObservationNoise,ProcessNoise,Scenario,ScenarioName,Model,ExoMode,IntervalStatus,RecordedStatus,IsValid,NumWindows
-combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A1,Seasonal Forcing,AR,None,ok,ok,1,2
-combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A1,Seasonal Forcing,ARX,I,ok,ok,1,2
+combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A1,Seasonal Forcing,AR,None,ok,ok,1,4
+combined_stress,SEIR with observation and process noise,SEIR,ssa,1,1,1,A1,Seasonal Forcing,ARX,I,ok,ok,1,4
 observation_noise,SIRS with observation noise,SIRS,uds,0,1,0,A1,Seasonal Forcing,AR,None,ok,ok,1,2
 observation_noise,SIRS with observation noise,SIRS,uds,0,1,0,A1,Seasonal Forcing,ARX,I,ok,ok,1,2
-process_noise,SIRS with stochastic process noise,SIRS,ssa,0,0,1,A1,Seasonal Forcing,AR,None,ok,ok,1,2
-process_noise,SIRS with stochastic process noise,SIRS,ssa,0,0,1,A1,Seasonal Forcing,ARX,I,ok,ok,1,2
+process_noise,SIRS with stochastic process noise,SIRS,ssa,0,0,1,A1,Seasonal Forcing,AR,None,ok,ok,1,4
+process_noise,SIRS with stochastic process noise,SIRS,ssa,0,0,1,A1,Seasonal Forcing,ARX,I,ok,ok,1,4
 structural_mismatch,SEIR structural mismatch,SEIR,uds,1,0,0,A1,Seasonal Forcing,AR,None,ok,ok,1,2
 structural_mismatch,SEIR structural mismatch,SEIR,uds,1,0,0,A1,Seasonal Forcing,ARX,I,ok,ok,1,2

@@ -1,16 +1,20 @@
 %PARTB_03_EVALUATE_MODELS Evaluate Part B robustness-ladder forecasts.
 %
 %   Description:
-%       Loads Part B forecast artifacts across all active robustness cases,
-%       computes the same Rt metrics used by Part A, summarizes performance
-%       by case/scenario/model/horizon, records explicit forecast-failure
-%       counts, and writes case-specific plus cross-case evaluation artifacts
-%       and tables. Figure generation is intentionally delegated to Part B 04.
+%       Loads Part B forecast artifacts across all active robustness cases and
+%       all process-noise replicates, computes the same Rt metrics used by
+%       Part A, and summarizes performance by case/scenario/model/horizon. All
+%       score tables carry replicate identity. For stochastic cases the
+%       aggregation hierarchy is window scores within each replicate, then a
+%       replicate-level summary, then an across-replicate aggregate (mean,
+%       median, spread, and standard error of replicate-level mean WIS), so
+%       many windows from one SSA realization are not treated as independent
+%       replicates. Figure generation is delegated to Part B 04.
 %
 %   Workflow:
 %       1. Load forecast artifacts from all active case directories.
 %       2. Compute WIS, RMSE, MAE, coverage, calibration, and interval width.
-%       3. Build case-level and cross-case robustness summaries.
+%       3. Build case-level, cross-case, and replicate-aware robustness summaries.
 %       4. Save evaluation .mat artifacts and table files.
 %
 %   See also PARTB_CONFIG, EVALUATE_FORECAST_WINDOW_METRICS, ...
@@ -101,6 +105,8 @@ summary_tables.generic_partA_style = summarize_forecast_scores( ...
 summary_tables.degradation_summary = degradation_summary;
 summary_tables.partA_baseline_summary = partA_baseline_summary;
 
+local_validate_replicate_evaluation(window_scores, summary_tables);
+
 metrics = struct( ...
     'window_scores', window_scores, ...
     'pointwise_scores', pointwise_scores, ...
@@ -171,7 +177,7 @@ fprintf('=== Part B Robustness-Ladder Forecast Evaluation Complete ===\n\n');
 
 %% 6. Local Functions
 function paths = local_forecast_artifact_paths(cfg)
-%LOCAL_FORECAST_ARTIFACT_PATHS Return active forecast artifacts.
+%LOCAL_FORECAST_ARTIFACT_PATHS Return active forecast artifacts, every replicate.
     cases = local_active_cases(cfg);
     active_scenarios = local_active_scenario_ids(cfg);
     active_forecast_cases = local_active_forecast_cases(cfg);
@@ -179,17 +185,19 @@ function paths = local_forecast_artifact_paths(cfg)
     for i = 1:numel(cases)
         for s = 1:numel(active_scenarios)
             for f = 1:numel(active_forecast_cases)
-                artifact_path = fullfile(cfg.output.forecast_dir, ...
-                    sprintf('partB_%s_forecast_%s_%s_%s.mat', ...
+                pattern = sprintf('partB_%s_forecast_%s_rep*_%s_%s.mat', ...
                     char(cases(i).case_id), char(active_scenarios(s)), ...
                     char(active_forecast_cases(f).model_type), ...
-                    char(active_forecast_cases(f).exo_mode)));
-                if exist(artifact_path, 'file') == 2
-                    paths(end + 1, 1) = artifact_path; %#ok<AGROW>
+                    char(active_forecast_cases(f).exo_mode));
+                listing = dir(fullfile(cfg.output.forecast_dir, pattern));
+                for k = 1:numel(listing)
+                    paths(end + 1, 1) = string(fullfile(listing(k).folder, ...
+                        listing(k).name)); %#ok<AGROW>
                 end
             end
         end
     end
+    paths = sort(paths);
 end
 
 function cases = local_active_cases(cfg)
@@ -226,11 +234,40 @@ function local_validate_forecast_artifact(loaded, artifact_path)
     required_fields = {'case_id', 'case_name', 'truth_model', 'solver', ...
         'forecast_assumption', 'structural_mismatch_enabled', ...
         'observation_noise_enabled', 'process_noise_enabled', ...
-        'scenario_id', 'scenario_name', 'model_type', ...
+        'scenario_id', 'scenario_name', 'replicate_id', 'replicate_index', ...
+        'num_replicates_for_case', 'process_seed', 'model_type', ...
         'exo_mode', 'selected_configuration', 'forecast_results'};
     if ~all(isfield(loaded, required_fields))
         error('EVAL:InvalidForecastArtifact', ...
             'Forecast artifact is missing required fields: %s.', artifact_path);
+    end
+end
+
+function local_validate_replicate_evaluation(window_scores, summary_tables)
+%LOCAL_VALIDATE_REPLICATE_EVALUATION Ensure replicate identity and aggregation.
+    required_cols = {'ReplicateID', 'ReplicateIndex', 'NumReplicates'};
+    if ~all(ismember(required_cols, window_scores.Properties.VariableNames))
+        error('EVAL:MissingReplicateColumns', ...
+            'Window score table must include replicate identity columns.');
+    end
+
+    agg = summary_tables.replicate_aggregate_summary;
+    if isempty(agg) || height(agg) == 0 || ...
+            ~ismember('NumReplicates', agg.Properties.VariableNames)
+        error('EVAL:MissingReplicateAggregate', ...
+            'Replicate aggregate summary must report NumReplicates.');
+    end
+
+    % Each process-noise-enabled aggregate row must summarize the replicates
+    % present for that case/scenario/model rather than a single realization.
+    proc_idx = logical(agg.ProcessNoise);
+    if any(proc_idx)
+        expected = double(max(window_scores.NumReplicates(:)));
+        if expected > 1 && any(double(agg.NumReplicates(proc_idx)) < 2)
+            error('EVAL:InsufficientReplicateAggregate', ...
+                ['Process-noise aggregate rows must summarize more than one ' ...
+                'replicate when multiple replicates were generated.']);
+        end
     end
 end
 
@@ -326,10 +363,22 @@ function metadata = local_score_metadata(loaded, artifact_path, result_source)
     metadata.ProcessNoise = logical(loaded.process_noise_enabled);
     metadata.Scenario = string(loaded.scenario_id);
     metadata.ScenarioName = string(loaded.scenario_name);
+    metadata.ReplicateID = local_loaded_string(loaded, 'replicate_id', "rep001");
+    metadata.ReplicateIndex = local_loaded_scalar(loaded, 'replicate_index', 1);
+    metadata.NumReplicates = local_loaded_scalar(loaded, ...
+        'num_replicates_for_case', 1);
     metadata.Model = string(loaded.model_type);
     metadata.ExoMode = string(loaded.exo_mode);
     metadata.ForecastArtifact = string(artifact_path);
     metadata.ResultSource = string(result_source);
+end
+
+function value = local_loaded_scalar(loaded, field_name, default_value)
+%LOCAL_LOADED_SCALAR Read a numeric scalar field with fallback.
+    value = double(default_value);
+    if isfield(loaded, field_name) && ~isempty(loaded.(field_name))
+        value = double(loaded.(field_name));
+    end
 end
 
 function row = local_window_row(m, window_entry, window_wis, window_rmse, ...
@@ -339,7 +388,8 @@ function row = local_window_row(m, window_entry, window_wis, window_rmse, ...
 %LOCAL_WINDOW_ROW Build one window-level score row.
     row = table(m.CaseID, m.CaseName, m.TruthModel, m.Solver, ...
         m.StructuralMismatch, m.ObservationNoise, m.ProcessNoise, ...
-        m.Scenario, m.ScenarioName, m.Model, m.ExoMode, ...
+        m.Scenario, m.ScenarioName, m.ReplicateID, m.ReplicateIndex, ...
+        m.NumReplicates, m.Model, m.ExoMode, ...
         m.ForecastArtifact, m.ResultSource, window_entry.window_day, ...
         window_entry.window_day_idx, window_wis, window_wis, window_rmse, ...
         window_mae, median_component, dispersion_component, under_component, ...
@@ -349,7 +399,8 @@ function row = local_window_row(m, window_entry, window_wis, window_rmse, ...
         string(window_entry.recorded_status), window_entry.aicc, ...
         'VariableNames', {'CaseID', 'CaseName', 'TruthModel', 'Solver', ...
         'StructuralMismatch', 'ObservationNoise', 'ProcessNoise', ...
-        'Scenario', 'ScenarioName', 'Model', 'ExoMode', ...
+        'Scenario', 'ScenarioName', 'ReplicateID', 'ReplicateIndex', ...
+        'NumReplicates', 'Model', 'ExoMode', ...
         'ForecastArtifact', 'ResultSource', 'WindowDay', 'WindowDayIdx', ...
         'WindowWIS', 'WindowRawScaleWIS', 'WindowRMSE', 'WindowMAE', ...
         'MeanWISMedianComponent', 'MeanWISDispersionComponent', ...
@@ -371,6 +422,8 @@ function rows = local_pointwise_rows(m, window_entry, horizon_idx, forecast_day,
         repmat(m.ObservationNoise, horizon, 1), ...
         repmat(m.ProcessNoise, horizon, 1), ...
         repmat(m.Scenario, horizon, 1), repmat(m.ScenarioName, horizon, 1), ...
+        repmat(m.ReplicateID, horizon, 1), repmat(m.ReplicateIndex, horizon, 1), ...
+        repmat(m.NumReplicates, horizon, 1), ...
         repmat(m.Model, horizon, 1), repmat(m.ExoMode, horizon, 1), ...
         repmat(m.ForecastArtifact, horizon, 1), ...
         repmat(m.ResultSource, horizon, 1), ...
@@ -385,7 +438,8 @@ function rows = local_pointwise_rows(m, window_entry, horizon_idx, forecast_day,
         repmat(string(window_entry.interval_status), horizon, 1), ...
         'VariableNames', {'CaseID', 'CaseName', 'TruthModel', 'Solver', ...
         'StructuralMismatch', 'ObservationNoise', 'ProcessNoise', ...
-        'Scenario', 'ScenarioName', 'Model', 'ExoMode', ...
+        'Scenario', 'ScenarioName', 'ReplicateID', 'ReplicateIndex', ...
+        'NumReplicates', 'Model', 'ExoMode', ...
         'ForecastArtifact', 'ResultSource', 'WindowDay', 'WindowDayIdx', ...
         'HorizonIdx', 'ForecastDay', 'Truth_Rt', 'Median_Forecast', ...
         'Error', 'SquaredError', 'AbsoluteError', 'WIS', 'RawScaleWIS', ...
@@ -472,6 +526,11 @@ function rows = local_interval_rows(m, window_entry, horizon_idx, forecast_day, 
             wis_components.overprediction_by_interval(:, j);
         row_idx = row_idx + horizon;
     end
+
+    % Replicate identity is constant within a window; attach it to every row.
+    rows.ReplicateID = repmat(m.ReplicateID, height(rows), 1);
+    rows.ReplicateIndex = repmat(m.ReplicateIndex, height(rows), 1);
+    rows.NumReplicates = repmat(m.NumReplicates, height(rows), 1);
 end
 
 function summary_tables = local_summary_tables(window_scores, pointwise_scores, interval_scores)
@@ -497,6 +556,71 @@ function summary_tables = local_summary_tables(window_scores, pointwise_scores, 
         pointwise_scores, {'CaseID', 'CaseName', 'TruthModel', 'Solver', ...
         'StructuralMismatch', 'ObservationNoise', 'ProcessNoise', 'Model', 'ExoMode'});
     summary_tables.case_failure_summary = local_summarize_failure_scores(window_scores);
+
+    % Replicate-aware hierarchy: first a per-replicate summary (window scores
+    % collapsed within each SSA realization), then an aggregate across
+    % replicate-level mean WIS so stochastic-case conclusions reflect
+    % between-replicate variability rather than pooled windows.
+    summary_tables.replicate_summary = local_summarize_replicate_scores(window_scores);
+    summary_tables.replicate_aggregate_summary = ...
+        local_summarize_replicate_aggregate(summary_tables.replicate_summary);
+end
+
+function summary = local_summarize_replicate_scores(window_scores)
+%LOCAL_SUMMARIZE_REPLICATE_SCORES Collapse window scores within each replicate.
+    if isempty(window_scores) || height(window_scores) == 0
+        summary = table();
+        return;
+    end
+    group_vars = {'CaseID', 'CaseName', 'TruthModel', 'Solver', ...
+        'StructuralMismatch', 'ObservationNoise', 'ProcessNoise', ...
+        'Scenario', 'ScenarioName', 'Model', 'ExoMode', ...
+        'ReplicateID', 'ReplicateIndex'};
+    [G, keys] = findgroups(window_scores(:, group_vars));
+    summary = keys;
+    summary.NumReplicatesForCase = splitapply(@(x) max(x), ...
+        window_scores.NumReplicates, G);
+    summary.NumWindows = splitapply(@numel, window_scores.WindowWIS, G);
+    summary.NumValidWindows = splitapply(@(x) sum(logical(x)), ...
+        window_scores.IsValid, G);
+    summary.MeanWIS = splitapply(@local_mean_finite, window_scores.WindowWIS, G);
+    summary.MedianWIS = splitapply(@local_median_finite, window_scores.WindowWIS, G);
+    summary.MeanRMSE = splitapply(@local_mean_finite, window_scores.WindowRMSE, G);
+    summary.MeanMAE = splitapply(@local_mean_finite, window_scores.WindowMAE, G);
+    summary.MeanCoverage = splitapply(@local_mean_finite, window_scores.MeanCoverage, G);
+    summary.MeanIntervalWidth = splitapply(@local_mean_finite, ...
+        window_scores.MeanIntervalWidth, G);
+end
+
+function summary = local_summarize_replicate_aggregate(replicate_summary)
+%LOCAL_SUMMARIZE_REPLICATE_AGGREGATE Aggregate replicate-level mean WIS.
+    if isempty(replicate_summary) || height(replicate_summary) == 0
+        summary = table();
+        return;
+    end
+    group_vars = {'CaseID', 'CaseName', 'TruthModel', 'Solver', ...
+        'StructuralMismatch', 'ObservationNoise', 'ProcessNoise', ...
+        'Scenario', 'ScenarioName', 'Model', 'ExoMode'};
+    [G, keys] = findgroups(replicate_summary(:, group_vars));
+    summary = keys;
+    summary.NumReplicates = splitapply(@numel, replicate_summary.MeanWIS, G);
+    summary.TotalWindows = splitapply(@sum, replicate_summary.NumWindows, G);
+    summary.MeanReplicateMeanWIS = splitapply(@local_mean_finite, ...
+        replicate_summary.MeanWIS, G);
+    summary.MedianReplicateMeanWIS = splitapply(@local_median_finite, ...
+        replicate_summary.MeanWIS, G);
+    summary.StdReplicateMeanWIS = splitapply(@local_std_finite, ...
+        replicate_summary.MeanWIS, G);
+    summary.SEReplicateMeanWIS = summary.StdReplicateMeanWIS ./ ...
+        sqrt(max(summary.NumReplicates, 1));
+    summary.MinReplicateMeanWIS = splitapply(@local_min_finite, ...
+        replicate_summary.MeanWIS, G);
+    summary.MaxReplicateMeanWIS = splitapply(@local_max_finite, ...
+        replicate_summary.MeanWIS, G);
+    summary.MeanReplicateCoverage = splitapply(@local_mean_finite, ...
+        replicate_summary.MeanCoverage, G);
+    summary.MeanReplicateIntervalWidth = splitapply(@local_mean_finite, ...
+        replicate_summary.MeanIntervalWidth, G);
 end
 
 function summary = local_summarize_window_scores(scores, group_vars)
@@ -722,6 +846,12 @@ function outputs = local_write_cross_tables(table_dir, metrics, summary_tables, 
         sprintf('%s_case_failure_summary.csv', prefix), ...
         summary_tables.case_failure_summary);
     outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_replicate_summary.csv', prefix), ...
+        summary_tables.replicate_summary);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
+        sprintf('%s_replicate_aggregate_summary.csv', prefix), ...
+        summary_tables.replicate_aggregate_summary);
+    outputs(end + 1, 1) = local_write_table(table_dir, ...
         sprintf('%s_degradation_summary.csv', prefix), summary_tables.degradation_summary);
     outputs(end + 1, 1) = local_write_table(table_dir, ...
         sprintf('%s_partA_baseline_summary.csv', prefix), summary_tables.partA_baseline_summary);
@@ -875,6 +1005,28 @@ function value = local_std_finite(values)
         value = nan;
     else
         value = std(values);
+    end
+end
+
+function value = local_min_finite(values)
+%LOCAL_MIN_FINITE Minimum over finite numeric values only.
+    values = double(values(:));
+    values = values(isfinite(values));
+    if isempty(values)
+        value = nan;
+    else
+        value = min(values);
+    end
+end
+
+function value = local_max_finite(values)
+%LOCAL_MAX_FINITE Maximum over finite numeric values only.
+    values = double(values(:));
+    values = values(isfinite(values));
+    if isempty(values)
+        value = nan;
+    else
+        value = max(values);
     end
 end
 
