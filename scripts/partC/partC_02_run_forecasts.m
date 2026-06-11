@@ -14,7 +14,7 @@
 %       4. Save one canonical forecast artifact per strategy/model case.
 %
 %   See also PARTC_CONFIG, BUILD_FORECAST_ENTRIES, ...
-%            RUN_EXPANDING_WINDOW_FORECAST, LOAD_PARTC_FIXED_CONFIGURATIONS.
+%            RUN_EXPANDING_WINDOW_FORECAST, LOAD_FIXED_FORECAST_CONFIGURATIONS.
 %
 % A. M. Kaahin 2026-05-18
 % Modified: 2026-06-11
@@ -44,7 +44,7 @@ loaded = load(processedPath);
 local_validate_processed_data(loaded, processedPath);
 
 date = loaded.date(:);
-fixed_configs = load_partC_fixed_configurations(cfg);
+fixed_configs = load_fixed_forecast_configurations(cfg, "partC");
 local_order_selection = local_load_local_order_selection(cfg);
 
 fprintf('Experiment: %s\n', cfg.experiment_id);

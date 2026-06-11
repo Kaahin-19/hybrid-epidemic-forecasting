@@ -1,41 +1,56 @@
-function fixed_configs = load_partC_fixed_configurations(cfg)
-%LOAD_PARTC_FIXED_CONFIGURATIONS Load Part A-selected Part C orders.
+function fixed_configs = load_fixed_forecast_configurations(cfg, stage_id)
+%LOAD_FIXED_FORECAST_CONFIGURATIONS Load fixed Part A-selected orders.
 %
 %   Syntax:
-%       fixed_configs = load_partC_fixed_configurations(cfg)
+%       fixed_configs = load_fixed_forecast_configurations(cfg, stage_id)
 %
 %   Description:
-%       Loads the fixed AR/None and ARX/I model orders selected in Part A for
-%       use in Part C. If a Part A model-selection artifact is unavailable,
-%       the documented Part C fallback order from cfg.fixed_forecast_cases is
-%       used and recorded in the returned metadata.
+%       Resolves fixed AR/None and ARX/I forecast configurations from the
+%       project configuration. When a matching Part A model-selection artifact
+%       is available, the selected configuration is loaded and validated. When
+%       it is unavailable, the documented fallback configuration is used.
 %
 %   Inputs:
-%       cfg - Part C configuration structure.
+%       cfg      - Part B or Part C configuration structure.
+%       stage_id - Pipeline stage identifier, "partB" or "partC".
 %
 %   Outputs:
 %       fixed_configs - Structure array with model identity, selected order,
 %                       source artifact, and selection metadata.
 %
-%   See also PARTC_CONFIG, GENERATE_CANDIDATE_GRID.
+%   See also PARTB_CONFIG, PARTC_CONFIG, GENERATE_CANDIDATE_GRID.
 %
 % A. M. Kaahin 2026-06-03
+% Modified: 2026-06-11
 
     %% 1. Configuration Loading
+    if nargin < 2 || strlength(string(stage_id)) == 0
+        stage_id = local_infer_stage_id(cfg);
+    end
+
+    stage_id = lower(string(stage_id));
     cases = cfg.fixed_forecast_cases;
+
+    if stage_id == "partb" && local_smoke_enabled(cfg)
+        n = min(numel(cases), cfg.smoke_test.num_forecast_cases);
+        cases = cases(1:n);
+        fprintf('Smoke test enabled: using %d fixed forecast case(s).\n', n);
+    end
+
     fixed_configs = repmat(local_empty_fixed_config(), 1, numel(cases));
 
     %% 2. Artifact Resolution
     for i = 1:numel(cases)
-        fixed_configs(i) = local_load_one_fixed_config(cases(i));
+        fixed_configs(i) = local_load_one_fixed_config(cfg, cases(i), stage_id);
     end
 end
 
-function model_cfg = local_load_one_fixed_config(fixed_case)
+function model_cfg = local_load_one_fixed_config(cfg, fixed_case, stage_id)
 %LOCAL_LOAD_ONE_FIXED_CONFIG Load one Part A selection artifact or fallback.
     model_type = string(fixed_case.model_type);
     exo_mode = string(fixed_case.exo_mode);
-    artifact_path = string(fixed_case.selected_configuration_artifact);
+    artifact_path = local_selection_artifact_path(cfg, fixed_case, ...
+        model_type, exo_mode);
 
     if strlength(artifact_path) > 0 && exist(artifact_path, 'file') == 2
         selection = load(artifact_path);
@@ -48,19 +63,22 @@ function model_cfg = local_load_one_fixed_config(fixed_case)
         selection_metadata = local_selection_metadata(selection);
     else
         selected_configuration = reshape(double(fixed_case.fallback_configuration), 1, []);
-        source = "partC_config_fallback";
+        source = local_fallback_source(stage_id);
         selection_artifact = "";
         fallback_used = true;
         selection_metadata = struct('selected_index', nan, ...
             'best_global_wis', nan);
         warning('FORECAST:PartASelectionFallback', ...
             ['Missing Part A selection artifact for %s / %s: %s. ', ...
-            'Using documented Part C fallback %s.'], ...
-            model_type, exo_mode, artifact_path, mat2str(selected_configuration));
+            'Using documented %s fallback %s.'], ...
+            model_type, exo_mode, artifact_path, local_stage_label(stage_id), ...
+            mat2str(selected_configuration));
     end
 
-    local_validate_configuration_shape(model_type, selected_configuration);
-    selection_metadata.fallback_used = fallback_used;
+    local_validate_configuration_shape(stage_id, model_type, selected_configuration);
+    if stage_id == "partc"
+        selection_metadata.fallback_used = fallback_used;
+    end
 
     model_cfg = local_empty_fixed_config();
     model_cfg.model_type = model_type;
@@ -69,6 +87,19 @@ function model_cfg = local_load_one_fixed_config(fixed_case)
     model_cfg.selected_configuration_source = source;
     model_cfg.selected_configuration_artifact = selection_artifact;
     model_cfg.selection_metadata = selection_metadata;
+end
+
+function artifact_path = local_selection_artifact_path(cfg, fixed_case, ...
+    model_type, exo_mode)
+%LOCAL_SELECTION_ARTIFACT_PATH Resolve explicit or derived Part A artifact path.
+    if isfield(fixed_case, 'selected_configuration_artifact')
+        artifact_path = string(fixed_case.selected_configuration_artifact);
+        return;
+    end
+
+    artifact_path = string(fullfile(cfg.output.partA_model_selection_dir, ...
+        sprintf('partA_02_global_hyperparameters_%s_%s.mat', ...
+        char(model_type), char(exo_mode))));
 end
 
 function local_validate_selection_artifact(selection, artifact_path, model_type, exo_mode)
@@ -86,7 +117,7 @@ function local_validate_selection_artifact(selection, artifact_path, model_type,
     end
 end
 
-function local_validate_configuration_shape(model_type, selected_configuration)
+function local_validate_configuration_shape(stage_id, model_type, selected_configuration)
 %LOCAL_VALIDATE_CONFIGURATION_SHAPE Check expected parameter counts.
     switch char(model_type)
         case 'AR'
@@ -94,8 +125,8 @@ function local_validate_configuration_shape(model_type, selected_configuration)
         case 'ARX'
             expected_count = 3;
         otherwise
-            error('FORECAST:UnsupportedModel', ...
-                'Part C supports only AR/None and ARX/I.');
+            error('FORECAST:UnsupportedModel', '%s', ...
+                local_supported_model_message(stage_id));
     end
 
     if numel(selected_configuration) ~= expected_count
@@ -130,6 +161,66 @@ function value = local_numeric_field(s, field_name)
             value = raw;
         end
     end
+end
+
+function stage_id = local_infer_stage_id(cfg)
+%LOCAL_INFER_STAGE_ID Infer the fixed-configuration consumer stage.
+    stage_id = "";
+    if isfield(cfg, 'experiment_id')
+        experiment_id = lower(string(cfg.experiment_id));
+        if contains(experiment_id, "partb")
+            stage_id = "partb";
+        elseif contains(experiment_id, "partc")
+            stage_id = "partc";
+        end
+    end
+
+    if strlength(stage_id) == 0
+        error('FORECAST:MissingStageID', ...
+            'Specify stage_id as "partB" or "partC".');
+    end
+end
+
+function source = local_fallback_source(stage_id)
+%LOCAL_FALLBACK_SOURCE Return the stage-specific fallback source label.
+    switch stage_id
+        case "partb"
+            source = "partB_config_fallback";
+        case "partc"
+            source = "partC_config_fallback";
+        otherwise
+            source = "config_fallback";
+    end
+end
+
+function label = local_stage_label(stage_id)
+%LOCAL_STAGE_LABEL Return a human-readable stage label.
+    switch stage_id
+        case "partb"
+            label = "Part B config";
+        case "partc"
+            label = "Part C";
+        otherwise
+            label = "configuration";
+    end
+end
+
+function message = local_supported_model_message(stage_id)
+%LOCAL_SUPPORTED_MODEL_MESSAGE Return the stage-specific model support message.
+    switch stage_id
+        case "partb"
+            message = "Part B robustness ladder supports only AR and ARX.";
+        case "partc"
+            message = "Part C supports only AR/None and ARX/I.";
+        otherwise
+            message = "Fixed forecast configurations support only AR and ARX.";
+    end
+end
+
+function enabled = local_smoke_enabled(cfg)
+%LOCAL_SMOKE_ENABLED Check optional Part B smoke-test state.
+    enabled = isfield(cfg, 'smoke_test') && isfield(cfg.smoke_test, 'enabled') && ...
+        logical(cfg.smoke_test.enabled);
 end
 
 function model_cfg = local_empty_fixed_config()

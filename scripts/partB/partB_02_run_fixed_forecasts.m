@@ -13,7 +13,7 @@
 %       4. Save one MATLAB forecast artifact per case/scenario/model.
 %
 %   See also PARTB_CONFIG, BUILD_FORECAST_ENTRIES,
-%            RUN_EXPANDING_WINDOW_FORECAST.
+%            LOAD_FIXED_FORECAST_CONFIGURATIONS, RUN_EXPANDING_WINDOW_FORECAST.
 %
 % A. M. Kaahin 2026-05-18
 % Modified: 2026-06-11
@@ -31,7 +31,7 @@ if isempty(truth_paths)
         cfg.output.data_root_dir);
 end
 
-fixed_configs = local_load_fixed_partA_configs(cfg);
+fixed_configs = load_fixed_forecast_configurations(cfg, "partB");
 
 fprintf('Experiment: %s\n', cfg.experiment_id);
 fprintf('Found %d truth artifact(s).\n', numel(truth_paths));
@@ -155,127 +155,6 @@ end
 function forecast_dir = local_case_forecast_dir(cfg, ~)
 %LOCAL_CASE_FORECAST_DIR Return the shared Part B forecast directory.
     forecast_dir = cfg.output.forecast_dir;
-end
-
-function fixed_configs = local_load_fixed_partA_configs(cfg)
-%LOCAL_LOAD_FIXED_PARTA_CONFIGS Load or fall back to frozen Part A selections.
-    cases = cfg.fixed_forecast_cases;
-    if cfg.smoke_test.enabled
-        n = min(numel(cases), cfg.smoke_test.num_forecast_cases);
-        cases = cases(1:n);
-        fprintf('Smoke test enabled: using %d fixed forecast case(s).\n', n);
-    end
-
-    fixed_configs = repmat(local_empty_fixed_config(), 1, numel(cases));
-    for i = 1:numel(cases)
-        fixed_configs(i) = local_load_one_fixed_config(cfg, cases(i));
-    end
-end
-
-function model_cfg = local_load_one_fixed_config(cfg, fixed_case)
-%LOCAL_LOAD_ONE_FIXED_CONFIG Load one Part A selection artifact or fallback.
-    model_type = string(fixed_case.model_type);
-    exo_mode = string(fixed_case.exo_mode);
-    artifact_path = fullfile(cfg.output.partA_model_selection_dir, ...
-        sprintf('partA_02_global_hyperparameters_%s_%s.mat', ...
-        char(model_type), char(exo_mode)));
-
-    if exist(artifact_path, 'file') == 2
-        selection = load(artifact_path);
-        local_validate_selection_artifact(selection, artifact_path, ...
-            model_type, exo_mode);
-        selected_configuration = reshape(double(selection.selected_configuration), 1, []);
-        source = "partA_model_selection";
-        selection_artifact = string(artifact_path);
-        selection_metadata = local_selection_metadata(selection);
-    else
-        selected_configuration = reshape(double(fixed_case.fallback_configuration), 1, []);
-        source = "partB_config_fallback";
-        selection_artifact = "";
-        selection_metadata = struct('selected_index', nan, 'best_global_wis', nan);
-        warning('FORECAST:PartASelectionFallback', ...
-            ['Missing Part A selection artifact for %s / %s: %s. ', ...
-            'Using documented Part B config fallback %s.'], ...
-            model_type, exo_mode, artifact_path, mat2str(selected_configuration));
-    end
-
-    local_validate_configuration_shape(model_type, selected_configuration);
-
-    model_cfg = local_empty_fixed_config();
-    model_cfg.model_type = model_type;
-    model_cfg.exo_mode = exo_mode;
-    model_cfg.selected_configuration = selected_configuration;
-    model_cfg.selected_configuration_source = source;
-    model_cfg.selected_configuration_artifact = selection_artifact;
-    model_cfg.selection_metadata = selection_metadata;
-end
-
-function local_validate_selection_artifact(selection, artifact_path, model_type, exo_mode)
-%LOCAL_VALIDATE_SELECTION_ARTIFACT Validate a Part A selection artifact.
-    required_fields = {'model_type', 'exo_mode', 'selected_configuration'};
-    if ~all(isfield(selection, required_fields))
-        error('FORECAST:InvalidSelectionArtifact', ...
-            'Selection artifact is missing required fields: %s.', artifact_path);
-    end
-
-    if string(selection.model_type) ~= model_type || string(selection.exo_mode) ~= exo_mode
-        error('FORECAST:SelectionIdentityMismatch', ...
-            'Selection artifact identity mismatch: %s.', artifact_path);
-    end
-end
-
-function local_validate_configuration_shape(model_type, selected_configuration)
-%LOCAL_VALIDATE_CONFIGURATION_SHAPE Check expected parameter counts.
-    switch char(model_type)
-        case 'AR'
-            expected_count = 1;
-        case 'ARX'
-            expected_count = 3;
-        otherwise
-            error('FORECAST:UnsupportedModel', ...
-                'Part B robustness ladder supports only AR and ARX.');
-    end
-
-    if numel(selected_configuration) ~= expected_count
-        error('FORECAST:InvalidSelectedConfiguration', ...
-            'Selected configuration for %s has invalid size: %s.', ...
-            model_type, mat2str(selected_configuration));
-    end
-end
-
-function metadata = local_selection_metadata(selection)
-%LOCAL_SELECTION_METADATA Capture optional Part A selection metadata.
-    metadata = struct();
-    metadata.selected_index = local_numeric_field(selection, 'selected_index');
-    metadata.best_global_wis = local_numeric_field(selection, 'best_global_wis');
-    if isnan(metadata.best_global_wis) && isfield(selection, 'global_mean_wis') && ...
-            isfield(selection, 'selected_index') && ...
-            selection.selected_index >= 1 && ...
-            selection.selected_index <= numel(selection.global_mean_wis)
-        metadata.best_global_wis = double(selection.global_mean_wis(selection.selected_index));
-    end
-end
-
-function value = local_numeric_field(s, field_name)
-%LOCAL_NUMERIC_FIELD Read a scalar numeric field or NaN.
-    value = nan;
-    if isfield(s, field_name) && ~isempty(s.(field_name)) && isnumeric(s.(field_name))
-        raw = double(s.(field_name));
-        if isscalar(raw)
-            value = raw;
-        end
-    end
-end
-
-function model_cfg = local_empty_fixed_config()
-%LOCAL_EMPTY_FIXED_CONFIG Build a fixed configuration placeholder.
-    model_cfg = struct( ...
-        'model_type', "", ...
-        'exo_mode', "", ...
-        'selected_configuration', [], ...
-        'selected_configuration_source', "", ...
-        'selected_configuration_artifact', "", ...
-        'selection_metadata', struct());
 end
 
 function local_validate_truth_artifact(loaded, artifact_path)

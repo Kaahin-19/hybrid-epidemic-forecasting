@@ -63,6 +63,7 @@ The implementation is divided into three major phases as outlined in the project
 
 **Model selection (``src/model_selection/``)**
 * ``generate_candidate_grid.m``: Constructs the Part A model-configuration candidates.
+* ``load_fixed_forecast_configurations.m``: Resolves fixed Part A-selected forecast configurations for later stages.
 * ``evaluate_candidate.m``: Scores one Part A model configuration across scenarios.
 * ``aggregate_candidate_scores.m``: Evaluates and aggregates the Part A candidate scores.
 * ``select_best_configuration.m``: Selects the candidate with the lowest global mean WIS.

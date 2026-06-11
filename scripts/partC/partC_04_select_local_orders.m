@@ -15,7 +15,7 @@
 %       4. Save canonical local-order selection artifact and tables.
 %
 %   See also PARTC_CONFIG, BUILD_FORECAST_ENTRIES, ...
-%            LOAD_PARTC_FIXED_CONFIGURATIONS, GENERATE_CANDIDATE_GRID, ...
+%            LOAD_FIXED_FORECAST_CONFIGURATIONS, GENERATE_CANDIDATE_GRID, ...
 %            PARTC_02_RUN_FORECASTS.
 %
 % A. M. Kaahin 2026-06-03
@@ -44,7 +44,7 @@ if ~exist(cfg.output.table_dir, 'dir'), mkdir(cfg.output.table_dir); end
 
 loaded = load(processedPath);
 local_validate_processed_data(loaded, processedPath);
-fixed_configs = load_partC_fixed_configurations(cfg);
+fixed_configs = load_fixed_forecast_configurations(cfg, "partC");
 
 fprintf('Calibration fraction: %.2f\n', ...
     local_strategy(cfg, "local_order_retuning").calibration_fraction);
