@@ -25,39 +25,39 @@ Direct dependency chain for this milestone:
 
 ### `scripts/partA/partA_01_generate_truth.m`
 
-- Added a simple Rt bounds check immediately after `generate_rt_signal`.
-- The check uses `cfg.Rt.bounds` at the Part A script/config boundary.
-- Updated the workflow header to mention the bounds check.
-- Updated the `Modified:` date.
+- Added the project-level Rt bounds check immediately after `generate_rt_signal`.
+- The check uses `cfg.Rt.bounds`, so the project constraint is enforced at the script/config boundary.
+- Updated the script workflow header and `Modified:` date.
 
 ### `src/scenarios/generate_rt_signal.m`
 
-- Simplified the function to evaluate only the configured Rt formula.
+- Simplified the function so it only evaluates the configured Rt formula.
 - Removed input reshaping.
 - Removed output reshaping.
-- Removed the generic helper-level positivity check.
+- Removed the generic helper-level positivity/sanity check.
 - Kept only the unsupported `signal_type` error required by the `switch`.
-- Reduced the sectioning to one useful `%% 1. Signal Formula` section.
+- Reduced section comments to the remaining useful formula section.
 - Updated the `Modified:` date.
 
 ### `src/epidemic/simulate_ground_truth_epidemic.m`
 
 - Removed top-level `tspan` and `Rt_true` reshaping.
-- Renamed the first section to `%% 1. Simulation Options`.
-- Kept URDME output clipping with `max(..., 0)` as existing solver-output sanitation, without adding inline comments inside local functions.
+- Renamed the first section to match the current code.
 - Removed the redundant `double(susceptible)` conversion.
-- Removed the inline comment inside `local_beta_from_effective_rt`; local helpers now keep only the compact one-line function header comments.
+- Removed extra inline/internal comments so local helpers keep the repository style: compact one-line local function headers only.
+- Kept SIRS and SEIR support.
+- Kept URDME output clipping with `max(..., 0)` as existing solver-output sanitation.
 - Updated the `Modified:` date.
 
 ## Files Reviewed But Left Unchanged
 
-- `config/partA_config.m` was reviewed for `cfg.Rt.bounds`. No A1 logic change was made there. The worktree already contains a whitespace-only formatting diff on the scenario 4 `init` assignment.
+- `config/partA_config.m`
 
 ## Validation
 
-- No expensive MATLAB run was performed.
-- Checked the revised diff and targeted file sections with `git diff`, `sed`, and `rg`.
+- No expensive MATLAB run was performed for this milestone.
+- Checked the A1 files with `git diff`, `sed`, and targeted `rg` inspection.
 
 ## Status
 
-A1 revised and stopped pending approval before A2.
+A1 complete and stopped pending approval before A2.
