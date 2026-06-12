@@ -33,7 +33,7 @@ function interval_options = make_interval_options(intervals_cfg, context)
 %   See also SIMULATE_AR_ARX_INTERVALS, SIMULATE_STATESPACE_INTERVALS.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-11
+% Modified: 2026-06-12
 
     %% 1. Input Validation
     stage = string(context.stage);
@@ -41,16 +41,15 @@ function interval_options = make_interval_options(intervals_cfg, context)
         error('INTERVALS:InvalidStage', 'context.stage must be selection or final.');
     end
 
-    base_seed = double(intervals_cfg.seed);
+base_seed = intervals_cfg.seed;
 
     %% 2. Protocol Resolution
-    method = intervals_cfg.method;
-    num_draws = double(intervals_cfg.num_draws);
-    if isfield(intervals_cfg, 'final_num_draws') && ~isempty(intervals_cfg.final_num_draws)
-        % Honor an optional smaller caller-supplied draw cap (Part B smoke test).
-        num_draws = min(num_draws, double(intervals_cfg.final_num_draws));
-    end
-    include_epidemic_seed_variation = logical(intervals_cfg.include_epidemic_seed_variation);
+method = intervals_cfg.method;
+num_draws = intervals_cfg.num_draws;
+if isfield(intervals_cfg, 'final_num_draws') && ~isempty(intervals_cfg.final_num_draws)
+    num_draws = min(num_draws, intervals_cfg.final_num_draws);
+end
+include_epidemic_seed_variation = intervals_cfg.include_epidemic_seed_variation;
     resample_seed = local_hash_seed(base_seed, ...
         {context.scenario_key, context.window_index, ...
         context.model_type, context.exo_mode});
@@ -60,17 +59,17 @@ function interval_options = make_interval_options(intervals_cfg, context)
 
     %% 3. Output Assembly
     interval_options = struct();
-    interval_options.stage = stage;
-    interval_options.method = method;
-    interval_options.num_draws = num_draws;
-    interval_options.alphas = reshape(double(context.alphas), 1, []);
-    interval_options.min_residual_std = double(intervals_cfg.min_residual_std);
-    interval_options.use_common_random_numbers = logical(intervals_cfg.use_common_random_numbers);
-    interval_options.include_epidemic_seed_variation = include_epidemic_seed_variation;
-    interval_options.exo_mode = string(context.exo_mode);
-    interval_options.sirs_cfg = context.sirs_cfg;
-    interval_options.horizon = double(context.horizon);
-    interval_options.sim_seed = double(context.sim_seed);
+interval_options.stage = stage;
+interval_options.method = method;
+interval_options.num_draws = num_draws;
+interval_options.alphas = context.alphas;
+interval_options.min_residual_std = intervals_cfg.min_residual_std;
+interval_options.use_common_random_numbers = intervals_cfg.use_common_random_numbers;
+interval_options.include_epidemic_seed_variation = include_epidemic_seed_variation;
+interval_options.exo_mode = context.exo_mode;
+interval_options.sirs_cfg = context.sirs_cfg;
+interval_options.horizon = context.horizon;
+interval_options.sim_seed = context.sim_seed;
     interval_options.interval_seed = base_seed;
     interval_options.resample_seed = resample_seed;
     interval_options.epidemic_base_seed = epidemic_base_seed;

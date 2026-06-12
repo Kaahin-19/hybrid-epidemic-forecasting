@@ -27,14 +27,14 @@ function [candidate_scores, global_mean_wis, candidate_aicc, global_mean_aicc] =
 %   See also EVALUATE_CANDIDATE, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-11
+% Modified: 2026-06-12
 
 %% 1. Candidate Scoring
 num_candidates = size(candidate_grid, 1);
 num_scenarios = length(scenario_data);
 candidate_scores = inf(num_candidates, num_scenarios);
 global_mean_wis = inf(num_candidates, 1);
-candidate_aicc = nan(num_candidates, num_scenarios);   % diagnostic only
+candidate_aicc = nan(num_candidates, num_scenarios);
 global_mean_aicc = nan(num_candidates, 1);
 
 report_interval = max(1, ceil(num_candidates / 20));
@@ -64,7 +64,6 @@ end
 
 function value = local_mean_finite(values)
 %LOCAL_MEAN_FINITE Mean over finite values only (diagnostic AICc aggregation).
-    values = double(values(:));
     values = values(isfinite(values));
     if isempty(values)
         value = nan;

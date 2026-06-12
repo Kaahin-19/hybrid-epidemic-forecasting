@@ -24,15 +24,10 @@ function components = compute_wis_components(truth_Rt, median_Rt, lower_Rt, uppe
 %   See also COMPUTE_WIS.
 %
 % A. M. Kaahin 2026-06-01
+% Modified: 2026-06-12
 
-    %% 1. Input Validation
-    truth_Rt = double(truth_Rt(:));
-    median_Rt = double(median_Rt(:));
-    lower_Rt = double(lower_Rt);
-    upper_Rt = double(upper_Rt);
-    alphas = reshape(double(alphas), 1, []);
-
-    local_validate_shapes(truth_Rt, median_Rt, lower_Rt, upper_Rt, alphas);
+%% 1. Input Validation
+local_validate_shapes(truth_Rt, median_Rt, lower_Rt, upper_Rt, alphas);
 
     %% 2. Component Computation
     num_intervals = numel(alphas);

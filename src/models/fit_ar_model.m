@@ -22,6 +22,7 @@ function model = fit_ar_model(Rt_hist, p, options)
 %   See also FORECAST_AR_MODEL, EVALUATE_CANDIDATE.
 %
 % A. M. Kaahin 2026-05-31
+% Modified: 2026-06-12
 
     %% 1. Input Validation
     if nargin < 3 || isempty(options)
@@ -37,7 +38,7 @@ function model = fit_ar_model(Rt_hist, p, options)
     end
 
     Rt_hist = local_validate_rt_history(Rt_hist);
-    log_Rt = log(max(Rt_hist, eps));
+    log_Rt = log(Rt_hist);
 
     %% 2. Fallback Checks
     model = local_base_model(Rt_hist, p);
@@ -76,13 +77,12 @@ function model = local_base_model(Rt_hist, p)
     model.aicc = inf;
     model.residual_std = 0;
     model.last_Rt = Rt_hist(end);
-    model.log_history = log(max(Rt_hist, eps));
+    model.log_history = log(Rt_hist);
     model.is_persistence = false;
 end
 
 function value = local_validate_order(value, label)
 %LOCAL_VALIDATE_ORDER Validate a positive integer model order.
-    value = double(value);
     if ~isscalar(value) || ~isfinite(value) || value < 1 || value ~= floor(value)
         error('AR:InvalidOrder', '%s must be a positive integer scalar.', label);
     end
@@ -91,7 +91,7 @@ end
 function value = local_option_or_default(options, field_name, default_value)
 %LOCAL_OPTION_OR_DEFAULT Read an optional scalar option.
     if isfield(options, field_name)
-        value = double(options.(field_name));
+        value = options.(field_name);
     else
         value = default_value;
     end
@@ -103,7 +103,6 @@ function Rt_hist = local_validate_rt_history(Rt_hist)
         error('AR:InvalidHistory', 'Rt_hist must be a numeric vector.');
     end
 
-    Rt_hist = double(Rt_hist(:));
     if isempty(Rt_hist) || any(~isfinite(Rt_hist)) || any(Rt_hist <= 0)
         error('AR:InvalidHistory', ...
             'Rt_hist must contain finite positive values.');

@@ -6,7 +6,7 @@ function scenario_data = build_forecast_entries(cfg, exo_mode, source_spec)
 %       scenario_entry = build_forecast_entries(cfg, exo_mode, source_spec)
 %
 %   Description:
-%       Builds the normalized scenario-entry structure consumed by the shared
+%       Builds the standard scenario-entry structure consumed by the shared
 %       expanding-window forecast dispatcher. The default call loads Part A
 %       synthetic truth artifacts. Optional source specifications adapt Part B
 %       robustness artifacts and Part C processed real-data artifacts into the
@@ -26,7 +26,7 @@ function scenario_data = build_forecast_entries(cfg, exo_mode, source_spec)
 %            PARTC_CONFIG.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-11
+% Modified: 2026-06-12
 
     %% 1. Source Dispatch
     if nargin < 3 || isempty(source_spec)
@@ -163,11 +163,6 @@ end
 
 function scenario_entry = local_build_entry_from_signals(signals)
 %LOCAL_BUILD_ENTRY_FROM_SIGNALS Assemble the shared scenario-entry structure.
-    % Forecast history (Rt_past) is drawn from the model-visible Rt_history_input
-    % (Rt_model_input). The future scoring truth is the separate evaluation
-    % target signals.Rt_evaluation_target, applied to truth_Rt below. For Part B
-    % observation-noise cases these two differ: history is incidence-estimated,
-    % evaluation is latent Rt_true.
     scenario_inputs = struct( ...
         'Rt_history_input', signals.Rt_model_input, ...
         'tspan', signals.tspan, ...
@@ -240,8 +235,6 @@ function window_entry = local_prepare_window_data(scenario_inputs, ...
     window_entry.horizon_indices = (idx_T + 1 : idx_end)';
     window_entry.t_future        = scenario_inputs.tspan(idx_T + 1 : idx_end);
     window_entry.Rt_past         = scenario_inputs.Rt_history_input(1:idx_T);
-    % Placeholder future truth; overwritten with the evaluation target in
-    % local_build_window_data for valid windows.
     window_entry.truth_Rt        = scenario_inputs.Rt_history_input(idx_T + 1 : idx_end);
 
     [window_entry.U_past, window_entry.sirs_state] = ...

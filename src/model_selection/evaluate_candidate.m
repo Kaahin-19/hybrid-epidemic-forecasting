@@ -29,13 +29,13 @@ function [scenario_scores, scenario_aicc] = evaluate_candidate(model_type, ...
 %            SIMULATE_AR_ARX_INTERVALS, SIMULATE_STATESPACE_INTERVALS.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-11
+% Modified: 2026-06-12
 
     %% 1. Candidate Evaluation
     params = candidate_configuration;
     num_scenarios = length(scenario_data);
     scenario_scores = inf(1, num_scenarios);
-    scenario_aicc = nan(1, num_scenarios);   % diagnostic only; not a selector
+    scenario_aicc = nan(1, num_scenarios);
 
     for s = 1:num_scenarios
         data = scenario_data(s);
@@ -46,7 +46,6 @@ function [scenario_scores, scenario_aicc] = evaluate_candidate(model_type, ...
         for w = 1:numel(data.window_data)
             window_entry = data.window_data(w);
 
-            % Capture fit AICc separately from WIS validity.
             [Rt_pred, out_alphas, Rt_lower, Rt_upper, window_aicc(w)] = ...
                 local_window_forecast(model_type, params, window_entry, ...
                 evaluation_options, data.num_exo, scenario_key, w);
@@ -105,7 +104,6 @@ end
 
 function value = local_mean_finite(values)
 %LOCAL_MEAN_FINITE Mean over finite values only (diagnostic AICc aggregation).
-    values = double(values(:));
     values = values(isfinite(values));
     if isempty(values)
         value = nan;

@@ -41,13 +41,12 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_n4s
 %   See also FIT_AR_MODEL, FIT_ARX_MODEL, FIT_SSEST_MODEL, PARTA_03_RUN_FORECASTS.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-06-11
+% Modified: 2026-06-12
 
     %% 1. Preprocessing
     if nargin < 7 || isempty(interval_alphas)
         interval_alphas = [0.05, 0.10, 0.20, 0.50];
     else
-        interval_alphas = reshape(double(interval_alphas), 1, []);
     end
 
     if any(interval_alphas <= 0 | interval_alphas >= 1)
@@ -61,7 +60,7 @@ function [Rt_curve, aicc, interval_alphas, lower_bounds, upper_bounds] = fit_n4s
 
     use_closed_loop = local_use_closed_loop(U_hist, sirs_state, sirs_params, exo_mode);
 
-    y = log(max(Rt_hist(:), eps));
+    y = log(Rt_hist);
     
     if d == 1
         fit_y = diff(y);
@@ -235,7 +234,7 @@ function [pred_y, pred_sd] = local_closed_loop_forecast( ...
         end
 
         if d == 1
-            step_y = log(max(rolling_Rt(current_idx), eps)) + step_fit(1);
+            step_y = log(rolling_Rt(current_idx)) + step_fit(1);
         else
             step_y = step_fit(1);
         end
@@ -263,10 +262,6 @@ end
 function [manual_ok, pred_y, pred_sd] = local_manual_closed_loop_forecast( ...
     sys, origin_data, initial_U, horizon, sirs_state, sirs_params, exo_mode, sim_seed, opt)
 %LOCAL_MANUAL_CLOSED_LOOP_FORECAST Use forecast-model matrices for d = 0 recursion.
-    manual_ok = false;
-    pred_y = [];
-    pred_sd = [];
-
     try
         current_state = local_sanitize_sirs_state(sirs_state, sirs_params.pop_size);
         current_u = initial_U(end, :);
@@ -369,7 +364,7 @@ end
 
 function [data_step, fit_u_next] = local_build_forecast_data(rolling_Rt, rolling_U, d)
 %LOCAL_BUILD_FORECAST_DATA Build one-step state-space forecast data.
-    y_step = log(max(rolling_Rt(:), eps));
+    y_step = log(rolling_Rt);
 
     if d == 1
         fit_y_step = diff(y_step);

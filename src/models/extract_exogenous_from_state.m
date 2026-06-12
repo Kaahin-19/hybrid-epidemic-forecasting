@@ -20,11 +20,9 @@ function U_next = extract_exogenous_from_state(state, exo_mode, pop_size)
 %   See also FORECAST_ARX_CLOSED_LOOP, ADVANCE_SIRS_STEPPER.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-11
+% Modified: 2026-06-12
 
     %% 1. Input Validation
-    state = reshape(double(state), 1, []);
-    pop_size = double(pop_size);
     if numel(state) ~= 3 || any(~isfinite(state)) || ...
             ~isscalar(pop_size) || ~isfinite(pop_size) || pop_size <= 0
         error('ARX:InvalidEpidemicState', ...
@@ -45,5 +43,4 @@ function U_next = extract_exogenous_from_state(state, exo_mode, pop_size)
                 'exo_mode must be S, I, or Both for ARX closed-loop forecasts.');
     end
 
-    U_next = reshape(double(U_next), 1, []);
 end

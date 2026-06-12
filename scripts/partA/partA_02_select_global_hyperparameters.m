@@ -19,7 +19,7 @@
 %            EVALUATE_CANDIDATE, AGGREGATE_CANDIDATE_SCORES.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-11
+% Modified: 2026-06-12
 
 %% 1. Initialization
 clear; close all; clc;
@@ -76,11 +76,10 @@ if ~isfinite(best_global_wis)
         'All candidate model configurations produced invalid global WIS scores.');
 end
 
-% Apply one-SE parsimony within the finite-WIS candidate set.
 one_se_threshold = best_global_wis + local_one_se(candidate_scores(raw_best_index, :));
 candidate_complexity = local_candidate_complexity(model_type, candidate_grid, ...
     scenario_data(1).num_exo);
-eligible = isfinite(global_mean_wis(:)) & (global_mean_wis(:) <= one_se_threshold);
+eligible = isfinite(global_mean_wis) & (global_mean_wis <= one_se_threshold);
 eligible(raw_best_index) = true;
 selected_index = local_select_simplest(candidate_complexity, global_mean_wis, eligible);
 
@@ -92,7 +91,6 @@ aggregation_mode = "equal_scenario_mean_wis";
 failure_policy = "inf_on_invalid";
 cfg_snapshot = cfg.run_snapshot;
 
-% Store AICc diagnostics separately from the WIS selector.
 candidate_diagnostics = struct( ...
     'description', "Fitted-model AICc complexity diagnostic; not a selection criterion.", ...
     'scenario_ids', scenario_ids, ...
@@ -128,7 +126,6 @@ end
 
 function one_se = local_one_se(scenario_scores)
 %LOCAL_ONE_SE Empirical standard error of the equal-scenario mean WIS.
-scenario_scores = double(scenario_scores(:));
 scenario_scores = scenario_scores(isfinite(scenario_scores));
 n = numel(scenario_scores);
 if n < 2
@@ -144,18 +141,17 @@ end
 function complexity = local_candidate_complexity(model_type, candidate_grid, num_exo)
 %LOCAL_CANDIDATE_COMPLEXITY Estimated free-parameter count per candidate.
 model_type = string(model_type);
-num_exo = max(0, double(num_exo));
 n = size(candidate_grid, 1);
 complexity = nan(n, 1);
 for i = 1:n
-    row = double(candidate_grid(i, :));
+    row = candidate_grid(i, :);
     switch model_type
         case "AR"
-            complexity(i) = row(1);                     % p
+            complexity(i) = row(1);
         case "ARX"
-            complexity(i) = row(1) + num_exo * row(2) + row(3);  % na + num_exo*nb + nk
+            complexity(i) = row(1) + num_exo * row(2) + row(3);
         case {"N4SID", "SSEST"}
-            complexity(i) = row(1) + row(2);            % n + d
+            complexity(i) = row(1) + row(2);
         otherwise
             complexity(i) = sum(row);
     end
@@ -164,9 +160,9 @@ end
 
 function idx = local_select_simplest(candidate_complexity, global_mean_wis, eligible)
 %LOCAL_SELECT_SIMPLEST Simplest eligible candidate; ties broken by WIS then index.
-candidate_indices = find(eligible(:));
-keys = [double(candidate_complexity(candidate_indices)), ...
-    double(global_mean_wis(candidate_indices)), candidate_indices];
+candidate_indices = find(eligible);
+keys = [candidate_complexity(candidate_indices), ...
+    global_mean_wis(candidate_indices), candidate_indices];
 keys = sortrows(keys, [1 2 3]);
 idx = keys(1, 3);
 end

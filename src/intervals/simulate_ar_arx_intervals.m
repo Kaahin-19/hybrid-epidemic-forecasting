@@ -42,7 +42,7 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
 %            INITIALIZE_SIRS_STEPPER, ADVANCE_SIRS_STEPPER.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-11
+% Modified: 2026-06-12
 
     %% 1. Setup
     model_type = string(model_type);
@@ -51,7 +51,7 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
     horizon = double(interval_options.horizon);
     num_draws = double(interval_options.num_draws);
     Rt_past = double(Rt_past(:));
-    log_past = log(max(Rt_past, eps));
+    log_past = log(Rt_past);
 
     meta = local_base_meta(interval_options);
 
@@ -223,19 +223,20 @@ function ensemble_Rt = local_ar_bootstrap_paths(a_values, log_history, innovatio
     end
 
     [horizon, num_draws] = size(innovations);
-    [log_lo, log_hi] = local_log_clip_range();
-    roll = repmat(log_history, 1, num_draws);
-    ensemble_Rt = zeros(horizon, num_draws);
+[log_lo, log_hi] = local_log_clip_range();
+roll = zeros(p + horizon, num_draws);
+roll(1:p, :) = repmat(log_history, 1, num_draws);
+ensemble_Rt = zeros(horizon, num_draws);
 
-    for h = 1:horizon
-        recent = roll(end - p + 1:end, :);     % oldest..newest by row
-        recent_newest_first = flipud(recent);  % newest first, aligns with a_values
-        y_hat = -(a_values.' * recent_newest_first);
-        y_next = y_hat + innovations(h, :);
-        y_next = min(max(y_next, log_lo), log_hi);
-        ensemble_Rt(h, :) = exp(y_next);
-        roll = [roll; y_next]; %#ok<AGROW>
-    end
+for h = 1:horizon
+    recent = roll(h:(h + p - 1), :);
+    recent_newest_first = flipud(recent);
+    y_hat = -(a_values.' * recent_newest_first);
+    y_next = y_hat + innovations(h, :);
+    y_next = min(max(y_next, log_lo), log_hi);
+    ensemble_Rt(h, :) = exp(y_next);
+    roll(p + h, :) = y_next;
+end
 end
 
 function ensemble_Rt = local_arx_closed_loop_bootstrap_paths( ...
@@ -277,32 +278,36 @@ function column = local_resimulate_draw( ...
     stepper, draw_seed, exo_mode, pop_size, horizon, log_lo, log_hi)
 %LOCAL_RESIMULATE_DRAW One Monte Carlo draw with per-draw epidemic advances.
     column = nan(horizon, 1);
-    try
-        rolling_log = log_history;
-        rolling_U = U_history;
-        state = local_sanitize_state(sirs_state, pop_size);
-        stepper.seed = draw_seed;
-        stepper.call_count = 0;
+try
+    history_len = numel(log_history);
+    rolling_log = zeros(history_len + horizon, 1);
+    rolling_U = zeros(history_len + horizon, size(U_history, 2));
+    rolling_log(1:history_len) = log_history;
+    rolling_U(1:history_len, :) = U_history;
+    state = local_sanitize_state(sirs_state, pop_size);
+    stepper.seed = draw_seed;
+    stepper.call_count = 0;
 
-        for h = 1:horizon
-            y_hat = recursive_arx_step(coefficients, rolling_log, rolling_U);
-            y_next = min(max(y_hat + innovation_column(h), log_lo), log_hi);
-            Rt_next = exp(y_next);
+    for h = 1:horizon
+        idx = history_len + h - 1;
+        y_hat = recursive_arx_step(coefficients, rolling_log(1:idx), rolling_U(1:idx, :));
+        y_next = min(max(y_hat + innovation_column(h), log_lo), log_hi);
+        Rt_next = exp(y_next);
             if ~isfinite(Rt_next) || Rt_next <= 0
                 column = nan(horizon, 1);
                 return;
             end
 
-            [state, stepper] = advance_sirs_stepper(stepper, state, Rt_next);
-            U_next = extract_exogenous_from_state(state, exo_mode, pop_size);
+        [state, stepper] = advance_sirs_stepper(stepper, state, Rt_next);
+        U_next = extract_exogenous_from_state(state, exo_mode, pop_size);
 
-            column(h) = Rt_next;
-            rolling_log = [rolling_log; y_next]; %#ok<AGROW>
-            rolling_U = [rolling_U; U_next]; %#ok<AGROW>
-        end
-    catch
-        column = nan(horizon, 1);
+        column(h) = Rt_next;
+        rolling_log(idx + 1) = y_next;
+        rolling_U(idx + 1, :) = U_next;
     end
+catch
+    column = nan(horizon, 1);
+end
 end
 
 function seed = local_draw_epidemic_seed(interval_options, draw_index, horizon)

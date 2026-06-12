@@ -42,7 +42,7 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
 %            INITIALIZE_SIRS_STEPPER, ADVANCE_SIRS_STEPPER.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-11
+% Modified: 2026-06-12
 
     %% 1. Setup
     model_type = string(model_type);
@@ -54,7 +54,7 @@ function [Rt_pred, aicc, out_alphas, lower_bounds, upper_bounds, meta] = ...
     num_draws = double(interval_options.num_draws);
 
     Rt_past = double(Rt_past(:));
-    y = log(max(Rt_past, eps));
+    y = log(Rt_past);
     fit_u = local_fit_inputs(U_past, num_exo);
 
     meta = local_base_meta(interval_options);
@@ -252,7 +252,6 @@ function ensemble_Rt = local_closed_loop_bootstrap_paths( ...
     [log_lo, log_hi] = local_log_clip_range();
     ensemble_Rt = nan(horizon, num_draws);
 
-    % Output-only recursion (no epidemic feedback).
     if num_inputs == 0
         for d = 1:num_draws
             ensemble_Rt(:, d) = local_output_only_draw( ...
@@ -261,7 +260,6 @@ function ensemble_Rt = local_closed_loop_bootstrap_paths( ...
         return;
     end
 
-    % Closed-loop recursion (exogenous epidemic feedback).
     U_history = double(U_history);
     if isvector(U_history)
         U_history = U_history(:);
