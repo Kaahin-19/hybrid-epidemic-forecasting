@@ -1,21 +1,26 @@
-%PARTC_01_PREPARE_REAL_DATA Prepare WHO COVID-19 inputs for Part C.
+%PARTC_01_PREPARE_REAL_DATA Prepare WHO COVID-19 inputs and a renewal Rt proxy.
 %
 %   Description:
 %       Reads the configured WHO daily COVID-19 CSV, extracts the selected
-%       country and date window, constructs a smoothed incidence proxy, and
-%       estimates an empirical Rt signal with a renewal-style ratio. The
-%       compact Part C processed dataset is then saved for forecast,
-%       evaluation, and figure-generation stages.
+%       country and date window, and builds a clearly named observed/smoothed
+%       incidence pair. A fixed serial/generation-interval assumption from the
+%       Part C configuration is discretized into normalized weights, and a
+%       renewal-based effective reproduction-number proxy is estimated from the
+%       smoothed incidence with the shared epidemic helpers. The renewal Rt is a
+%       smoothing-dependent proxy for latent transmission, never ground truth.
+%       The full-length series (with NaN warmup) is saved for the later Part C
+%       forecast, evaluation, and figure-generation stages.
 %
 %   Workflow:
 %       1. Initialization and WHO CSV schema validation.
-%       2. Country/date filtering, case cleaning, smoothing, and Rt estimation.
-%       3. Processed artifact persistence.
+%       2. Country/date filtering, case cleaning, and trailing smoothing.
+%       3. Serial-interval discretization and renewal Rt-proxy estimation.
+%       4. Processed artifact persistence.
 %
-%   See also PARTC_CONFIG, PARTC_05_GENERATE_FIGURES.
+%   See also PARTC_CONFIG, SERIAL_INTERVAL_WEIGHTS, ESTIMATE_RT_RENEWAL.
 %
 % A. M. Kaahin 2026-05-18
-% Modified: 2026-06-11
+% Modified: 2026-06-12
 
 %% 1. Initialization
 clear; close all; clc;
@@ -48,7 +53,7 @@ new_cases_col = local_resolve_column(raw_table, ...
 cumulative_cases_col = local_resolve_column(raw_table, ...
     cfg.input.cumulative_cases_col, rawPath);
 
-%% 2. WHO Filtering and Preprocessing
+%% 2. WHO Filtering and Incidence Construction
 date_all = local_parse_dates(raw_table.(date_col), cfg.input.date_col);
 if any(isnat(date_all))
     bad_rows = find(isnat(date_all));
@@ -94,66 +99,90 @@ if ~any(window_idx)
 end
 
 date = date_country(window_idx);
-daily_cases = daily_cases_country(window_idx);
 country_name_values = country_name_values(window_idx);
 
 local_validate_dates(date);
-daily_cases = local_validate_case_series(daily_cases);
 
-I_proxy_full = movmean(daily_cases, ...
+% Observed incidence is the cleaned daily reported case series; the smoothed
+% incidence is a trailing moving average used as the renewal estimator input.
+I_observed = local_validate_case_series(daily_cases_country(window_idx));
+I_smoothed = movmean(I_observed, ...
     [cfg.input.smoothing_window_days - 1, 0], 'Endpoints', 'shrink');
 
-[Rt_est_full, renewal_lambda_full, serial_interval_weights] = ...
-    local_estimate_rt_renewal(I_proxy_full, cfg);
+%% 3. Serial Interval and Renewal Rt Proxy
+% si_weights holds the discretized serial-interval weights; it is deliberately
+% not named serial_interval_weights so the shared function of that name stays
+% callable in this script scope. The artifact still exposes the canonical
+% serial_interval_weights field via the struct save below.
+serial_interval_config = local_serial_interval_config(cfg);
+si_weights = serial_interval_weights( ...
+    serial_interval_config.mean_days, serial_interval_config.sd_days, ...
+    serial_interval_config.max_lag_days);
 
-warmup_rows = cfg.input.serial_interval_max_lag_days;
-if numel(Rt_est_full) <= warmup_rows
-    error('PREP:InsufficientWarmupData', ...
-        'Not enough rows remain after filtering to estimate Rt with %d lags.', ...
-        warmup_rows);
-end
+[Rt_est, Lambda_t] = estimate_rt_renewal(I_smoothed, si_weights);
 
-keep_idx = ((1:numel(Rt_est_full))' > warmup_rows);
-date = date(keep_idx);
-daily_cases = daily_cases(keep_idx);
-I_proxy = I_proxy_full(keep_idx);
-Rt_est = Rt_est_full(keep_idx);
-renewal_lambda = renewal_lambda_full(keep_idx);
+% Treat undefined or non-positive renewal denominators as warmup/invalid so the
+% saved Rt proxy is NaN wherever Lambda_t cannot support a valid ratio.
+invalid_lambda = ~isfinite(Lambda_t) | (Lambda_t <= 0);
+Rt_est(invalid_lambda) = NaN;
 
-max_i_proxy = max(I_proxy);
-if ~isfinite(max_i_proxy) || max_i_proxy <= 0
-    error('PREP:InvalidIProxyScale', ...
-        'The smoothed WHO case proxy must contain at least one positive value.');
-end
-I_scaled = I_proxy / max_i_proxy;
-
-local_validate_processed_signals(Rt_est, I_proxy, I_scaled, date, cfg);
+% The model-input history and the evaluation proxy are both the renewal Rt
+% estimate: on real data there is no latent Rt to separate them. They are kept
+% as distinct named signals for the downstream forecast and evaluation stages.
+Rt_model_input = Rt_est;
+Rt_evaluation_proxy = Rt_est;
 
 t = (0:(numel(date) - 1))';
 
+local_validate_processed_signals(Rt_est, I_observed, I_smoothed, ...
+    si_weights, cfg);
+
+%% 4. Metadata and Persistence
 country_observed = local_observed_country_name(country_name_values, ...
     cfg.input.country_name);
 metadata = local_build_metadata(cfg, rawPath, country_observed, ...
-    numel(date), serial_interval_weights);
+    numel(date), serial_interval_config, si_weights, ...
+    nnz(~isnan(Rt_est)));
 metadata.processed_date_range = [date(1), date(end)];
 metadata.processed_t_range = [t(1), t(end)];
 metadata.processed_artifact_name = "partC_01_real_data_processed.mat";
-cfg_snapshot = local_cfg_snapshot(cfg);
-processed_table = table(date, t, Rt_est, I_proxy, I_scaled, daily_cases, ...
-    renewal_lambda, 'VariableNames', {'date', 't', 'Rt_est', 'I_proxy', ...
-    'I_scaled', 'daily_cases', 'renewal_lambda'});
+cfg_snapshot = local_cfg_snapshot(cfg, serial_interval_config);
+
+processed_table = table(date, t, I_observed, I_smoothed, Lambda_t, ...
+    Rt_est, Rt_model_input, Rt_evaluation_proxy, 'VariableNames', ...
+    {'date', 't', 'I_observed', 'I_smoothed', 'Lambda_t', 'Rt_est', ...
+    'Rt_model_input', 'Rt_evaluation_proxy'});
 
 fprintf('Prepared %d WHO-derived real-data observations for %s.\n', ...
-    numel(Rt_est), char(country_observed));
+    numel(date), char(country_observed));
+fprintf('Renewal Rt proxy defined on %d of %d days (%d-day NaN warmup).\n', ...
+    nnz(~isnan(Rt_est)), numel(Rt_est), serial_interval_config.max_lag_days);
 
-%% 3. Persistence
 matPath = fullfile(cfg.output.data_processed_dir, ...
     'partC_01_real_data_processed.mat');
 csvPath = fullfile(cfg.output.data_processed_dir, ...
     'partC_01_real_data_processed.csv');
 
-save(matPath, 'date', 't', 'Rt_est', 'I_proxy', 'I_scaled', 'cfg', ...
-    'cfg_snapshot', 'rawPath', 'daily_cases', 'renewal_lambda', 'metadata');
+% Assemble the artifact as a struct and save its fields as top-level variables
+% (save -struct). This exposes the canonical serial_interval_weights field name
+% without binding a script variable of that name.
+artifact = struct();
+artifact.date = date;
+artifact.t = t;
+artifact.I_observed = I_observed;
+artifact.I_smoothed = I_smoothed;
+artifact.serial_interval_weights = si_weights;
+artifact.serial_interval_config = serial_interval_config;
+artifact.Lambda_t = Lambda_t;
+artifact.Rt_est = Rt_est;
+artifact.Rt_model_input = Rt_model_input;
+artifact.Rt_evaluation_proxy = Rt_evaluation_proxy;
+artifact.cfg = cfg;
+artifact.cfg_snapshot = cfg_snapshot;
+artifact.rawPath = rawPath;
+artifact.metadata = metadata;
+
+save(matPath, '-struct', 'artifact');
 writetable(processed_table, csvPath);
 
 fprintf('Processed MAT artifact saved to: %s\n', matPath);
@@ -161,7 +190,7 @@ fprintf('Processed CSV export saved to: %s\n', csvPath);
 
 fprintf('=== Part C WHO Real Data Preparation Complete ===\n\n');
 
-%% 4. Local Functions
+%% 5. Local Functions
 function actual_col = local_resolve_column(data_table, expected_col, source_path)
 %LOCAL_RESOLVE_COLUMN Resolve a configured WHO column name in a table.
     expected_col = string(expected_col);
@@ -307,65 +336,53 @@ function daily_cases = local_validate_case_series(daily_cases)
     end
 end
 
-function [Rt_est, renewal_lambda, serial_interval_weights] = ...
-    local_estimate_rt_renewal(I_proxy, cfg)
-%LOCAL_ESTIMATE_RT_RENEWAL Estimate Rt from smoothed incidence by renewal ratio.
-    I_proxy = double(I_proxy(:));
-    max_lag = cfg.input.serial_interval_max_lag_days;
-    serial_interval_weights = local_serial_interval_weights( ...
-        cfg.input.serial_interval_mean_days, ...
-        cfg.input.serial_interval_sd_days, ...
-        max_lag);
-
-    renewal_lambda = nan(numel(I_proxy), 1);
-    for t_idx = (max_lag + 1):numel(I_proxy)
-        lagged_incidence = I_proxy(t_idx - (1:max_lag));
-        renewal_lambda(t_idx) = sum(serial_interval_weights .* lagged_incidence);
-    end
-
-    Rt_est = I_proxy ./ renewal_lambda;
+function serial_interval_config = local_serial_interval_config(cfg)
+%LOCAL_SERIAL_INTERVAL_CONFIG Assemble the fixed serial-interval assumption.
+    serial_interval_config = struct();
+    serial_interval_config.distribution = "gamma";
+    serial_interval_config.mean_days = cfg.input.serial_interval_mean_days;
+    serial_interval_config.sd_days = cfg.input.serial_interval_sd_days;
+    serial_interval_config.max_lag_days = cfg.input.serial_interval_max_lag_days;
+    serial_interval_config.lags = (1:cfg.input.serial_interval_max_lag_days)';
+    serial_interval_config.normalized = true;
+    serial_interval_config.source = ...
+        "Fixed external COVID-19 serial-interval assumption from partC_config; not inferred from the case series.";
+    serial_interval_config.discretization = ...
+        "Gamma density evaluated at integer day lags 1..max_lag, normalized to sum one.";
 end
 
-function weights = local_serial_interval_weights(mean_days, sd_days, max_lag)
-%LOCAL_SERIAL_INTERVAL_WEIGHTS Discretize a gamma serial interval on day lags.
-    if mean_days <= 0 || sd_days <= 0 || max_lag < 1
-        error('PREP:InvalidSerialInterval', ...
-            'Serial interval mean, standard deviation, and max lag must be positive.');
-    end
-
-    lag_days = (1:max_lag)';
-    shape = (mean_days / sd_days)^2;
-    scale = (sd_days^2) / mean_days;
-    weights = (lag_days.^(shape - 1) .* exp(-lag_days / scale)) ./ ...
-        (gamma(shape) * scale^shape);
-    weights = weights / sum(weights);
-end
-
-function local_validate_processed_signals(Rt_est, I_proxy, I_scaled, date, cfg)
+function local_validate_processed_signals(Rt_est, I_observed, I_smoothed, ...
+    weights, cfg)
 %LOCAL_VALIDATE_PROCESSED_SIGNALS Validate the WHO-derived Part C artifact.
-    if numel(date) ~= numel(unique(date)) || any(diff(date) < days(0))
-        error('PREP:InvalidProcessedDates', ...
-            'Processed Part C dates must be unique and sorted.');
+%   Dates are already checked by local_validate_dates on the same vector.
+    if any(~isfinite(I_observed)) || any(I_observed < 0) || ...
+            any(~isfinite(I_smoothed)) || any(I_smoothed < 0)
+        error('PREP:InvalidIncidence', ...
+            'I_observed and I_smoothed must be finite and nonnegative.');
     end
 
-    if any(~isfinite(Rt_est)) || any(Rt_est <= 0)
+    weights = double(weights(:));
+    if isempty(weights) || any(~isfinite(weights)) || any(weights < 0) || ...
+            abs(sum(weights) - 1) > 1e-9
+        error('PREP:InvalidSerialIntervalWeights', ...
+            'Serial-interval weights must be finite, nonnegative, and sum to one.');
+    end
+
+    % Rt_est carries NaN warmup by construction; the defined entries must be a
+    % finite, strictly positive renewal-ratio proxy.
+    defined_Rt = Rt_est(~isnan(Rt_est));
+    if any(~isfinite(defined_Rt)) || any(defined_Rt <= 0)
         error('PREP:InvalidRtSignal', ...
-            'Estimated Rt must be finite and strictly positive after warmup removal.');
+            'Defined renewal Rt-proxy values must be finite and strictly positive.');
     end
 
-    if any(~isfinite(I_proxy)) || any(I_proxy < 0) || ...
-            any(~isfinite(I_scaled)) || any(I_scaled < 0)
-        error('PREP:InvalidIProxy', ...
-            'I_proxy and I_scaled must be finite and nonnegative.');
-    end
-
-    n = numel(Rt_est);
     min_required = cfg.forecast.min_window + cfg.forecast.horizon + 1;
-    if n < min_required
+    if numel(defined_Rt) < min_required
         error('PREP:InsufficientForecastData', ...
-            ['Only %d processed observations remain. Part C needs at least ' ...
-            '%d for min_window=%d and horizon=%d.'], ...
-            n, min_required, cfg.forecast.min_window, cfg.forecast.horizon);
+            ['Only %d defined Rt-proxy observations remain. Part C needs at ' ...
+            'least %d for min_window=%d and horizon=%d.'], ...
+            numel(defined_Rt), min_required, cfg.forecast.min_window, ...
+            cfg.forecast.horizon);
     end
 end
 
@@ -384,7 +401,7 @@ function country_observed = local_observed_country_name(country_values, fallback
 end
 
 function metadata = local_build_metadata(cfg, rawPath, country_observed, ...
-    num_observations, serial_interval_weights)
+    num_observations, serial_interval_config, weights, num_defined_rt)
 %LOCAL_BUILD_METADATA Record WHO preprocessing details with the artifact.
     metadata = struct();
     metadata.source = cfg.input.source;
@@ -395,18 +412,25 @@ function metadata = local_build_metadata(cfg, rawPath, country_observed, ...
     metadata.start_date = cfg.input.start_date;
     metadata.end_date = cfg.input.end_date;
     metadata.num_observations = num_observations;
+    metadata.num_defined_rt = num_defined_rt;
     metadata.smoothing_window_days = cfg.input.smoothing_window_days;
-    metadata.case_proxy = "I_proxy = trailing 7-day moving average of cleaned New_cases";
+    metadata.I_observed_definition = ...
+        "Cleaned WHO daily reported New_cases (cumulative-difference fallback).";
+    metadata.I_smoothed_definition = ...
+        "Trailing moving average of I_observed over smoothing_window_days.";
     metadata.rt_estimation_method = ...
-        "renewal ratio Rt_est(t) = I_proxy(t) / sum_s w_s I_proxy(t-s)";
-    metadata.serial_interval_mean_days = cfg.input.serial_interval_mean_days;
-    metadata.serial_interval_sd_days = cfg.input.serial_interval_sd_days;
-    metadata.serial_interval_max_lag_days = cfg.input.serial_interval_max_lag_days;
-    metadata.serial_interval_lags = (1:cfg.input.serial_interval_max_lag_days)';
-    metadata.serial_interval_weights = serial_interval_weights;
+        "Renewal ratio Rt_est(t) = I_smoothed(t) / sum_s w(s) I_smoothed(t-s).";
+    metadata.rt_is_proxy = true;
+    metadata.rt_interpretation = ...
+        "Rt_est is a smoothing-dependent renewal-based proxy for latent transmission, not the true latent Rt and not a SIRS/SIR hidden state.";
+    metadata.rt_warmup_days = serial_interval_config.max_lag_days;
+    metadata.rt_warmup_handling = ...
+        "First max_lag days, and any day with undefined or non-positive renewal infectiousness, are NaN.";
+    metadata.serial_interval_config = serial_interval_config;
+    metadata.serial_interval_weights = weights(:);
 end
 
-function cfg_snapshot = local_cfg_snapshot(cfg)
+function cfg_snapshot = local_cfg_snapshot(cfg, serial_interval_config)
 %LOCAL_CFG_SNAPSHOT Store relevant preprocessing configuration.
     cfg_snapshot = struct();
     cfg_snapshot.experiment_id = cfg.experiment_id;
@@ -415,4 +439,5 @@ function cfg_snapshot = local_cfg_snapshot(cfg)
     cfg_snapshot.input = cfg.input;
     cfg_snapshot.forecast = cfg.forecast;
     cfg_snapshot.output = cfg.output;
+    cfg_snapshot.serial_interval_config = serial_interval_config;
 end
