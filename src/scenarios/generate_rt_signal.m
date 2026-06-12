@@ -22,36 +22,26 @@ function Rt = generate_rt_signal(tspan, scenario)
 %   See also PARTA_CONFIG, PARTB_CONFIG, PARTA_01_GENERATE_TRUTH.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-05
+% Modified: 2026-06-12
 
-    %% 1. Scenario Inputs
-    t = reshape(tspan, 1, []);
+    %% 1. Signal Formula
     signal_type = scenario.signal_type;
     params = scenario.params;
-
-    %% 2. Signal Formula
     switch signal_type
         case "seasonal"
-            Rt = local_rt_seasonal(t, params);
+            Rt = local_rt_seasonal(tspan, params);
 
         case "sigmoid"
-            Rt = local_rt_sigmoid(t, params);
+            Rt = local_rt_sigmoid(tspan, params);
 
         case "multi_wave"
-            Rt = local_rt_multi_wave(t, params);
+            Rt = local_rt_multi_wave(tspan, params);
 
         otherwise
             error('SCENARIO:UnsupportedGenerator', ...
                 'Unsupported Rt signal type: %s.', signal_type);
     end
 
-    %% 3. Scientific Sanity Check
-    Rt = reshape(Rt, 1, []);
-
-    if any(~isfinite(Rt)) || any(Rt <= 0)
-        error('SCENARIO:InvalidRtSignal', ...
-            'Generated Rt signal must contain finite positive values.');
-    end
 end
 
 function Rt = local_rt_seasonal(t, p)

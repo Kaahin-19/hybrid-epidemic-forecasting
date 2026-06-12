@@ -9,13 +9,13 @@
 %
 %   Workflow:
 %       1. Load configuration and ensure the Part A data directory exists.
-%       2. Generate each configured effective-Rt signal.
+%       2. Generate each configured effective-Rt signal and check bounds.
 %       3. Simulate and save one SIRS truth artifact per scenario.
 %
 %   See also PARTA_CONFIG, GENERATE_RT_SIGNAL, SIMULATE_GROUND_TRUTH_EPIDEMIC.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-11
+% Modified: 2026-06-12
 
 %% 1. Initialization
 clear; close all; clc;
@@ -24,6 +24,7 @@ fprintf('=== Part A Synthetic Truth Generation ===\n');
 
 cfg     = partA_config();
 tspan   = cfg.time.tspan;
+rtBounds = cfg.Rt.bounds;
 dataDir = cfg.output.data_dir;
 
 if ~exist(dataDir, 'dir')
@@ -37,7 +38,12 @@ for i = 1:numel(cfg.scenarios)
     scenario = cfg.scenarios(i);
     fprintf('  - Processing %s (%s)... ', scenario.id, scenario.name);
 
-    Rt_true      = generate_rt_signal(tspan, scenario);
+    Rt_true = generate_rt_signal(tspan, scenario);
+    if ~all(Rt_true >= rtBounds(1) & Rt_true <= rtBounds(2), 'all')
+        error('PARTA:RtOutOfBounds', ...
+            'Generated Rt signal for %s is outside cfg.Rt.bounds.', scenario.id);
+    end
+
     model_params = scenario.model_params;
 
     sim_options      = cfg.truth;
