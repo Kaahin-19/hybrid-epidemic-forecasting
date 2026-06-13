@@ -88,7 +88,7 @@ else
 end
 
 umod.solve   = 1;
-umod.parse   = 0;
+umod.parse   = 1;
 umod.compile = 0;
 umod.seed    = sim_options.seed;
 umod.U       = [];
