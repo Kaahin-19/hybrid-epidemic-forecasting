@@ -270,7 +270,7 @@ function ensemble_Rt = local_closed_loop_bootstrap_paths( ...
 
     sim_options = struct('solver', 'uds', 'compile', false, ...
         'seed', local_valid_seed(interval_options.epidemic_base_seed));
-    stepper = initialize_sirs_stepper(sirs_cfg, sim_options);
+    stepper = sirs_init(sirs_cfg, sim_options);
 
     for d = 1:num_draws
         draw_seed = local_draw_epidemic_seed(interval_options, d, horizon);
@@ -321,7 +321,7 @@ function column = local_resimulate_draw( ...
                 return;
             end
 
-            [state, stepper] = advance_sirs_stepper(stepper, state, Rt_next);
+            [state, stepper] = sirs_step(stepper, state, Rt_next);
             u_next = extract_exogenous_from_state(state, exo_mode, pop_size);
             x = A * x + B * u_col + K * e_h;
             column(h) = Rt_next;

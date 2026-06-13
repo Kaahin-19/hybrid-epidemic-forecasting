@@ -261,7 +261,7 @@ function ensemble_Rt = local_arx_closed_loop_bootstrap_paths( ...
 
     sim_options = struct('solver', 'uds', 'compile', false, ...
         'seed', local_valid_seed(interval_options.epidemic_base_seed));
-    stepper = initialize_sirs_stepper(sirs_cfg, sim_options);
+    stepper = sirs_init(sirs_cfg, sim_options);
 
     ensemble_Rt = nan(horizon, num_draws);
     for d = 1:num_draws
@@ -298,7 +298,7 @@ try
                 return;
             end
 
-        [state, stepper] = advance_sirs_stepper(stepper, state, Rt_next);
+        [state, stepper] = sirs_step(stepper, state, Rt_next);
         U_next = extract_exogenous_from_state(state, exo_mode, pop_size);
 
         column(h) = Rt_next;
