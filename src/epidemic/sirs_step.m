@@ -51,7 +51,7 @@ umod.ldata_time = reshape(beta_driver, [1, numel(umod.vol), numel(umod.tspan)]);
 
 step_seed    = stepper.seed + stepper.call_count;
 umod.solve   = 1;
-umod.parse   = 0;
+umod.parse   = 1;
 umod.compile = 0;
 umod.seed    = step_seed;
 umod.U       = [];
