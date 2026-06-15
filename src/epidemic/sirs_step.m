@@ -22,7 +22,7 @@ function [next_state, stepper] = sirs_step(stepper, current_state, Rt_next)
 %   See also SIRS_INIT.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-13
+% Modified: 2026-06-15
 
 params = stepper.model_params;
 
@@ -56,10 +56,6 @@ umod.compile = 0;
 umod.seed    = step_seed;
 umod.U       = [];
 
-caller_rng_state = rng;
-rng_cleanup      = onCleanup(@() rng(caller_rng_state));
-rng(step_seed);
-
 umod = urdme(umod);
 
 next_state = reshape(umod.U(1:3, end), 1, []);
@@ -69,9 +65,4 @@ if any(~isfinite(next_state))
 end
 
 stepper.call_count = stepper.call_count + 1;
-stepper.last_beta  = beta_value;
-stepper.last_seed  = step_seed;
-stepper.last_state = next_state;
-
-clear rng_cleanup
 end

@@ -29,7 +29,6 @@ table_dir = cfg.output.table_dir;
 figure_dir = cfg.output.fig_dir;
 
 if ~exist(figure_dir, 'dir'), mkdir(figure_dir); end
-
 evaluation_artifact = fullfile(evaluation_dir, 'partA_04_evaluation_results.mat');
 if exist(evaluation_artifact, 'file') ~= 2
     error('FIG:MissingEvaluationArtifact', ...
@@ -40,7 +39,9 @@ end
 
 %% 2. Load Existing Artifacts
 evaluation_data = load(evaluation_artifact);
+
 truth_scenarios = local_load_truth_scenarios(data_dir);
+
 
 window_scores = evaluation_data.window_scores;
 
@@ -51,6 +52,7 @@ table_cache.horizon_summary = local_read_table_required( ...
     fullfile(table_dir, 'partA_04_horizon_summary.csv'));
 table_cache.interval_summary = local_read_table_required( ...
     fullfile(table_dir, 'partA_04_interval_summary.csv'));
+
 
 fprintf('Loaded %d truth artifacts from %s\n', numel(truth_scenarios), data_dir);
 

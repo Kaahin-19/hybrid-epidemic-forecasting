@@ -22,7 +22,7 @@ function stepper = sirs_init(model_params, sim_options)
 %   See also SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-13
+% Modified: 2026-06-15
 
 %% 1. Prepare Inputs
 sim_options.solver  = char(sim_options.solver);
@@ -97,9 +97,6 @@ umod.U       = [];
 stepper               = struct();
 stepper.umod_template = umod;
 stepper.model_params  = model_params;
-stepper.sim_options   = sim_options;
-stepper.build_dir     = build_dir;
 stepper.seed          = sim_options.seed;
 stepper.call_count    = 0;
-stepper.model_name    = string(model_name);
 end
