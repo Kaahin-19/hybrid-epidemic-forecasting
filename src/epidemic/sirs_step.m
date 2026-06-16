@@ -22,7 +22,7 @@ function [next_state, stepper] = sirs_step(stepper, current_state, Rt_next)
 %   See also SIRS_INIT.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-15
+% Modified: 2026-06-16
 
 params = stepper.model_params;
 
@@ -51,7 +51,7 @@ umod.ldata_time = reshape(beta_driver, [1, numel(umod.vol), numel(umod.tspan)]);
 
 step_seed    = stepper.seed + stepper.call_count;
 umod.solve   = 1;
-umod.parse   = 1;
+umod.parse   = 0;
 umod.compile = 0;
 umod.seed    = step_seed;
 umod.U       = [];

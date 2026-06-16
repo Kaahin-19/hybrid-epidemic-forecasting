@@ -22,7 +22,7 @@ function stepper = sirs_init(model_params, sim_options)
 %   See also SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-15
+% Modified: 2026-06-16
 
 %% 1. Prepare Inputs
 sim_options.solver  = char(sim_options.solver);
@@ -37,7 +37,15 @@ end
 epidemic_dir = fileparts(mfilename('fullpath'));
 src_dir      = fileparts(epidemic_dir);
 repo_root    = fileparts(src_dir);
-build_dir    = fullfile(repo_root, 'build', 'urdme');
+base_build   = fullfile(repo_root, 'build', 'urdme');
+
+% Per-worker subdirectory: avoids SIRS.c write/read race in parfor.
+worker_tag = local_worker_tag();
+if isempty(worker_tag)
+    build_dir = base_build;
+else
+    build_dir = fullfile(base_build, worker_tag);
+end
 
 if exist(build_dir, 'dir') ~= 7
     mkdir(build_dir);
@@ -74,6 +82,13 @@ gdata       = [model_params.gamma; model_params.xi];
 beta_driver = repmat(model_params.gamma, 1, numel(umod.tspan));
 
 %% 3. One-Time URDME Preparation
+% Auto-compile if the propensity mex is absent from build_dir (e.g. first parfor
+% worker run, where forecast_closed passes compile=false but the worker dir is fresh).
+mex_stem = ['mexuds_' model_name '_' model_name '_mexrhs'];
+if ~sim_options.compile && exist(fullfile(build_dir, [mex_stem, '.', mexext()]), 'file') ~= 2
+    sim_options.compile = true;
+end
+
 umod = urdme(umod, 'solve', 0, 'compile', sim_options.compile, ...
     'solver', sim_options.solver, ...
     'modelname', model_name, ...
@@ -99,4 +114,14 @@ stepper.umod_template = umod;
 stepper.model_params  = model_params;
 stepper.seed          = sim_options.seed;
 stepper.call_count    = 0;
+end
+
+function tag = local_worker_tag()
+%LOCAL_WORKER_TAG Return a stable per-process tag when inside a parfor worker.
+task = getCurrentTask();
+if isempty(task)
+    tag = '';
+else
+    tag = sprintf('worker_%d', feature('getpid'));
+end
 end
