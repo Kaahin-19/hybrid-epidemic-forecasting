@@ -184,12 +184,12 @@ parfor idx = 1:num_candidates
             window_aicc(w) = aicc_w;
         end
 
-        scen_wis(s)  = mean(window_wis);
+        scen_wis(s)  = local_mean_finite(window_wis);
         scen_aicc(s) = local_mean_finite(window_aicc);
     end
 
     candidate_scores(idx, :) = scen_wis;
-    global_mean_wis(idx)     = mean(scen_wis);
+    global_mean_wis(idx)     = local_mean_finite(scen_wis);
     candidate_aicc(idx, :)   = scen_aicc;
     global_mean_aicc(idx)    = local_mean_finite(scen_aicc);
 end
@@ -214,8 +214,8 @@ selected_index       = local_select_simplest(candidate_complexity, global_mean_w
 selected_configuration = candidate_grid(selected_index, :);
 
 %% 4. Artifact Generation
-aggregation_mode = "equal_scenario_mean_wis";
-failure_policy   = "inf_on_invalid";
+aggregation_mode = "finite_window_mean_wis";
+failure_policy   = "skip_invalid_windows";
 cfg_snapshot     = cfg.run_snapshot;
 
 candidate_diagnostics = struct( ...
