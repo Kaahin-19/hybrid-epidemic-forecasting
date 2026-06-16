@@ -47,6 +47,13 @@ end
 
 horizon  = cfg.forecast.horizon;
 pop_size = cfg.sirs.pop_size;
+n_scenarios = numel(file_list);
+scenario_template = struct( ...
+    'scenario_id', "", ...
+    'num_exo', 0, ...
+    'windows', [], ...
+    'window_data', struct('Rt_past', {}, 'truth_Rt', {}, 'U_past', {}, 'sirs_state', {}));
+scenario_data = repmat(scenario_template, n_scenarios, 1);
 
 for i = 1:numel(file_list)
     loaded = load(fullfile(data_dir, file_list(i).name));
@@ -118,6 +125,8 @@ if isempty(gcp('nocreate'))
     pool_cleanup = onCleanup(@local_shutdown_parallel_pool);
 end
 
+scenario_data_const = parallel.pool.Constant(scenario_data);
+
 %% 3. Candidate Evaluation
 fprintf('Stage: Evaluating %d candidate configurations across %d scenarios\n', ...
     num_candidates, num_scenarios);
@@ -137,9 +146,10 @@ parfor idx = 1:num_candidates
     params    = candidate_grid(idx, :);
     scen_wis  = inf(1, num_scenarios);
     scen_aicc = nan(1, num_scenarios);
+    scenario_data_local = scenario_data_const.Value;
 
     for s = 1:num_scenarios
-        data        = scenario_data(s);
+        data        = scenario_data_local(s);
         window_wis  = inf(numel(data.window_data), 1);
         window_aicc = nan(numel(data.window_data), 1);
 
