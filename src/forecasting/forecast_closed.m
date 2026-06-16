@@ -45,6 +45,7 @@ function [ensemble, aicc] = forecast_closed(model_type, params, Rt_past, U_past,
 %   See also FORECAST_OPEN, INTERVAL_BOUNDS, COMPUTE_WIS, SIRS_INIT, SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-15
+% Modified: 2026-06-16
 
     y = log(Rt_past);
 
@@ -139,7 +140,11 @@ function [ensemble, aicc] = local_arx(y, U_past, params, num_exo, num_draws, ...
             if ~isfinite(Rt_next) || Rt_next <= 0
                 break;
             end
-            [state, stepper]  = sirs_step(stepper, state, Rt_next);
+            try
+                [state, stepper] = sirs_step(stepper, state, Rt_next);
+            catch
+                break;
+            end
             col(h)            = Rt_next;
             roll_y(T + h)     = y_next;
             roll_U(T + h, :)  = local_exo_row(state, exo_mode, pop_size);
@@ -216,7 +221,11 @@ function [ensemble, aicc] = local_ss_closed(model_type, y, U_past, n, ~, ...
             if ~isfinite(Rt_next) || Rt_next <= 0
                 break;
             end
-            [state, stepper] = sirs_step(stepper, state, Rt_next);
+            try
+                [state, stepper] = sirs_step(stepper, state, Rt_next);
+            catch
+                break;
+            end
             u_next           = local_exo_col(state, exo_mode, pop_size);
             x                = A * x + B * u_current + K_gain * innovations(h, d);
             col(h)           = Rt_next;
