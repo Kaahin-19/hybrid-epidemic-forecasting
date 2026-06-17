@@ -14,8 +14,10 @@ function [ensemble, aicc] = forecast_closed(model_type, params, Rt_past, U_past,
 %       innovations under resample_seed, and propagates closed-loop bootstrap
 %       paths. At each horizon step the forecast Rt drives a SIRS epidemic step
 %       whose output state determines the next exogenous covariate. Outputs are
-%       on the Rt scale. A draw that produces a non-finite or non-positive Rt
-%       at any step is left as NaN for that step and all later steps. Range-based
+%       on the Rt scale. A draw that produces a non-finite or non-positive Rt,
+%       or whose SIRS state leaves the valid Rt-to-beta forecast domain (checked
+%       by local_state_in_domain before and after each step), is left as NaN for
+%       that step and all later steps; the state is never repaired. Range-based
 %       validity filtering is the responsibility of interval_bounds. Returns
 %       nan(horizon, num_draws) and aicc = inf when the series is constant
 %       (std < 1e-8), there are too few observations relative to the model
@@ -45,7 +47,7 @@ function [ensemble, aicc] = forecast_closed(model_type, params, Rt_past, U_past,
 %   See also FORECAST_OPEN, INTERVAL_BOUNDS, COMPUTE_WIS, SIRS_INIT, SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-15
-% Modified: 2026-06-16
+% Modified: 2026-06-17
 
     y = log(Rt_past);
 
@@ -114,8 +116,10 @@ function [ensemble, aicc] = local_arx(y, U_past, params, num_exo, num_draws, ...
         return;
     end
 
-    innovations  = local_resample(residuals, horizon, num_draws, resample_seed);
-    pop_size     = sirs_cfg.pop_size;
+    innovations     = local_resample(residuals, horizon, num_draws, resample_seed);
+    pop_size        = sirs_cfg.pop_size;
+    min_susceptible = sirs_cfg.min_susceptible;
+    mass_tol_rel    = sirs_cfg.mass_tol;
     base_stepper = sirs_init(sirs_cfg, ...
         struct('solver', 'uds', 'compile', false, 'seed', epidemic_base_seed));
 
@@ -140,10 +144,12 @@ function [ensemble, aicc] = local_arx(y, U_past, params, num_exo, num_draws, ...
             if ~isfinite(Rt_next) || Rt_next <= 0
                 break;
             end
-            try
-                [state, stepper] = sirs_step(stepper, state, Rt_next);
-            catch
-                break;
+            if ~local_state_in_domain(state, pop_size, min_susceptible, mass_tol_rel)
+                break;   % out of forecast domain (e.g. S below floor): leave remaining steps NaN
+            end
+            [state, stepper] = sirs_step(stepper, state, Rt_next);
+            if ~local_state_in_domain(state, pop_size, min_susceptible, mass_tol_rel)
+                break;   % post-step invariant violated: leave remaining steps NaN
             end
             col(h)            = Rt_next;
             roll_y(T + h)     = y_next;
@@ -199,8 +205,10 @@ function [ensemble, aicc] = local_ss_closed(model_type, y, U_past, n, ~, ...
         return;
     end
 
-    innovations  = local_resample(residuals, horizon, num_draws, resample_seed);
-    pop_size     = sirs_cfg.pop_size;
+    innovations     = local_resample(residuals, horizon, num_draws, resample_seed);
+    pop_size        = sirs_cfg.pop_size;
+    min_susceptible = sirs_cfg.min_susceptible;
+    mass_tol_rel    = sirs_cfg.mass_tol;
     base_stepper = sirs_init(sirs_cfg, ...
         struct('solver', 'uds', 'compile', false, 'seed', epidemic_base_seed));
 
@@ -221,10 +229,12 @@ function [ensemble, aicc] = local_ss_closed(model_type, y, U_past, n, ~, ...
             if ~isfinite(Rt_next) || Rt_next <= 0
                 break;
             end
-            try
-                [state, stepper] = sirs_step(stepper, state, Rt_next);
-            catch
-                break;
+            if ~local_state_in_domain(state, pop_size, min_susceptible, mass_tol_rel)
+                break;   % out of forecast domain (e.g. S below floor): leave remaining steps NaN
+            end
+            [state, stepper] = sirs_step(stepper, state, Rt_next);
+            if ~local_state_in_domain(state, pop_size, min_susceptible, mass_tol_rel)
+                break;   % post-step invariant violated: leave remaining steps NaN
             end
             u_next           = local_exo_col(state, exo_mode, pop_size);
             x                = A * x + B * u_current + K_gain * innovations(h, d);
@@ -301,4 +311,12 @@ function innovations = local_resample(residuals, horizon, num_draws, resample_se
     idx         = randi(numel(centered), horizon, num_draws);
     innovations = centered(idx);
     clear cleanup;
+end
+
+function ok = local_state_in_domain(state, pop_size, min_susceptible, mass_tol_rel)
+%LOCAL_STATE_IN_DOMAIN True when [S,I,R] is inside the valid Rt-to-beta forecast domain.
+    ok = isnumeric(state) && numel(state) == 3 && all(isfinite(state)) ...
+        && all(state >= 0) ...
+        && abs(sum(state) - pop_size) <= mass_tol_rel * pop_size ...
+        && state(1) >= min_susceptible;
 end

@@ -3,22 +3,27 @@
 %   Description:
 %       Evaluates the active model family and exogenous-input setting across
 %       all Part A synthetic truth scenarios, using an expanding-window WIS
-%       protocol. The raw best candidate is the one with the lowest cross-scenario
-%       global mean WIS; the final selected configuration is the simplest candidate
-%       whose global mean WIS lies within one empirical standard error of that raw
-%       best (one-SE parsimony rule). WIS remains the selection metric; AICc stays
-%       diagnostic only.
+%       protocol. Closed-loop windows whose forecast-origin SIRS state already
+%       lies outside the valid Rt-to-beta domain are inadmissible and excluded
+%       from scoring (counts saved per scenario); admissible windows whose
+%       forecast leaves the domain during the horizon stay invalid and receive
+%       Inf WIS. Per-scenario WIS is the plain mean over admissible windows, and
+%       the global score the equal-scenario mean. The raw best candidate has the
+%       lowest global mean WIS; the final selected configuration is the simplest
+%       candidate whose global mean WIS lies within one empirical standard error
+%       of that raw best (one-SE parsimony rule). WIS remains the selection
+%       metric; AICc stays diagnostic only.
 %
 %   Workflow:
 %       1. Load configuration and synthetic truth artifacts.
-%       2. Build the candidate grid and expanding-window data.
+%       2. Build the candidate grid, expanding-window data, and window admissibility.
 %       3. Score each candidate via expanding-window WIS (parfor over candidates).
 %       4. Apply one-SE parsimony rule and save one model-selection artifact.
 %
 %   See also PARTA_CONFIG, FORECAST_OPEN, FORECAST_CLOSED, INTERVAL_BOUNDS, COMPUTE_WIS.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-16
+% Modified: 2026-06-17
 
 %% 1. Initialization
 clear; close all; clc;
@@ -52,7 +57,10 @@ scenario_template = struct( ...
     'scenario_id', "", ...
     'num_exo', 0, ...
     'windows', [], ...
-    'window_data', struct('Rt_past', {}, 'truth_Rt', {}, 'U_past', {}, 'sirs_state', {}));
+    'window_data', struct('Rt_past', {}, 'truth_Rt', {}, 'U_past', {}, 'sirs_state', {}), ...
+    'admissible', [], ...
+    'num_admissible', 0, ...
+    'num_inadmissible', 0);
 scenario_data = repmat(scenario_template, n_scenarios, 1);
 
 for i = 1:numel(file_list)
@@ -94,7 +102,28 @@ for i = 1:numel(file_list)
     scenario_data(i).window_data = local_build_windows(Rt, U_true, S_true, I_true, ...
         tspan, win_endpoints, horizon, pop_size, num_exo > 0);
 
-    fprintf('Prepared scenario %d/%d (%s)\n', i, numel(file_list), loaded.scenario_id);
+    % Window-admissibility pre-screen: a closed-loop window whose forecast-origin
+    % SIRS state is already outside the valid Rt-to-beta domain (depleted S, etc.)
+    % is inadmissible and excluded from scoring. Open-loop windows are always
+    % admissible (no closed-loop origin). Same domain rule as the in-horizon guard.
+    n_wins     = numel(scenario_data(i).window_data);
+    admissible = true(n_wins, 1);
+    if num_exo > 0
+        for k = 1:n_wins
+            st = scenario_data(i).window_data(k).sirs_state;
+            admissible(k) = ~isempty(st) && isnumeric(st) && numel(st) == 3 ...
+                && all(isfinite(st)) && all(st >= 0) ...
+                && abs(sum(st) - pop_size) <= cfg.sirs.mass_tol * pop_size ...
+                && st(1) >= cfg.sirs.min_susceptible;
+        end
+    end
+    scenario_data(i).admissible       = admissible;
+    scenario_data(i).num_admissible   = sum(admissible);
+    scenario_data(i).num_inadmissible = sum(~admissible);
+
+    fprintf(['Prepared scenario %d/%d (%s): %d windows, %d admissible, ' ...
+        '%d inadmissible (depleted-S origin)\n'], i, numel(file_list), ...
+        loaded.scenario_id, n_wins, sum(admissible), sum(~admissible));
 end
 
 switch model_type
@@ -150,10 +179,14 @@ parfor idx = 1:num_candidates
 
     for s = 1:num_scenarios
         data        = scenario_data_local(s);
+        adm         = data.admissible;
         window_wis  = inf(numel(data.window_data), 1);
         window_aicc = nan(numel(data.window_data), 1);
 
         for w = 1:numel(data.window_data)
+            if ~adm(w)
+                continue;   % inadmissible forecast origin: excluded from scoring
+            end
             win    = data.window_data(w);
             r_seed = local_resample_seed(base_seed, data.scenario_id, w, model_type, exo_mode);
             e_seed = local_epidemic_seed(base_seed, data.scenario_id, w, model_type, exo_mode);
@@ -184,12 +217,20 @@ parfor idx = 1:num_candidates
             window_aicc(w) = aicc_w;
         end
 
-        scen_wis(s)  = local_mean_finite(window_wis);
-        scen_aicc(s) = local_mean_finite(window_aicc);
+        if any(adm)
+            % Plain mean over admissible windows: an in-horizon domain exit leaves
+            % that window at inf, which propagates (the candidate is not credited
+            % for a forecast it could not complete). AICc stays a finite-only mean.
+            scen_wis(s)  = mean(window_wis(adm));
+            scen_aicc(s) = local_mean_finite(window_aicc(adm));
+        else
+            scen_wis(s)  = nan;   % no admissible window in this scenario
+            scen_aicc(s) = nan;
+        end
     end
 
     candidate_scores(idx, :) = scen_wis;
-    global_mean_wis(idx)     = local_mean_finite(scen_wis);
+    global_mean_wis(idx)     = mean(scen_wis);
     candidate_aicc(idx, :)   = scen_aicc;
     global_mean_aicc(idx)    = local_mean_finite(scen_aicc);
 end
@@ -214,9 +255,18 @@ selected_index       = local_select_simplest(candidate_complexity, global_mean_w
 selected_configuration = candidate_grid(selected_index, :);
 
 %% 4. Artifact Generation
-aggregation_mode = "finite_window_mean_wis";
-failure_policy   = "skip_invalid_windows";
+aggregation_mode = "equal_scenario_mean_over_admissible_windows";
+failure_policy   = "exclude_inadmissible_origin_windows; inf_wis_on_inhorizon_domain_exit";
 cfg_snapshot     = cfg.run_snapshot;
+
+window_admissibility = struct( ...
+    'rule', "closed-loop forecast origin must lie in the Rt-to-beta domain: numeric, finite, length 3, nonnegative, mass-conserving (S+I+R == pop_size), and S >= min_susceptible", ...
+    'min_susceptible', cfg.sirs.min_susceptible, ...
+    'mass_tol_rel', cfg.sirs.mass_tol, ...
+    'scenario_ids', scenario_ids, ...
+    'num_windows', window_counts, ...
+    'num_admissible', [scenario_data.num_admissible], ...
+    'num_inadmissible', [scenario_data.num_inadmissible]);
 
 candidate_diagnostics = struct( ...
     'description', "Fitted-model AICc complexity diagnostic; not a selection criterion.", ...
@@ -236,7 +286,7 @@ save(artifact_path, ...
     'selected_configuration', 'selected_index', ...
     'scenario_ids', 'window_counts', 'cfg_snapshot', ...
     'wis_alphas', 'aggregation_mode', 'failure_policy', 'best_global_wis', ...
-    'candidate_diagnostics');
+    'candidate_diagnostics', 'window_admissibility');
 
 fprintf('Selected global model configuration: %s\n', mat2str(selected_configuration));
 fprintf('Global model-selection artifact saved to: %s\n', artifact_path);
