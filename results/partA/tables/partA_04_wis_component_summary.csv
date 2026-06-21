@@ -1,0 +1,2 @@
+Model,ExoMode,GroupCount,MeanMedianComponent,MeanDispersionComponent,MeanUnderpredictionComponent,MeanOverpredictionComponent,MedianShare,DispersionShare,UnderpredictionShare,OverpredictionShare
+ARX,I,176,0.00570986563840327,0.00371616086603049,0.0123603207652051,0.0151099364436479,0.154754491882528,0.100719110220097,0.335001781243189,0.409524616654187
