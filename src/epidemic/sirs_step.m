@@ -24,7 +24,7 @@ function [next_state, stepper] = sirs_step(stepper, current_state, Rt_next)
 %       next_state - Advanced row-vector [S, I, R] state.
 %       stepper    - Updated stepper with incremented call_count.
 %
-%   See also SIRS_INIT.
+%   See also PARTA_01_GENERATE_TRUTH, FORECAST_CLOSED, SIRS_INIT.
 %
 % A. M. Kaahin 2026-06-01
 % Modified: 2026-06-21

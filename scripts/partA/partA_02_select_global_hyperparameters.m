@@ -20,7 +20,7 @@
 %          best global WIS.
 %       4. Save the model-selection artifact and diagnostics.
 %
-%   See also PARTA_CONFIG, FORECAST_OPEN, FORECAST_CLOSED, INTERVAL_BOUNDS, COMPUTE_WIS
+%   See also PARTA_01_GENERATE_TRUTH, PARTA_CONFIG, FORECAST_OPEN, FORECAST_CLOSED, INTERVAL_BOUNDS, SIRS_INIT, COMPUTE_WIS.
 %
 % A. M. Kaahin 2026-05-31
 % Modified: 2026-06-21

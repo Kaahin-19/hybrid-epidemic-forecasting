@@ -48,28 +48,28 @@ function [point_path, ensemble_paths, fit_info] = forecast_closed(model_type, pa
 %       ensemble_paths - horizon×num_draws matrix of finite Rt bootstrap draws.
 %       fit_info       - Struct with field AICc (corrected AIC of the fitted model).
 %
-%   See also FORECAST_OPEN, INTERVAL_BOUNDS, COMPUTE_WIS, SIRS_INIT, SIRS_STEP.
+%   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS, FORECAST_OPEN, SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-15
 % Modified: 2026-06-21
 
-    y = log(Rt_past);
+y = log(Rt_past);
 
-    switch model_type
-        case "ARX"
-            [ensemble_paths, aicc] = local_arx(y, U_past, params, num_exo, num_draws, ...
-                horizon, exo_mode, base_stepper, sirs_state, ...
-                resample_seed, epidemic_base_seed, vary_epidemic_seed);
-        case {"N4SID", "SSEST"}
-            [ensemble_paths, aicc] = local_ss_closed(model_type, y, U_past, params(1), ...
-                num_exo, num_draws, horizon, exo_mode, base_stepper, sirs_state, ...
-                resample_seed, epidemic_base_seed, vary_epidemic_seed);
-        otherwise
-            error('FORECAST_CLOSED:UnknownModel', 'Unsupported model type: %s', model_type);
-    end
+switch model_type
+    case "ARX"
+        [ensemble_paths, aicc] = local_arx(y, U_past, params, num_exo, num_draws, ...
+            horizon, exo_mode, base_stepper, sirs_state, ...
+            resample_seed, epidemic_base_seed, vary_epidemic_seed);
+    case {"N4SID", "SSEST"}
+        [ensemble_paths, aicc] = local_ss_closed(model_type, y, U_past, params(1), ...
+            num_exo, num_draws, horizon, exo_mode, base_stepper, sirs_state, ...
+            resample_seed, epidemic_base_seed, vary_epidemic_seed);
+    otherwise
+        error('FORECAST_CLOSED:UnknownModel', 'Unsupported model type: %s', model_type);
+end
 
-    point_path = median(ensemble_paths, 2);
-    fit_info   = struct('AICc', aicc);
+point_path = median(ensemble_paths, 2);
+fit_info   = struct('AICc', aicc);
 end
 
 %% Local functions
@@ -78,220 +78,220 @@ function [ensemble, aicc] = local_arx(y, U_past, params, num_exo, num_draws, ...
     horizon, exo_mode, base_stepper, sirs_state, ...
     resample_seed, epidemic_base_seed, vary_epidemic_seed)
 %LOCAL_ARX Closed-loop ARX bootstrap ensemble on the log scale.
-    na = params(1);
-    nb = params(2);
-    nk = params(3);
-    T  = numel(y);
+na = params(1);
+nb = params(2);
+nk = params(3);
+T  = numel(y);
 
-    if std(y) < 1e-8
-        error('FORECAST_CLOSED:ConstantSeries', ...
-            'log(Rt_past) is effectively constant (std < 1e-8); cannot fit ARX model.');
-    end
+if std(y) < 1e-8
+    error('FORECAST_CLOSED:ConstantSeries', ...
+        'log(Rt_past) is effectively constant (std < 1e-8); cannot fit ARX model.');
+end
 
-    max_lag = max(na, nk + nb - 1);
-    if T - max_lag < 2
-        error('FORECAST_CLOSED:InsufficientHistory', ...
-            'ARX history too short: T - max_lag = %d < 2.', T - max_lag);
-    end
+max_lag = max(na, nk + nb - 1);
+if T - max_lag < 2
+    error('FORECAST_CLOSED:InsufficientHistory', ...
+        'ARX history too short: T - max_lag = %d < 2.', T - max_lag);
+end
 
-    nb_vec = repmat(nb, 1, num_exo);
-    nk_vec = repmat(nk, 1, num_exo);
-    sys    = arx(iddata(y, U_past, 1), [na, nb_vec, nk_vec]);
-    aicc   = sys.Report.Fit.AICc;
-    a_vals = sys.A(2:end);                   % 1×na
-    b_vals = local_extract_b(sys.B, nb, nk, num_exo);
+nb_vec = repmat(nb, 1, num_exo);
+nk_vec = repmat(nk, 1, num_exo);
+sys    = arx(iddata(y, U_past, 1), [na, nb_vec, nk_vec]);
+aicc   = sys.Report.Fit.AICc;
+a_vals = sys.A(2:end);                   % 1×na
+b_vals = local_extract_b(sys.B, nb, nk, num_exo);
 
-    residuals = zeros(T - max_lag, 1);
-    for t = (max_lag + 1):T
-        y_hat                  = local_arx_step(a_vals, b_vals, na, nb, nk, ...
-                                     y(1:t-1), U_past(1:t-1, :));
-        residuals(t - max_lag) = y(t) - y_hat;
-    end
-    residuals = residuals(isfinite(residuals));
+residuals = zeros(T - max_lag, 1);
+for t = (max_lag + 1):T
+    y_hat                  = local_arx_step(a_vals, b_vals, na, nb, nk, ...
+        y(1:t-1), U_past(1:t-1, :));
+    residuals(t - max_lag) = y(t) - y_hat;
+end
+residuals = residuals(isfinite(residuals));
 
-    if numel(residuals) < 2
-        error('FORECAST_CLOSED:InsufficientResiduals', ...
-            'Fewer than two finite ARX residuals available.');
-    end
+if numel(residuals) < 2
+    error('FORECAST_CLOSED:InsufficientResiduals', ...
+        'Fewer than two finite ARX residuals available.');
+end
 
-    innovations     = local_resample(residuals, horizon, num_draws, resample_seed);
-    pop_size        = base_stepper.model_params.pop_size;
-    min_susceptible = base_stepper.model_params.min_susceptible;
+innovations     = local_resample(residuals, horizon, num_draws, resample_seed);
+pop_size        = base_stepper.model_params.pop_size;
+min_susceptible = base_stepper.model_params.min_susceptible;
 
-    rolling_y = [y;      zeros(horizon, 1)];
-    rolling_U = [U_past; zeros(horizon, num_exo)];
+rolling_y = [y;      zeros(horizon, 1)];
+rolling_U = [U_past; zeros(horizon, num_exo)];
 
-    ensemble = zeros(horizon, num_draws);
-    for d = 1:num_draws
-        draw_seed          = local_draw_seed(epidemic_base_seed, d, horizon, vary_epidemic_seed);
-        stepper            = base_stepper;
-        stepper.seed       = draw_seed;
-        stepper.call_count = 0;
-        state              = sirs_state;
-        roll_y             = rolling_y;
-        roll_U             = rolling_U;
-        for h = 1:horizon
-            y_hat   = local_arx_step(a_vals, b_vals, na, nb, nk, ...
-                          roll_y(1:T+h-1), roll_U(1:T+h-1, :));
-            y_next  = y_hat + innovations(h, d);
-            Rt_next = exp(y_next);
-            if ~isfinite(Rt_next) || Rt_next <= 0
-                error('FORECAST_CLOSED:InvalidForecastDraw', ...
-                    'Bootstrap draw produced a non-finite or non-positive Rt.');
-            end
-            % sirs_step guards the current state's susceptible floor before
-            % computing beta; the post-step check guards the returned state at
-            % every lead, including the final one.
-            [state, stepper] = sirs_step(stepper, state, Rt_next);
-            if state(1) <= min_susceptible
-                error('EPIDEMIC:SusceptibleBelowThreshold', ...
-                    'Forecasted SIRS state crossed the susceptible-domain threshold.');
-            end
-            ensemble(h, d)   = Rt_next;
-            roll_y(T + h)    = y_next;
-            roll_U(T + h, :) = local_exo_row(state, exo_mode, pop_size);
+ensemble = zeros(horizon, num_draws);
+for d = 1:num_draws
+    draw_seed          = local_draw_seed(epidemic_base_seed, d, horizon, vary_epidemic_seed);
+    stepper            = base_stepper;
+    stepper.seed       = draw_seed;
+    stepper.call_count = 0;
+    state              = sirs_state;
+    roll_y             = rolling_y;
+    roll_U             = rolling_U;
+    for h = 1:horizon
+        y_hat   = local_arx_step(a_vals, b_vals, na, nb, nk, ...
+            roll_y(1:T+h-1), roll_U(1:T+h-1, :));
+        y_next  = y_hat + innovations(h, d);
+        Rt_next = exp(y_next);
+        if ~isfinite(Rt_next) || Rt_next <= 0
+            error('FORECAST_CLOSED:InvalidForecastDraw', ...
+                'Bootstrap draw produced a non-finite or non-positive Rt.');
         end
+        % sirs_step guards the current state's susceptible floor before
+        % computing beta; the post-step check guards the returned state at
+        % every lead, including the final one.
+        [state, stepper] = sirs_step(stepper, state, Rt_next);
+        if state(1) <= min_susceptible
+            error('EPIDEMIC:SusceptibleBelowThreshold', ...
+                'Forecasted SIRS state crossed the susceptible-domain threshold.');
+        end
+        ensemble(h, d)   = Rt_next;
+        roll_y(T + h)    = y_next;
+        roll_U(T + h, :) = local_exo_row(state, exo_mode, pop_size);
     end
+end
 end
 
 function [ensemble, aicc] = local_ss_closed(model_type, y, U_past, n, ~, ...
     num_draws, horizon, exo_mode, base_stepper, sirs_state, ...
     resample_seed, epidemic_base_seed, vary_epidemic_seed)
 %LOCAL_SS_CLOSED Closed-loop state-space bootstrap ensemble on the log scale.
-    if std(y) < 1e-8
-        error('FORECAST_CLOSED:ConstantSeries', ...
-            'log(Rt_past) is effectively constant (std < 1e-8); cannot fit state-space model.');
-    end
+if std(y) < 1e-8
+    error('FORECAST_CLOSED:ConstantSeries', ...
+        'log(Rt_past) is effectively constant (std < 1e-8); cannot fit state-space model.');
+end
 
-    data = iddata(y, U_past, 1);
-    switch model_type
-        case "N4SID"
-            sys = n4sid(data, n, n4sidOptions('Display', 'off'));
-        case "SSEST"
-            sys = ssest(data, n, ssestOptions('Display', 'off'));
-    end
-    aicc = sys.Report.Fit.AICc;
+data = iddata(y, U_past, 1);
+switch model_type
+    case "N4SID"
+        sys = n4sid(data, n, n4sidOptions('Display', 'off'));
+    case "SSEST"
+        sys = ssest(data, n, ssestOptions('Display', 'off'));
+end
+aicc = sys.Report.Fit.AICc;
 
-    [A, B, C, D, K_gain, X0] = idssdata(sys);
+[A, B, C, D, K_gain, X0] = idssdata(sys);
 
-    x         = X0;
-    T         = numel(y);
-    residuals = zeros(T, 1);
-    for t = 1:T
-        u_col        = U_past(t, :).';         % column for D*u, B*u
-        y_hat        = C * x + D * u_col;
-        e_t          = y(t) - y_hat;
-        residuals(t) = e_t;
-        x            = A * x + B * u_col + K_gain * e_t;
-    end
-    x_origin  = x;
-    residuals = residuals(isfinite(residuals));
+x         = X0;
+T         = numel(y);
+residuals = zeros(T, 1);
+for t = 1:T
+    u_col        = U_past(t, :).';         % column for D*u, B*u
+    y_hat        = C * x + D * u_col;
+    e_t          = y(t) - y_hat;
+    residuals(t) = e_t;
+    x            = A * x + B * u_col + K_gain * e_t;
+end
+x_origin  = x;
+residuals = residuals(isfinite(residuals));
 
-    if numel(residuals) < 2
-        error('FORECAST_CLOSED:InsufficientResiduals', ...
-            'Fewer than two finite state-space residuals available.');
-    end
+if numel(residuals) < 2
+    error('FORECAST_CLOSED:InsufficientResiduals', ...
+        'Fewer than two finite state-space residuals available.');
+end
 
-    innovations     = local_resample(residuals, horizon, num_draws, resample_seed);
-    pop_size        = base_stepper.model_params.pop_size;
-    min_susceptible = base_stepper.model_params.min_susceptible;
+innovations     = local_resample(residuals, horizon, num_draws, resample_seed);
+pop_size        = base_stepper.model_params.pop_size;
+min_susceptible = base_stepper.model_params.min_susceptible;
 
-    ensemble = zeros(horizon, num_draws);
-    for d = 1:num_draws
-        draw_seed          = local_draw_seed(epidemic_base_seed, d, horizon, vary_epidemic_seed);
-        stepper            = base_stepper;
-        stepper.seed       = draw_seed;
-        stepper.call_count = 0;
-        x                  = x_origin;
-        state              = sirs_state;
-        u_current          = U_past(end, :).';  % last observed covariate, column for D*u
-        for h = 1:horizon
-            y_hat   = C * x + D * u_current;
-            y_next  = y_hat + innovations(h, d);
-            Rt_next = exp(y_next);
-            if ~isfinite(Rt_next) || Rt_next <= 0
-                error('FORECAST_CLOSED:InvalidForecastDraw', ...
-                    'Bootstrap draw produced a non-finite or non-positive Rt.');
-            end
-            % sirs_step guards the current state; the post-step check guards the
-            % returned state at every lead, including the final one.
-            [state, stepper] = sirs_step(stepper, state, Rt_next);
-            if state(1) <= min_susceptible
-                error('EPIDEMIC:SusceptibleBelowThreshold', ...
-                    'Forecasted SIRS state crossed the susceptible-domain threshold.');
-            end
-            u_next         = local_exo_col(state, exo_mode, pop_size);
-            x              = A * x + B * u_current + K_gain * innovations(h, d);
-            ensemble(h, d) = Rt_next;
-            u_current      = u_next;
+ensemble = zeros(horizon, num_draws);
+for d = 1:num_draws
+    draw_seed          = local_draw_seed(epidemic_base_seed, d, horizon, vary_epidemic_seed);
+    stepper            = base_stepper;
+    stepper.seed       = draw_seed;
+    stepper.call_count = 0;
+    x                  = x_origin;
+    state              = sirs_state;
+    u_current          = U_past(end, :).';  % last observed covariate, column for D*u
+    for h = 1:horizon
+        y_hat   = C * x + D * u_current;
+        y_next  = y_hat + innovations(h, d);
+        Rt_next = exp(y_next);
+        if ~isfinite(Rt_next) || Rt_next <= 0
+            error('FORECAST_CLOSED:InvalidForecastDraw', ...
+                'Bootstrap draw produced a non-finite or non-positive Rt.');
         end
+        % sirs_step guards the current state; the post-step check guards the
+        % returned state at every lead, including the final one.
+        [state, stepper] = sirs_step(stepper, state, Rt_next);
+        if state(1) <= min_susceptible
+            error('EPIDEMIC:SusceptibleBelowThreshold', ...
+                'Forecasted SIRS state crossed the susceptible-domain threshold.');
+        end
+        u_next         = local_exo_col(state, exo_mode, pop_size);
+        x              = A * x + B * u_current + K_gain * innovations(h, d);
+        ensemble(h, d) = Rt_next;
+        u_current      = u_next;
     end
+end
 end
 
 function b_vals = local_extract_b(B_property, nb, nk, num_exo)
 %LOCAL_EXTRACT_B Extract active B coefficients from the ARX system polynomial.
-    b_vals = cell(1, num_exo);
-    if iscell(B_property)
-        for j = 1:num_exo
-            b_vals{j} = B_property{j}(nk + 1 : nk + nb);
-        end
-    elseif num_exo == 1
-        b_vals{1} = B_property(nk + 1 : nk + nb);
-    else
-        for j = 1:num_exo
-            b_vals{j} = B_property(j, nk + 1 : nk + nb);
-        end
+b_vals = cell(1, num_exo);
+if iscell(B_property)
+    for j = 1:num_exo
+        b_vals{j} = B_property{j}(nk + 1 : nk + nb);
     end
+elseif num_exo == 1
+    b_vals{1} = B_property(nk + 1 : nk + nb);
+else
+    for j = 1:num_exo
+        b_vals{j} = B_property(j, nk + 1 : nk + nb);
+    end
+end
 end
 
 function y_hat = local_arx_step(a_vals, b_vals, na, nb, nk, log_hist, U_hist)
 %LOCAL_ARX_STEP One-step ARX prediction from rolling log and exogenous history.
-    T     = numel(log_hist);
-    y_hat = 0;
-    for lag = 1:na
-        y_hat = y_hat - a_vals(lag) * log_hist(T + 1 - lag);
+T     = numel(log_hist);
+y_hat = 0;
+for lag = 1:na
+    y_hat = y_hat - a_vals(lag) * log_hist(T + 1 - lag);
+end
+for j = 1:numel(b_vals)
+    for k = 1:nb
+        input_lag = nk + k - 1;
+        y_hat = y_hat + b_vals{j}(k) * U_hist(T + 1 - input_lag, j);
     end
-    for j = 1:numel(b_vals)
-        for k = 1:nb
-            input_lag = nk + k - 1;
-            y_hat = y_hat + b_vals{j}(k) * U_hist(T + 1 - input_lag, j);
-        end
-    end
+end
 end
 
 function u = local_exo_row(state, exo_mode, pop_size)
 %LOCAL_EXO_ROW Row-vector exogenous covariate from epidemic state (for history update).
-    switch exo_mode
-        case "S";    u = state(1) / pop_size;
-        case "I";    u = state(2) / pop_size;
-        case "Both"; u = [state(1), state(2)] / pop_size;
-    end
+switch exo_mode
+    case "S";    u = state(1) / pop_size;
+    case "I";    u = state(2) / pop_size;
+    case "Both"; u = [state(1), state(2)] / pop_size;
+end
 end
 
 function u = local_exo_col(state, exo_mode, pop_size)
 %LOCAL_EXO_COL Column-vector exogenous covariate from epidemic state (for matrix multiply).
-    switch exo_mode
-        case "S";    u = state(1) / pop_size;
-        case "I";    u = state(2) / pop_size;
-        case "Both"; u = [state(1); state(2)] / pop_size;
-    end
+switch exo_mode
+    case "S";    u = state(1) / pop_size;
+    case "I";    u = state(2) / pop_size;
+    case "Both"; u = [state(1); state(2)] / pop_size;
+end
 end
 
 function seed = local_draw_seed(base, draw_index, horizon, vary)
 %LOCAL_DRAW_SEED Per-draw epidemic seed derived from the base seed.
-    seed = base;
-    if vary
-        seed = base + (draw_index - 1) * (horizon + 1);
-    end
+seed = base;
+if vary
+    seed = base + (draw_index - 1) * (horizon + 1);
+end
 end
 
 function innovations = local_resample(residuals, horizon, num_draws, resample_seed)
 %LOCAL_RESAMPLE Centred residual resample with isolated RNG state.
-    centered     = residuals - mean(residuals);
-    caller_state = rng;
-    cleanup      = onCleanup(@() rng(caller_state));
-    rng(resample_seed, 'twister');
-    idx         = randi(numel(centered), horizon, num_draws);
-    innovations = centered(idx);
-    clear cleanup;
+centered     = residuals - mean(residuals);
+caller_state = rng;
+cleanup      = onCleanup(@() rng(caller_state));
+rng(resample_seed, 'twister');
+idx         = randi(numel(centered), horizon, num_draws);
+innovations = centered(idx);
+clear cleanup;
 end

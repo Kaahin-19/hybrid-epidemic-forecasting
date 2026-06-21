@@ -146,7 +146,7 @@ cfg.forecast.max_exo_delay      = 2;
 cfg.forecast.max_state_order    = 2;
 cfg.forecast.state_diff_orders  = 0;
 
-cfg.forecast.wis_alphas     = [0.05, 0.10, 0.20, 0.50];
+cfg.forecast.wis_alphas = [0.05; 0.10; 0.20; 0.50];
 cfg.forecast.plot_alphas    = [0.10, 0.50];
 cfg.forecast.plot_lead_time = 7;
 
