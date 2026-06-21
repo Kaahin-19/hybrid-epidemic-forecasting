@@ -1,20 +1,25 @@
 %PARTA_05_GENERATE_FIGURES Generate and export Part A thesis figures.
 %
 %   Description:
-%       Loads finalized Part A truth, forecast, evaluation, and table
-%       artifacts, then generates presentation figures only. Evaluation
-%       tables and .mat artifacts are produced by Part A 04.
+%       Generates Part A figures staged by pipeline artifact availability.
+%       Sections execute independently: scenario trajectories require only
+%       partA_01 artifacts; forecast comparisons require only partA_03
+%       artifacts; evaluation figures require partA_04 artifacts. Sections
+%       skip gracefully when their prerequisites have not yet been generated.
 %
 %   Workflow:
-%       1. Load finalized truth, evaluation, and summary-table artifacts.
-%       2. Build plot specifications and generic panel data.
-%       3. Draw reusable visualization panels and export figure files.
+%       1. Initialize configuration and figure output directory.
+%       2. Load partA_01 truth artifacts and draw scenario trajectories.
+%       3. Scan partA_03 forecast artifacts and draw forecast comparisons.
+%       4. Load partA_04 evaluation artifact and draw WIS distribution.
+%       5. Draw horizon-wise WIS from partA_04 horizon summary table.
+%       6. Draw coverage summary from partA_04 interval summary table.
 %
-%   See also PARTA_CONFIG, PARTA_04_EVALUATE_FORECASTS, BUILD_PLOT_SPEC, ...
-%            EXPORT_FIGURE.
+%   See also PARTA_CONFIG, PARTA_01_GENERATE_TRUTH, PARTA_03_RUN_FORECASTS,
+%            PARTA_04_EVALUATE_FORECASTS, BUILD_PLOT_SPEC, EXPORT_FIGURE.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-05
+% Modified: 2026-06-21
 
 %% 1. Initialization
 clear; close all; clc;
@@ -29,34 +34,11 @@ table_dir = cfg.output.table_dir;
 figure_dir = cfg.output.fig_dir;
 
 if ~exist(figure_dir, 'dir'), mkdir(figure_dir); end
-evaluation_artifact = fullfile(evaluation_dir, 'partA_04_evaluation_results.mat');
-if exist(evaluation_artifact, 'file') ~= 2
-    error('FIG:MissingEvaluationArtifact', ...
-        ['Missing Part A 04 evaluation artifact: %s\n' ...
-        'Run scripts/partA/partA_04_evaluate_forecasts.m first.'], ...
-        evaluation_artifact);
-end
 
-%% 2. Load Existing Artifacts
-evaluation_data = load(evaluation_artifact);
-
+%% 2. Scenario Trajectories (partA_01 artifacts)
 truth_scenarios = local_load_truth_scenarios(data_dir);
-
-
-window_scores = evaluation_data.window_scores;
-
-table_cache = struct();
-table_cache.model_summary = local_read_table_required( ...
-    fullfile(table_dir, 'partA_04_model_summary.csv'));
-table_cache.horizon_summary = local_read_table_required( ...
-    fullfile(table_dir, 'partA_04_horizon_summary.csv'));
-table_cache.interval_summary = local_read_table_required( ...
-    fullfile(table_dir, 'partA_04_interval_summary.csv'));
-
-
 fprintf('Loaded %d truth artifacts from %s\n', numel(truth_scenarios), data_dir);
 
-%% 3. Scenario Trajectories
 rt_spec = build_plot_spec( ...
     'figure_name', "Part A Rt scenarios", ...
     'shared_x_label', "Time, $t$ (days)", ...
@@ -71,77 +53,30 @@ fig = plot_multi_panel_figure(rt_panels, rt_spec);
 export_figure(fig, rt_spec);
 close(fig);
 
-%% 4. Model WIS Distribution
-performance_spec = build_plot_spec( ...
-    'figure_name', "Part A model WIS distribution", ...
-    'x_label', "Model / exogenous mode", ...
-    'y_label', "Window WIS", ...
-    'x_tick_rotation', 30, ...
-    'color_order', local_thesis_color_order(), ...
-    'output_path', fullfile(figure_dir, 'partA_05_model_wis_distribution.png'), ...
-    'legend', struct('location', "northoutside", 'orientation', "horizontal", ...
-        'box', "off", 'font_size', 9), ...
-    'size_cm', [17.0, 9.5]);
-performance_panel = local_model_wis_distribution_panel(window_scores);
-local_export_single_panel(performance_panel, performance_spec);
+%% 3. Forecast Comparisons (partA_03 artifacts)
+forecast_files = local_sort_dir_by_name( ...
+    dir(fullfile(forecast_dir, 'partA_03_forecast_*.mat')));
 
-%% 5. Horizon-Wise WIS
-horizon_legend = struct( ...
-    'labels', local_model_exo_labels(table_cache.horizon_summary), ...
-    'location', "northoutside", ...
-    'num_columns', 3, ...
-    'box', "off", ...
-    'font_size', 9);
-horizon_spec = build_plot_spec( ...
-    'figure_name', "Part A mean WIS by horizon", ...
-    'x_label', "Forecast horizon, $h$ (days)", ...
-    'y_label', "Mean WIS", ...
-    'color_order', local_thesis_color_order(), ...
-    'legend', horizon_legend, ...
-    'output_path', fullfile(figure_dir, 'partA_05_mean_wis_by_horizon.png'), ...
-    'size_cm', [17.0, 9.0]);
-horizon_panel = local_horizon_wis_panel(table_cache.horizon_summary, horizon_spec);
-local_export_single_panel(horizon_panel, horizon_spec);
+if isempty(forecast_files)
+    fprintf('Skipping forecast comparisons — run partA_03 first.\n');
+else
+    fprintf('Drawing %d forecast comparison figure(s)...\n', numel(forecast_files));
+    for f = 1:numel(forecast_files)
+        file_path = fullfile(forecast_files(f).folder, forecast_files(f).name);
+        [forecast_results, fscenario_id, fmodel, fexo] = ...
+            local_load_forecast_file(file_path);
 
-%% 6. Coverage Summary
-coverage_legend = struct( ...
-    'labels', local_model_exo_labels(table_cache.interval_summary), ...
-    'reference_label', "Nominal coverage", ...
-    'location', "northoutside", ...
-    'num_columns', 4, ...
-    'box', "off", ...
-    'font_size', 9);
-coverage_spec = build_plot_spec( ...
-    'figure_name', "Part A coverage summary", ...
-    'x_label', "Nominal coverage", ...
-    'y_label', "Empirical coverage", ...
-    'color_order', local_thesis_color_order(), ...
-    'legend', coverage_legend, ...
-    'x_limits', [0, 1], ...
-    'y_limits', [0, 1], ...
-    'output_path', fullfile(figure_dir, 'partA_05_coverage_summary.png'), ...
-    'size_cm', [16.0, 10.0]);
-coverage_panel = local_coverage_panel(table_cache.interval_summary, coverage_spec);
-local_export_single_panel(coverage_panel, coverage_spec);
-
-%% 7. Forecast Comparisons for Every Global Configuration
-configurations = local_all_configurations(table_cache.model_summary);
-if isempty(configurations)
-    error('FIG:NoModelConfigurations', ...
-        'No model/exogenous configurations found in the Part A 04 model summary.');
-end
-
-for c = 1:numel(configurations)
-    config = configurations(c);
-    for i = 1:numel(truth_scenarios)
-        scenario_id = string(truth_scenarios(i).scenario_id);
-        [forecast_results, forecast_path] = local_load_forecast_results( ...
-            forecast_dir, scenario_id, config.Model, config.ExoMode);
+        truth_idx = find(strcmp({truth_scenarios.scenario_id}, char(fscenario_id)), 1);
+        if isempty(truth_idx)
+            fprintf('Skipping %s — truth scenario %s not found.\n', ...
+                forecast_files(f).name, fscenario_id);
+            continue;
+        end
 
         plot_name = sprintf('partA_05_forecast_comparison_%s_%s_%s.png', ...
-            char(local_safe_token(scenario_id)), ...
-            char(local_safe_token(config.Model)), ...
-            char(local_safe_token(config.ExoMode)));
+            char(local_safe_token(fscenario_id)), ...
+            char(local_safe_token(fmodel)), ...
+            char(local_safe_token(fexo)));
         interval_labels = string(compose('%d%% PI', ...
             round((1 - sort(double(cfg.forecast.plot_alphas(:)))) * 100)));
         interval_labels = interval_labels(:);
@@ -164,18 +99,95 @@ for c = 1:numel(configurations)
             'output_path', fullfile(figure_dir, plot_name), ...
             'size_cm', [17.0, 9.0]);
 
-        fprintf('Drawing comparison from %s\n', forecast_path);
+        fprintf('Drawing comparison from %s\n', file_path);
         [comparison_panel, comparison_spec] = local_forecast_comparison_panel( ...
-            forecast_results, truth_scenarios(i), comparison_spec);
+            forecast_results, truth_scenarios(truth_idx), comparison_spec);
         local_export_single_panel(comparison_panel, comparison_spec);
     end
 end
 
-%% 8. Completion
+%% 4. Model WIS Distribution (partA_04 artifacts)
+evaluation_artifact = fullfile(evaluation_dir, 'partA_04_evaluation_results.mat');
+if exist(evaluation_artifact, 'file') ~= 2
+    fprintf('Skipping evaluation figures (sections 4-6) — run partA_04 first.\n');
+    skip_evaluation = true;
+else
+    skip_evaluation = false;
+    evaluation_data = load(evaluation_artifact);
+    window_scores = evaluation_data.window_scores;
+end
+
+if ~skip_evaluation
+    performance_spec = build_plot_spec( ...
+        'figure_name', "Part A model WIS distribution", ...
+        'x_label', "Model / exogenous mode", ...
+        'y_label', "Window WIS", ...
+        'x_tick_rotation', 30, ...
+        'color_order', local_thesis_color_order(), ...
+        'output_path', fullfile(figure_dir, 'partA_05_model_wis_distribution.png'), ...
+        'legend', struct('location', "northoutside", 'orientation', "horizontal", ...
+            'box', "off", 'font_size', 9), ...
+        'size_cm', [17.0, 9.5]);
+    performance_panel = local_model_wis_distribution_panel(window_scores);
+    local_export_single_panel(performance_panel, performance_spec);
+end
+
+%% 5. Horizon-wise WIS (partA_04 artifacts)
+if ~skip_evaluation
+    horizon_summary = local_read_table_optional( ...
+        fullfile(table_dir, 'partA_04_horizon_summary.csv'), 'horizon summary');
+    if ~isempty(horizon_summary)
+        horizon_legend = struct( ...
+            'labels', local_model_exo_labels(horizon_summary), ...
+            'location', "northoutside", ...
+            'num_columns', 3, ...
+            'box', "off", ...
+            'font_size', 9);
+        horizon_spec = build_plot_spec( ...
+            'figure_name', "Part A mean WIS by horizon", ...
+            'x_label', "Forecast horizon, $h$ (days)", ...
+            'y_label', "Mean WIS", ...
+            'color_order', local_thesis_color_order(), ...
+            'legend', horizon_legend, ...
+            'output_path', fullfile(figure_dir, 'partA_05_mean_wis_by_horizon.png'), ...
+            'size_cm', [17.0, 9.0]);
+        horizon_panel = local_horizon_wis_panel(horizon_summary, horizon_spec);
+        local_export_single_panel(horizon_panel, horizon_spec);
+    end
+end
+
+%% 6. Coverage Summary (partA_04 artifacts)
+if ~skip_evaluation
+    interval_summary = local_read_table_optional( ...
+        fullfile(table_dir, 'partA_04_interval_summary.csv'), 'interval summary');
+    if ~isempty(interval_summary)
+        coverage_legend = struct( ...
+            'labels', local_model_exo_labels(interval_summary), ...
+            'reference_label', "Nominal coverage", ...
+            'location', "northoutside", ...
+            'num_columns', 4, ...
+            'box', "off", ...
+            'font_size', 9);
+        coverage_spec = build_plot_spec( ...
+            'figure_name', "Part A coverage summary", ...
+            'x_label', "Nominal coverage", ...
+            'y_label', "Empirical coverage", ...
+            'color_order', local_thesis_color_order(), ...
+            'legend', coverage_legend, ...
+            'x_limits', [0, 1], ...
+            'y_limits', [0, 1], ...
+            'output_path', fullfile(figure_dir, 'partA_05_coverage_summary.png'), ...
+            'size_cm', [16.0, 10.0]);
+        coverage_panel = local_coverage_panel(interval_summary, coverage_spec);
+        local_export_single_panel(coverage_panel, coverage_spec);
+    end
+end
+
+%% 7. Completion
 fprintf('Figures saved under %s\n', figure_dir);
 fprintf('=== Part A Figure Generation Complete ===\n\n');
 
-%% 9. Local Functions - Artifact Loading
+%% 8. Local Functions - Artifact Loading
 function scenarios = local_load_truth_scenarios(data_dir)
 %LOCAL_LOAD_TRUTH_SCENARIOS Load canonical Part A truth artifacts.
     truth_files = dir(fullfile(data_dir, 'partA_01_truth_*.mat'));
@@ -198,39 +210,32 @@ function scenarios = local_load_truth_scenarios(data_dir)
     end
 end
 
-function table_data = local_read_table_required(table_path)
-%LOCAL_READ_TABLE_REQUIRED Read a required Part A table artifact.
+function table_data = local_read_table_optional(table_path, label)
+%LOCAL_READ_TABLE_OPTIONAL Read a Part A table artifact; return empty on missing.
+    if nargin < 2, label = table_path; end
     if exist(table_path, 'file') ~= 2
-        error('FIG:MissingTableArtifact', ...
-            ['Missing Part A 04 table artifact: %s\n' ...
-            'Run scripts/partA/partA_04_evaluate_forecasts.m first.'], ...
-            table_path);
+        fprintf('Skipping %s figure — table not found: %s\n', label, table_path);
+        table_data = table();
+        return;
     end
     table_data = readtable(table_path);
 end
 
-function [forecast_results, forecast_path] = local_load_forecast_results( ...
-    forecast_dir, scenario_id, model_type, exo_mode)
-%LOCAL_LOAD_FORECAST_RESULTS Load canonical forecast result arrays.
-    filename = sprintf('partA_03_forecast_%s_%s_%s.mat', ...
-        char(scenario_id), char(model_type), char(exo_mode));
-    candidate_path = fullfile(forecast_dir, filename);
-    if exist(candidate_path, 'file') ~= 2
-        error('FIG:MissingForecastComparisonArtifact', ...
-            'Missing forecast artifact for %s / %s / %s: %s', ...
-            scenario_id, model_type, exo_mode, candidate_path);
-    end
-
-    loaded = load(candidate_path);
-    forecast_path = string(candidate_path);
+function [forecast_results, scenario_id, model_type, exo_mode] = ...
+    local_load_forecast_file(file_path)
+%LOCAL_LOAD_FORECAST_FILE Load forecast results and metadata from a partA_03 artifact.
+    loaded = load(file_path);
     if ~isfield(loaded, 'forecast_results') || isempty(loaded.forecast_results)
         error('FIG:InvalidForecastArtifact', ...
-            'Forecast artifact has no forecast_results: %s', candidate_path);
+            'Forecast artifact has no forecast_results: %s', file_path);
     end
     forecast_results = loaded.forecast_results;
+    scenario_id = string(loaded.scenario_id);
+    model_type = string(loaded.model_type);
+    exo_mode = string(loaded.exo_mode);
 end
 
-%% 10. Local Functions - Figure Export
+%% 9. Local Functions - Figure Export
 function local_export_single_panel(panel_data, plot_spec)
 %LOCAL_EXPORT_SINGLE_PANEL Draw, export, and close a single-panel figure.
     fig = plot_single_panel(panel_data, plot_spec);
@@ -238,7 +243,7 @@ function local_export_single_panel(panel_data, plot_spec)
     close(fig);
 end
 
-%% 11. Local Functions - Panel Assembly
+%% 10. Local Functions - Panel Assembly
 function panels = local_rt_scenario_panels(scenarios, ~)
 %LOCAL_RT_SCENARIO_PANELS Build generic panels for scenario trajectories.
     panels = repmat(struct('series', [], 'plot_spec', struct()), ...
@@ -437,7 +442,7 @@ function [panel, plot_spec] = local_forecast_comparison_panel( ...
     panel = struct('series', series);
 end
 
-%% 12. Local Functions - Forecast Extraction
+%% 11. Local Functions - Forecast Extraction
 function [target_days, median_forecast, lower_forecast, upper_forecast] = ...
     local_extract_fixed_lead(forecast_results, lead_time, plot_alphas)
 %LOCAL_EXTRACT_FIXED_LEAD Extract one forecast lead across windows.
@@ -493,7 +498,7 @@ function idx = local_alpha_index(stored_alphas, target_alpha)
     end
 end
 
-%% 13. Local Functions - Plot Labels and Series Helpers
+%% 12. Local Functions - Plot Labels and Series Helpers
 function series = local_empty_series(n)
 %LOCAL_EMPTY_SERIES Create generic panel-series placeholders.
     series = repmat(struct('type', "line", 'x', [], 'y', [], ...
@@ -561,25 +566,7 @@ function colors = local_interval_colors(num_intervals)
     end
 end
 
-%% 14. Local Functions - Summary Tables and Utilities
-function configurations = local_all_configurations(model_summary)
-%LOCAL_ALL_CONFIGURATIONS List model/exogenous configurations.
-    configurations = struct('Model', {}, 'ExoMode', {});
-    if isempty(model_summary) || height(model_summary) == 0
-        return;
-    end
-
-    config_ids = local_group_ids(model_summary);
-    [~, unique_idx] = unique(config_ids, 'stable');
-    num_configs = numel(unique_idx);
-    configurations = repmat(struct('Model', "", 'ExoMode', ""), 1, num_configs);
-    for k = 1:num_configs
-        row_idx = unique_idx(k);
-        configurations(k).Model = string(model_summary.Model(row_idx));
-        configurations(k).ExoMode = string(model_summary.ExoMode(row_idx));
-    end
-end
-
+%% 13. Local Functions - Utilities
 function group_ids = local_group_ids(summary_table)
 %LOCAL_GROUP_IDS Build model/exogenous group identifiers.
     group_ids = string(summary_table.Model) + " / " + string(summary_table.ExoMode);

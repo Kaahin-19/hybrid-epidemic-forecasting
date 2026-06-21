@@ -15,7 +15,7 @@
 %   See also PARTA_CONFIG, GENERATE_RT_SIGNAL, SIRS_INIT, SIRS_STEP.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-16
+% Modified: 2026-06-21
 
 %% 1. Initialization
 clear; close all; clc;
@@ -24,6 +24,7 @@ fprintf('=== Part A Synthetic Truth Generation ===\n');
 
 cfg      = partA_config();
 tspan    = cfg.time.tspan;
+numTime  = numel(tspan);
 rtBounds = cfg.Rt.bounds;
 dataDir  = cfg.output.data_dir;
 
@@ -41,23 +42,27 @@ fprintf('Saving trajectories to: %s\n', dataDir);
 
 for i = 1:numel(cfg.scenarios)
     scenario = cfg.scenarios(i);
+    params   = cfg.sirs;
+
     fprintf('  - Processing %s (%s)... ', scenario.id, scenario.name);
 
     Rt_true = generate_rt_signal(tspan, scenario);
-    if ~all(Rt_true >= rtBounds(1) & Rt_true <= rtBounds(2), 'all')
+
+    if any(Rt_true < rtBounds(1) | Rt_true > rtBounds(2), 'all')
         error('PARTA:RtOutOfBounds', ...
             'Generated Rt signal for %s is outside cfg.Rt.bounds.', scenario.id);
     end
 
-    params               = scenario.model_params;
     step_options         = sim_options;
     step_options.compile = sim_options.compile && (i == 1);
     stepper              = sirs_init(params, step_options);
 
-    U = zeros(3, numel(tspan));
-    U(:, 1) = [params.pop_size - params.I0 - params.R0_init; params.I0; params.R0_init];
+    U = zeros(3, numTime);
+    U(:, 1) = [params.pop_size - params.I0 - params.R0_init; ...
+        params.I0; ...
+        params.R0_init];
 
-    for k = 1:(numel(tspan) - 1)
+    for k = 1:(numTime - 1)
         [next_state, stepper] = sirs_step(stepper, U(:, k), Rt_true(k));
         U(:, k + 1) = reshape(next_state, 3, 1);
     end
@@ -68,13 +73,8 @@ for i = 1:numel(cfg.scenarios)
         'Rt_true',       Rt_true(:), ...
         'S_true',        U(1, :)', ...
         'I_true',        U(2, :)', ...
-        'tspan',         tspan(:) ...
-        );
-
-    artifact.model_params = struct( ...
-        'gamma',    params.gamma, ...
-        'xi',       params.xi, ...
-        'pop_size', params.pop_size);
+        'tspan',         tspan(:), ...
+        'model_params',  params);
 
     outPath = fullfile(dataDir, sprintf('partA_01_truth_%s.mat', scenario.id));
     save(outPath, '-struct', 'artifact');
