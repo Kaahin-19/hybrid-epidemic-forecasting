@@ -1,12 +1,12 @@
 function [point_path, ensemble_paths, fit_info] = forecast_closed(model_type, params, Rt_past, U_past, ...
-    sirs_state, num_exo, num_draws, horizon, exo_mode, sirs_cfg, ...
+    sirs_state, num_exo, num_draws, horizon, exo_mode, base_stepper, ...
     resample_seed, epidemic_base_seed, vary_epidemic_seed)
 %FORECAST_CLOSED Bootstrap forecast ensemble for models with exogenous inputs (num_exo > 0).
 %
 %   Syntax:
 %       [point_path, ensemble_paths, fit_info] = forecast_closed(model_type, params,
 %           Rt_past, U_past, sirs_state, num_exo, num_draws, horizon, exo_mode,
-%           sirs_cfg, resample_seed, epidemic_base_seed, vary_epidemic_seed)
+%           base_stepper, resample_seed, epidemic_base_seed, vary_epidemic_seed)
 %
 %   Description:
 %       Fits an ARX or state-space model with exogenous inputs to log(Rt_past),
@@ -35,7 +35,10 @@ function [point_path, ensemble_paths, fit_info] = forecast_closed(model_type, pa
 %       num_draws          - Number of Monte Carlo draws.
 %       horizon            - Forecast horizon in steps.
 %       exo_mode           - "S", "I", or "Both" (controls covariate extraction).
-%       sirs_cfg           - SIRS model configuration struct (passed to sirs_init).
+%       base_stepper       - Prebuilt SIRS stepper from sirs_init, reused across all
+%                            draws and windows (the caller builds it once, e.g. once
+%                            per parallel worker). Its model_params supplies pop_size
+%                            and min_susceptible; forecast_closed never calls sirs_init.
 %       resample_seed      - Integer seed for the residual resample RNG.
 %       epidemic_base_seed - Integer base seed for per-draw SIRS epidemic seeds.
 %       vary_epidemic_seed - Logical; if true, each draw receives a distinct seed.
@@ -55,11 +58,11 @@ function [point_path, ensemble_paths, fit_info] = forecast_closed(model_type, pa
     switch model_type
         case "ARX"
             [ensemble_paths, aicc] = local_arx(y, U_past, params, num_exo, num_draws, ...
-                horizon, exo_mode, sirs_cfg, sirs_state, ...
+                horizon, exo_mode, base_stepper, sirs_state, ...
                 resample_seed, epidemic_base_seed, vary_epidemic_seed);
         case {"N4SID", "SSEST"}
             [ensemble_paths, aicc] = local_ss_closed(model_type, y, U_past, params(1), ...
-                num_exo, num_draws, horizon, exo_mode, sirs_cfg, sirs_state, ...
+                num_exo, num_draws, horizon, exo_mode, base_stepper, sirs_state, ...
                 resample_seed, epidemic_base_seed, vary_epidemic_seed);
         otherwise
             error('FORECAST_CLOSED:UnknownModel', 'Unsupported model type: %s', model_type);
@@ -72,7 +75,7 @@ end
 %% Local functions
 
 function [ensemble, aicc] = local_arx(y, U_past, params, num_exo, num_draws, ...
-    horizon, exo_mode, sirs_cfg, sirs_state, ...
+    horizon, exo_mode, base_stepper, sirs_state, ...
     resample_seed, epidemic_base_seed, vary_epidemic_seed)
 %LOCAL_ARX Closed-loop ARX bootstrap ensemble on the log scale.
     na = params(1);
@@ -112,10 +115,8 @@ function [ensemble, aicc] = local_arx(y, U_past, params, num_exo, num_draws, ...
     end
 
     innovations     = local_resample(residuals, horizon, num_draws, resample_seed);
-    pop_size        = sirs_cfg.pop_size;
-    min_susceptible = sirs_cfg.min_susceptible;
-    base_stepper = sirs_init(sirs_cfg, ...
-        struct('solver', 'uds', 'compile', false, 'seed', epidemic_base_seed));
+    pop_size        = base_stepper.model_params.pop_size;
+    min_susceptible = base_stepper.model_params.min_susceptible;
 
     rolling_y = [y;      zeros(horizon, 1)];
     rolling_U = [U_past; zeros(horizon, num_exo)];
@@ -154,7 +155,7 @@ function [ensemble, aicc] = local_arx(y, U_past, params, num_exo, num_draws, ...
 end
 
 function [ensemble, aicc] = local_ss_closed(model_type, y, U_past, n, ~, ...
-    num_draws, horizon, exo_mode, sirs_cfg, sirs_state, ...
+    num_draws, horizon, exo_mode, base_stepper, sirs_state, ...
     resample_seed, epidemic_base_seed, vary_epidemic_seed)
 %LOCAL_SS_CLOSED Closed-loop state-space bootstrap ensemble on the log scale.
     if std(y) < 1e-8
@@ -192,10 +193,8 @@ function [ensemble, aicc] = local_ss_closed(model_type, y, U_past, n, ~, ...
     end
 
     innovations     = local_resample(residuals, horizon, num_draws, resample_seed);
-    pop_size        = sirs_cfg.pop_size;
-    min_susceptible = sirs_cfg.min_susceptible;
-    base_stepper = sirs_init(sirs_cfg, ...
-        struct('solver', 'uds', 'compile', false, 'seed', epidemic_base_seed));
+    pop_size        = base_stepper.model_params.pop_size;
+    min_susceptible = base_stepper.model_params.min_susceptible;
 
     ensemble = zeros(horizon, num_draws);
     for d = 1:num_draws

@@ -161,6 +161,13 @@ num_draws  = cfg.intervals.num_draws;
 wis_alphas = cfg.forecast.wis_alphas;
 sirs_cfg   = cfg.sirs;
 
+% Build the SIRS stepper template once per worker, not once per window. The model
+% depends only on fixed cfg.sirs fields, so it is reused across all candidates,
+% scenarios, windows, and draws. The template seed is a placeholder: the uds solver
+% is deterministic and forecast_closed resets the seed per draw.
+sirs_stepper_const = parallel.pool.Constant(@() sirs_init(sirs_cfg, ...
+    struct('solver', 'uds', 'compile', false, 'seed', base_seed)));
+
 candidate_scores            = inf(num_candidates, num_scenarios);
 global_mean_wis             = inf(num_candidates, 1);
 candidate_aicc              = nan(num_candidates, num_scenarios);
@@ -197,9 +204,10 @@ parfor idx = 1:num_candidates
                     [~, ens, fit] = forecast_open(model_type, params, win.Rt_past, ...
                         num_draws, horizon, r_seed);
                 else
+                    base_stepper = sirs_stepper_const.Value;   % prebuilt once per worker
                     [~, ens, fit] = forecast_closed(model_type, params, ...
                         win.Rt_past, win.U_past, win.sirs_state, data.num_exo, ...
-                        num_draws, horizon, exo_mode, sirs_cfg, r_seed, e_seed, vary);
+                        num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
                 end
 
                 [lower, upper, Rt_pred] = interval_bounds(ens, wis_alphas);
