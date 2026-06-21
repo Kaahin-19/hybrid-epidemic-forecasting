@@ -1,30 +1,26 @@
-%PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS Select global Part A model hyperparameters.
+%PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS Select global Part A model configuration.
 %
 %   Description:
-%       Evaluates the active model family and exogenous-input setting across
-%       all Part A synthetic truth scenarios, using an expanding-window WIS
-%       protocol. Every candidate is scored on the same intended window set per
-%       scenario (derived from min_window/step_size/horizon and truth length).
-%       A window whose forecast leaves the SIRS susceptible domain raises
-%       EPIDEMIC:SusceptibleBelowThreshold and is counted as a domain failure; a
-%       candidate is feasible only with zero domain failures and all intended
-%       windows completed, and infeasible candidates are masked with Inf and are
-%       not selectable. Any non-domain unscoreable window (invalid intervals or
-%       non-finite WIS) raises PARTA_02:UnscoreableWindow and stops the run.
-%       Per-scenario WIS is the plain mean over intended windows, and the global
-%       score the equal-scenario mean. The raw best candidate has the lowest
-%       global mean WIS; the final selected configuration is the simplest
-%       candidate whose global mean WIS lies within one empirical standard error
-%       of that raw best (one-SE parsimony rule). WIS remains the selection
-%       metric; AICc stays diagnostic only.
+%       Evaluates candidate AR/ARX/state-space model configurations using the
+%       Part A expanding-window forecast protocol, then selects one global
+%       configuration by WIS with a one-standard-error parsimony rule.
+%
+%       A feasible candidate completes all intended forecast windows with zero
+%       SIRS susceptible-domain failures. A candidate that leaves the susceptible
+%       domain is infeasible, is early-rejected at the first failed window, and
+%       is masked with Inf so it cannot be selected.
+%
+%       Other unscoreable outputs, such as invalid intervals or non-finite WIS,
+%       are treated as errors and stop evaluation immediately.
 %
 %   Workflow:
-%       1. Load configuration and synthetic truth artifacts.
-%       2. Build the candidate grid and the intended expanding-window data.
-%       3. Score each candidate via expanding-window WIS (parfor over candidates).
-%       4. Apply one-SE parsimony rule and save one model-selection artifact.
+%       1. Load Part A truth artifacts and build forecast windows.
+%       2. Evaluate each candidate configuration across scenarios.
+%       3. Select the simplest candidate within one standard error of the raw
+%          best global WIS.
+%       4. Save the model-selection artifact and diagnostics.
 %
-%   See also PARTA_CONFIG, FORECAST_OPEN, FORECAST_CLOSED, INTERVAL_BOUNDS, COMPUTE_WIS.
+%   See also PARTA_CONFIG, FORECAST_OPEN, FORECAST_CLOSED, INTERVAL_BOUNDS, COMPUTE_WIS
 %
 % A. M. Kaahin 2026-05-31
 % Modified: 2026-06-21
@@ -176,6 +172,10 @@ candidate_intended_windows  = zeros(num_candidates, 1);
 candidate_completed_windows = zeros(num_candidates, 1);
 candidate_domain_failures   = zeros(num_candidates, 1);
 candidate_feasible          = false(num_candidates, 1);
+candidate_evaluated_windows             = zeros(num_candidates, 1);
+candidate_early_rejected                = false(num_candidates, 1);
+candidate_first_domain_failure_scenario = strings(num_candidates, 1);  % "" = no failure
+candidate_first_domain_failure_window   = nan(num_candidates, 1);      % NaN = no failure
 
 parfor idx = 1:num_candidates
     params    = candidate_grid(idx, :);
@@ -183,21 +183,25 @@ parfor idx = 1:num_candidates
     scen_aicc = nan(1, num_scenarios);
     scenario_data_local = scenario_data_const.Value;
 
-    intended_count       = 0;
+    intended_count       = sum(window_counts);   % full intended count, fixed regardless of early exit
     completed_count      = 0;
     domain_failure_count = 0;
+    evaluated_count      = 0;
+    early_rejected       = false;
+    first_failure_scenario = "";
+    first_failure_window   = NaN;
 
     for s = 1:num_scenarios
         data        = scenario_data_local(s);
         n_wins      = numel(data.window_data);
         window_wis  = inf(n_wins, 1);
         window_aicc = nan(n_wins, 1);
-        intended_count = intended_count + n_wins;
 
         for w = 1:n_wins
             win    = data.window_data(w);
             r_seed = local_resample_seed(base_seed, data.scenario_id, w, model_type, exo_mode);
             e_seed = local_epidemic_seed(base_seed, data.scenario_id, w, model_type, exo_mode);
+            evaluated_count = evaluated_count + 1;
 
             try
                 if data.num_exo == 0
@@ -233,11 +237,19 @@ parfor idx = 1:num_candidates
                 completed_count = completed_count + 1;
             catch ME
                 if strcmp(ME.identifier, 'EPIDEMIC:SusceptibleBelowThreshold')
-                    domain_failure_count = domain_failure_count + 1;   % window_wis(w) stays Inf
+                    domain_failure_count   = domain_failure_count + 1;  % at most 1: we break
+                    early_rejected         = true;
+                    first_failure_scenario = data.scenario_id;  % e.g. "A3"; window_wis(w) stays Inf
+                    first_failure_window   = data.windows(w);   % forecast-origin endpoint time
+                    break;                                      % stop remaining windows in this scenario
                 else
                     rethrow(ME);
                 end
             end
+        end
+
+        if early_rejected
+            break;                                              % stop remaining scenarios
         end
 
         % Plain mean over intended windows: a domain failure leaves that window at
@@ -254,6 +266,10 @@ parfor idx = 1:num_candidates
     candidate_intended_windows(idx)  = intended_count;
     candidate_completed_windows(idx) = completed_count;
     candidate_domain_failures(idx)   = domain_failure_count;
+    candidate_evaluated_windows(idx)             = evaluated_count;
+    candidate_early_rejected(idx)                = early_rejected;
+    candidate_first_domain_failure_scenario(idx) = first_failure_scenario;
+    candidate_first_domain_failure_window(idx)   = first_failure_window;
     candidate_feasible(idx)          = feasible;
     if feasible
         global_mean_wis(idx) = mean(scen_wis);
@@ -283,7 +299,7 @@ selected_configuration = candidate_grid(selected_index, :);
 
 %% 4. Artifact Generation
 aggregation_mode = "equal_scenario_mean_over_intended_windows";
-failure_policy   = "zero_domain_failures_required; fail_fast_on_nondomain_unscoreable_window";
+failure_policy   = "early_reject_candidate_on_first_domain_failure; fail_fast_on_nondomain_unscoreable_window";
 cfg_snapshot     = cfg.run_snapshot;
 
 candidate_diagnostics = struct( ...
@@ -306,7 +322,9 @@ save(artifact_path, ...
     'wis_alphas', 'aggregation_mode', 'failure_policy', 'best_global_wis', ...
     'candidate_diagnostics', 'candidate_aicc', 'global_mean_aicc', ...
     'candidate_intended_windows', 'candidate_completed_windows', ...
-    'candidate_domain_failures', 'candidate_feasible');
+    'candidate_domain_failures', 'candidate_feasible', ...
+    'candidate_evaluated_windows', 'candidate_early_rejected', ...
+    'candidate_first_domain_failure_scenario', 'candidate_first_domain_failure_window');
 
 fprintf('Selected global model configuration: %s\n', mat2str(selected_configuration));
 fprintf('Global model-selection artifact saved to: %s\n', artifact_path);
