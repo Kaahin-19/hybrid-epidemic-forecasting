@@ -113,7 +113,7 @@ else
 
         fig = figure('Visible', 'off', 'Units', 'centimeters', ...
             'Position', [2, 2, 17.0, 9.0], 'Color', 'w');
-        ax = axes('Parent', fig); %#ok<LAXES>
+        ax = axes('Parent', fig); 
         [h, lab] = plot_series(ax, spec);
         local_apply_legend(ax, h, lab, style, 'horizontal', numel(lab));
 
