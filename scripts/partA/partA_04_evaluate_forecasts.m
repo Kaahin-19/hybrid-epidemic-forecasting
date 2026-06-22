@@ -18,8 +18,8 @@
 %       3. Aggregate forecast scores into summary tables.
 %       4. Save the evaluation MAT artifact and CSV table outputs.
 %
-%   See also PARTA_CONFIG, COMPUTE_WIS, COMPUTE_POINT_ERROR, ...
-%            COMPUTE_INTERVAL_DIAGNOSTICS, PARTA_05_GENERATE_FIGURES.
+%   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_EVALUATE_FORECASTS, PARTA_CONFIG, ...
+%            COMPUTE_WIS, COMPUTE_POINT_ERROR, COMPUTE_INTERVAL_DIAGNOSTICS.
 %
 % A. M. Kaahin 2026-02-19
 % Modified: 2026-06-22

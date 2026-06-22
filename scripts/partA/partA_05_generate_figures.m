@@ -20,8 +20,8 @@
 %          and coverage summary.
 %       5. Local functions.
 %
-%   See also PARTA_CONFIG, PLOT_SERIES, PLOT_DISTRIBUTION, APPLY_PANEL_STYLE.
-%
+%   See also PARTA_01_GENERATE_TRUTH, PARTA_03_EVALUATE_FORECASTS, PARTA_04_EVALUATE_FORECASTS, ...
+%            PLOT_SERIES, PLOT_DISTRIBUTION, APPLY_PANEL_STYLE.
 % A. M. Kaahin 2026-06-01
 % Modified: 2026-06-22
 
@@ -106,10 +106,10 @@ else
 
         spec = struct('series', local_forecast_series(fc, plot_alphas, style), ...
             'style', struct('x_label', "Time, {\it t} (days)", ...
-                'y_label', "Effective reproduction number, {\it R}_t", ...
-                'y_limits', rt_bounds, 'grid', true, ...
-                'axis_font_size', style.axis_font_size, ...
-                'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+            'y_label', "Effective reproduction number, {\it R}_t", ...
+            'y_limits', rt_bounds, 'grid', true, ...
+            'axis_font_size', style.axis_font_size, ...
+            'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
 
         fig = figure('Visible', 'off', 'Units', 'centimeters', ...
             'Position', [2, 2, 17.0, 9.0], 'Color', 'w');
@@ -149,9 +149,9 @@ else
         'group', window_scores.Scenario, ...
         'color_order', style.palette, ...
         'style', struct('x_label', "Model / exogenous mode", ...
-            'y_label', "Window WIS", 'x_tick_rotation', 20, 'grid', true, ...
-            'axis_font_size', style.axis_font_size, ...
-            'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+        'y_label', "Window WIS", 'x_tick_rotation', 20, 'grid', true, ...
+        'axis_font_size', style.axis_font_size, ...
+        'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
     [hd, ld] = plot_distribution(ax, dist_spec);
     local_apply_legend(ax, hd, ld, style, 'horizontal', numel(ld));
     local_export_pdf(fig, fullfile(figure_dir, 'partA_05_model_wis_distribution.pdf'));
@@ -196,219 +196,219 @@ fprintf('=== Part A Figure Generation Complete ===\n\n');
 %% 5. Local Functions - Style
 function style = local_figure_style()
 %LOCAL_FIGURE_STYLE Return shared Part A figure style constants.
-    style = struct();
-    style.font_name        = "Arial";
-    style.axis_font_size   = 9;
-    style.tick_font_size   = 8;
-    style.legend_font_size = 8;
-    style.panel_font_size  = 9;
-    style.line_width       = 1.2;
-    style.truth_line_width = 1.3;
-    style.marker_size      = 3.5;
-    style.palette          = local_thesis_color_order();
+style = struct();
+style.font_name        = "Arial";
+style.axis_font_size   = 9;
+style.tick_font_size   = 8;
+style.legend_font_size = 8;
+style.panel_font_size  = 9;
+style.line_width       = 1.2;
+style.truth_line_width = 1.3;
+style.marker_size      = 3.5;
+style.palette          = local_thesis_color_order();
 end
 
 function colors = local_thesis_color_order()
 %LOCAL_THESIS_COLOR_ORDER Return the Part A categorical colour order.
-    colors = [
-        0.902, 0.624, 0.000;   % orange
-        0.337, 0.706, 0.914;   % sky blue
-        0.000, 0.620, 0.451;   % bluish green
-        0.000, 0.447, 0.698;   % blue
-        0.835, 0.369, 0.000;   % vermillion
-        0.800, 0.475, 0.655];  % reddish purple
+colors = [
+    0.902, 0.624, 0.000;   % orange
+    0.337, 0.706, 0.914;   % sky blue
+    0.000, 0.620, 0.451;   % bluish green
+    0.000, 0.447, 0.698;   % blue
+    0.835, 0.369, 0.000;   % vermillion
+    0.800, 0.475, 0.655];  % reddish purple
 end
 
 function colors = local_interval_colors(num_intervals)
 %LOCAL_INTERVAL_COLORS Return light solid fills for forecast interval bands.
-    base_colors = [
-        0.80, 0.88, 0.97;   % lightest (widest band)
-        0.62, 0.76, 0.92;
-        0.45, 0.64, 0.86;
-        0.30, 0.52, 0.78];
-    colors = base_colors(1:num_intervals, :);
+base_colors = [
+    0.80, 0.88, 0.97;   % lightest (widest band)
+    0.62, 0.76, 0.92;
+    0.45, 0.64, 0.86;
+    0.30, 0.52, 0.78];
+colors = base_colors(1:num_intervals, :);
 end
 
 function marker = local_series_marker(idx)
 %LOCAL_SERIES_MARKER Cycle distinguishable line markers.
-    markers = ["o", "s", "^", "d", "v", ">", "<", "p", "h"];
-    marker = markers(mod(idx - 1, numel(markers)) + 1);
+markers = ["o", "s", "^", "d", "v", ">", "<", "p", "h"];
+marker = markers(mod(idx - 1, numel(markers)) + 1);
 end
 
 %% 6. Local Functions - Artifact Loading
 function scenarios = local_load_truth_scenarios(truth_files)
 %LOCAL_LOAD_TRUTH_SCENARIOS Load Part A truth trajectories from partA_01 artifacts.
-    scenarios = repmat(struct('scenario_id', "", 'scenario_name', "", ...
-        'tspan', [], 'Rt_true', []), numel(truth_files), 1);
-    for i = 1:numel(truth_files)
-        loaded = load(fullfile(truth_files(i).folder, truth_files(i).name));
-        scenarios(i).scenario_id   = loaded.scenario_id;
-        scenarios(i).scenario_name = loaded.scenario_name;
-        scenarios(i).tspan         = loaded.tspan;
-        scenarios(i).Rt_true       = loaded.Rt_true;
-    end
+scenarios = repmat(struct('scenario_id', "", 'scenario_name', "", ...
+    'tspan', [], 'Rt_true', []), numel(truth_files), 1);
+for i = 1:numel(truth_files)
+    loaded = load(fullfile(truth_files(i).folder, truth_files(i).name));
+    scenarios(i).scenario_id   = loaded.scenario_id;
+    scenarios(i).scenario_name = loaded.scenario_name;
+    scenarios(i).tspan         = loaded.tspan;
+    scenarios(i).Rt_true       = loaded.Rt_true;
+end
 end
 
 %% 7. Local Functions - Forecast Series Assembly
 function fc = local_extract_fixed_lead(forecast_results, lead, plot_alphas)
 %LOCAL_EXTRACT_FIXED_LEAD Collect fixed-lead forecast values across windows.
-    num_windows = numel(forecast_results);
-    num_alphas = numel(plot_alphas);
+num_windows = numel(forecast_results);
+num_alphas = numel(plot_alphas);
 
-    target_days = nan(num_windows, 1);
-    truth = nan(num_windows, 1);
-    median_forecast = nan(num_windows, 1);
-    lower = nan(num_windows, num_alphas);
-    upper = nan(num_windows, num_alphas);
+target_days = nan(num_windows, 1);
+truth = nan(num_windows, 1);
+median_forecast = nan(num_windows, 1);
+lower = nan(num_windows, num_alphas);
+upper = nan(num_windows, num_alphas);
 
-    for w = 1:num_windows
-        result = forecast_results(w);
-        target_days(w) = result.t_future(lead);
-        truth(w) = result.Rt_true_future(lead);
-        median_forecast(w) = result.Rt_pred(lead);
-        for k = 1:num_alphas
-            col = local_alpha_index(result.interval_alphas, plot_alphas(k));
-            lower(w, k) = result.lower_bounds(lead, col);
-            upper(w, k) = result.upper_bounds(lead, col);
-        end
+for w = 1:num_windows
+    result = forecast_results(w);
+    target_days(w) = result.t_future(lead);
+    truth(w) = result.Rt_true_future(lead);
+    median_forecast(w) = result.Rt_pred(lead);
+    for k = 1:num_alphas
+        col = local_alpha_index(result.interval_alphas, plot_alphas(k));
+        lower(w, k) = result.lower_bounds(lead, col);
+        upper(w, k) = result.upper_bounds(lead, col);
     end
+end
 
-    [target_days, order] = sort(target_days);
-    fc = struct('target_days', target_days, 'truth', truth(order), ...
-        'median', median_forecast(order), 'lower', lower(order, :), ...
-        'upper', upper(order, :));
+[target_days, order] = sort(target_days);
+fc = struct('target_days', target_days, 'truth', truth(order), ...
+    'median', median_forecast(order), 'lower', lower(order, :), ...
+    'upper', upper(order, :));
 end
 
 function col = local_alpha_index(interval_alphas, target_alpha)
 %LOCAL_ALPHA_INDEX Locate the stored interval column for a requested alpha.
-    col = find(abs(interval_alphas - target_alpha) <= 1e-8, 1);
-    if isempty(col)
-        error('FIG:AlphaNotFound', ...
-            'Requested plot alpha %.4g is not among the stored interval alphas.', ...
-            target_alpha);
-    end
+col = find(abs(interval_alphas - target_alpha) <= 1e-8, 1);
+if isempty(col)
+    error('FIG:AlphaNotFound', ...
+        'Requested plot alpha %.4g is not among the stored interval alphas.', ...
+        target_alpha);
+end
 end
 
 function series = local_forecast_series(fc, plot_alphas, style)
 %LOCAL_FORECAST_SERIES Assemble bands, truth, and median; bands drawn first.
-    num_alphas = numel(plot_alphas);
-    fill_colors = local_interval_colors(num_alphas);
-    pi_labels = compose("%d%% PI", round((1 - plot_alphas) * 100));
+num_alphas = numel(plot_alphas);
+fill_colors = local_interval_colors(num_alphas);
+pi_labels = compose("%d%% PI", round((1 - plot_alphas) * 100));
 
-    series = repmat(local_series_template(), num_alphas + 2, 1);
+series = repmat(local_series_template(), num_alphas + 2, 1);
 
-    for k = 1:num_alphas
-        series(k).type = "ribbon";
-        series(k).x = fc.target_days;
-        series(k).lower = fc.lower(:, k);
-        series(k).upper = fc.upper(:, k);
-        series(k).face_color = fill_colors(k, :);
-        series(k).label = pi_labels(k);
-    end
+for k = 1:num_alphas
+    series(k).type = "ribbon";
+    series(k).x = fc.target_days;
+    series(k).lower = fc.lower(:, k);
+    series(k).upper = fc.upper(:, k);
+    series(k).face_color = fill_colors(k, :);
+    series(k).label = pi_labels(k);
+end
 
-    idx_truth = num_alphas + 1;
-    series(idx_truth).type = "line";
-    series(idx_truth).x = fc.target_days;
-    series(idx_truth).y = fc.truth;
-    series(idx_truth).color = [0, 0, 0];
-    series(idx_truth).line_width = style.truth_line_width;
-    series(idx_truth).label = "Ground truth";
+idx_truth = num_alphas + 1;
+series(idx_truth).type = "line";
+series(idx_truth).x = fc.target_days;
+series(idx_truth).y = fc.truth;
+series(idx_truth).color = [0, 0, 0];
+series(idx_truth).line_width = style.truth_line_width;
+series(idx_truth).label = "Ground truth";
 
-    idx_median = num_alphas + 2;
-    series(idx_median).type = "line";
-    series(idx_median).x = fc.target_days;
-    series(idx_median).y = fc.median;
-    series(idx_median).color = style.palette(4, :);
-    series(idx_median).line_style = "--";
-    series(idx_median).line_width = style.line_width;
-    series(idx_median).marker = "o";
-    series(idx_median).marker_size = style.marker_size;
-    series(idx_median).label = "Median forecast";
+idx_median = num_alphas + 2;
+series(idx_median).type = "line";
+series(idx_median).x = fc.target_days;
+series(idx_median).y = fc.median;
+series(idx_median).color = style.palette(4, :);
+series(idx_median).line_style = "--";
+series(idx_median).line_width = style.line_width;
+series(idx_median).marker = "o";
+series(idx_median).marker_size = style.marker_size;
+series(idx_median).label = "Median forecast";
 end
 
 %% 8. Local Functions - Evaluation Series Assembly
 function series = local_grouped_line_series(summary, x_var, y_var, style)
 %LOCAL_GROUPED_LINE_SERIES Build one line series per model/exogenous group.
-    group_ids = summary.Model + " / " + summary.ExoMode;
-    groups = unique(group_ids, 'stable');
-    series = repmat(local_series_template(), numel(groups), 1);
+group_ids = summary.Model + " / " + summary.ExoMode;
+groups = unique(group_ids, 'stable');
+series = repmat(local_series_template(), numel(groups), 1);
 
-    for i = 1:numel(groups)
-        idx = group_ids == groups(i);
-        [x_values, order] = sort(summary.(x_var)(idx));
-        y_values = summary.(y_var)(idx);
-        series(i).type = "line";
-        series(i).x = x_values;
-        series(i).y = y_values(order);
-        series(i).color = style.palette(mod(i - 1, size(style.palette, 1)) + 1, :);
-        series(i).line_width = style.line_width;
-        series(i).marker = local_series_marker(i);
-        series(i).marker_size = style.marker_size;
-        series(i).label = groups(i);
-    end
+for i = 1:numel(groups)
+    idx = group_ids == groups(i);
+    [x_values, order] = sort(summary.(x_var)(idx));
+    y_values = summary.(y_var)(idx);
+    series(i).type = "line";
+    series(i).x = x_values;
+    series(i).y = y_values(order);
+    series(i).color = style.palette(mod(i - 1, size(style.palette, 1)) + 1, :);
+    series(i).line_width = style.line_width;
+    series(i).marker = local_series_marker(i);
+    series(i).marker_size = style.marker_size;
+    series(i).label = groups(i);
+end
 end
 
 function series = local_coverage_reference()
 %LOCAL_COVERAGE_REFERENCE Build the nominal=empirical reference diagonal.
-    series = local_series_template();
-    series.type = "reference";
-    series.x = [0; 1];
-    series.y = [0; 1];
-    series.color = [0, 0, 0];
-    series.line_style = "--";
-    series.line_width = 1.0;
-    series.label = "Nominal = empirical";
+series = local_series_template();
+series.type = "reference";
+series.x = [0; 1];
+series.y = [0; 1];
+series.color = [0, 0, 0];
+series.line_style = "--";
+series.line_width = 1.0;
+series.label = "Nominal = empirical";
 end
 
 %% 9. Local Functions - Layout, Export, and Utilities
 function series = local_series_template()
 %LOCAL_SERIES_TEMPLATE Uniform empty series struct for PLOT_SERIES input.
-    series = struct('type', "line", 'x', [], 'y', [], 'lower', [], 'upper', [], ...
-        'color', [], 'line_style', "-", 'line_width', 1.0, ...
-        'marker', "none", 'marker_size', 4, 'face_color', [], ...
-        'face_alpha', 1, 'label', "");
+series = struct('type', "line", 'x', [], 'y', [], 'lower', [], 'upper', [], ...
+    'color', [], 'line_style', "-", 'line_width', 1.0, ...
+    'marker', "none", 'marker_size', 4, 'face_color', [], ...
+    'face_alpha', 1, 'label', "");
 end
 
 function local_panel_label(ax, label_text, style)
 %LOCAL_PANEL_LABEL Place a bold panel label in the top-left of an axes.
-    text(ax, 0.04, 0.94, label_text, 'Units', 'normalized', ...
-        'FontName', style.font_name, 'FontSize', style.panel_font_size, ...
-        'FontWeight', 'bold', 'Interpreter', 'tex', ...
-        'HorizontalAlignment', 'left', 'VerticalAlignment', 'top');
+text(ax, 0.04, 0.94, label_text, 'Units', 'normalized', ...
+    'FontName', style.font_name, 'FontSize', style.panel_font_size, ...
+    'FontWeight', 'bold', 'Interpreter', 'tex', ...
+    'HorizontalAlignment', 'left', 'VerticalAlignment', 'top');
 end
 
 function local_apply_legend(ax, handles, labels, style, orientation, num_columns)
 %LOCAL_APPLY_LEGEND Attach a shared legend outside the data region.
-    if isempty(handles)
-        return;
-    end
-    lg = legend(ax, handles, labels);
-    lg.Interpreter = 'tex';
-    lg.FontName = style.font_name;
-    lg.FontSize = style.legend_font_size;
-    lg.Box = 'off';
-    lg.Location = 'northoutside';
-    lg.Orientation = orientation;
-    lg.NumColumns = num_columns;
+if isempty(handles)
+    return;
+end
+lg = legend(ax, handles, labels);
+lg.Interpreter = 'tex';
+lg.FontName = style.font_name;
+lg.FontSize = style.legend_font_size;
+lg.Box = 'off';
+lg.Location = 'northoutside';
+lg.Orientation = orientation;
+lg.NumColumns = num_columns;
 end
 
 function local_export_pdf(fig, output_path)
 %LOCAL_EXPORT_PDF Export a figure as a vector PDF.
-    exportgraphics(fig, output_path, 'ContentType', 'vector');
+exportgraphics(fig, output_path, 'ContentType', 'vector');
 end
 
 function token = local_safe_token(value)
 %LOCAL_SAFE_TOKEN Convert a value into a filename-safe token.
-    token = regexprep(value, '[^A-Za-z0-9]+', '_');
-    token = regexprep(token, '^_+|_+$', '');
+token = regexprep(value, '[^A-Za-z0-9]+', '_');
+token = regexprep(token, '^_+|_+$', '');
 end
 
 function sorted_files = local_sort_dir_by_name(files)
 %LOCAL_SORT_DIR_BY_NAME Sort a dir struct array by file name.
-    if isempty(files)
-        sorted_files = files;
-        return;
-    end
-    [~, order] = sort({files.name});
-    sorted_files = files(order);
+if isempty(files)
+    sorted_files = files;
+    return;
+end
+[~, order] = sort({files.name});
+sorted_files = files(order);
 end

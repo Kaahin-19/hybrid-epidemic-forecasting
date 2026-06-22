@@ -109,7 +109,7 @@ for i = 1:numel(file_list)
     if isempty(scenario_data(i).window_data)
         error('PARTA_02:NoForecastWindows', ...
             ['Scenario %s has no intended forecast windows; check ' ...
-             'min_window/step_size/horizon against the truth length.'], ...
+            'min_window/step_size/horizon against the truth length.'], ...
             loaded.scenario_id);
     end
 
@@ -218,9 +218,9 @@ parfor idx = 1:num_candidates
                 truth_Rt = win.truth_Rt;
 
                 valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) ...
-                     && all(Rt_pred > 0) && all(isfinite(lower(:))) ...
-                     && all(isfinite(upper(:))) && all(lower(:) <= upper(:)) ...
-                     && numel(truth_Rt) == horizon;
+                    && all(Rt_pred > 0) && all(isfinite(lower(:))) ...
+                    && all(isfinite(upper(:))) && all(lower(:) <= upper(:)) ...
+                    && numel(truth_Rt) == horizon;
                 if ~valid
                     error('PARTA_02:UnscoreableWindow', ...
                         'Forecast window produced invalid intervals or non-finite WIS.');
@@ -335,25 +335,25 @@ fprintf('=== Global Model-Configuration Selection Complete ===\n\n');
 function window_data = local_build_windows(Rt, U_true, S_true, I_true, tspan, ...
     win_endpoints, horizon, pop_size, has_exo)
 %LOCAL_BUILD_WINDOWS Build expanding-window forecast entries for one scenario.
-    n_wins      = numel(win_endpoints);
-    template    = struct('Rt_past', [], 'truth_Rt', [], 'U_past', [], 'sirs_state', []);
-    window_data = repmat(template, n_wins, 1);
-    for k = 1:n_wins
-        idx_T = find(tspan == win_endpoints(k), 1);
-        if isempty(idx_T) || idx_T + horizon > numel(Rt)
-            continue;
-        end
-        window_data(k).Rt_past  = Rt(1:idx_T);
-        window_data(k).truth_Rt = Rt(idx_T + 1 : idx_T + horizon);
-        if has_exo
-            R_at_T = pop_size - S_true(idx_T) - I_true(idx_T);
-            window_data(k).U_past     = U_true(1:idx_T, :);
-            window_data(k).sirs_state = [S_true(idx_T), I_true(idx_T), R_at_T];
-        else
-            window_data(k).U_past     = [];
-            window_data(k).sirs_state = [];
-        end
+n_wins      = numel(win_endpoints);
+template    = struct('Rt_past', [], 'truth_Rt', [], 'U_past', [], 'sirs_state', []);
+window_data = repmat(template, n_wins, 1);
+for k = 1:n_wins
+    idx_T = find(tspan == win_endpoints(k), 1);
+    if isempty(idx_T) || idx_T + horizon > numel(Rt)
+        continue;
     end
+    window_data(k).Rt_past  = Rt(1:idx_T);
+    window_data(k).truth_Rt = Rt(idx_T + 1 : idx_T + horizon);
+    if has_exo
+        R_at_T = pop_size - S_true(idx_T) - I_true(idx_T);
+        window_data(k).U_past     = U_true(1:idx_T, :);
+        window_data(k).sirs_state = [S_true(idx_T), I_true(idx_T), R_at_T];
+    else
+        window_data(k).U_past     = [];
+        window_data(k).sirs_state = [];
+    end
+end
 end
 
 function local_shutdown_parallel_pool()

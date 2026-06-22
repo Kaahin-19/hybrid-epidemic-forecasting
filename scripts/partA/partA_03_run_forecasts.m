@@ -20,9 +20,7 @@
 %          forecasts in parallel using the selected configuration.
 %       4. Save one detailed MATLAB forecast artifact per scenario.
 %
-%   See also PARTA_CONFIG, FORECAST_OPEN, FORECAST_CLOSED, INTERVAL_BOUNDS, ...
-%            SIRS_INIT, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, ...
-%            PARTA_04_EVALUATE_FORECASTS.
+%   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_CONFIG, FORECAST_OPEN, FORECAST_CLOSED % %            INTERVAL_BOUNDS, SIRS_INIT.
 %
 % A. M. Kaahin 2026-02-19
 % Modified: 2026-06-21
@@ -64,8 +62,8 @@ n_scenarios = numel(file_list);
 scenario_template = struct( ...
     'scenario_id', "", 'scenario_name', "", 'num_exo', 0, ...
     'window_data', struct('forecast_origin', {}, 'window_day_idx', {}, ...
-        'horizon_indices', {}, 't_future', {}, 'Rt_past', {}, ...
-        'truth_Rt', {}, 'U_past', {}, 'sirs_state', {}));
+    'horizon_indices', {}, 't_future', {}, 'Rt_past', {}, ...
+    'truth_Rt', {}, 'U_past', {}, 'sirs_state', {}));
 scenario_data = repmat(scenario_template, n_scenarios, 1);
 
 for i = 1:n_scenarios
@@ -116,7 +114,7 @@ for i = 1:n_scenarios
     if isempty(scenario_data(i).window_data)
         error('PARTA_03:NoForecastWindows', ...
             ['Scenario %s has no intended forecast windows; check ' ...
-             'min_window/step_size/horizon against the truth length.'], ...
+            'min_window/step_size/horizon against the truth length.'], ...
             loaded.scenario_id);
     end
 
@@ -189,14 +187,14 @@ parfor s = 1:n_scenarios
         % or non-finite forecasts are a hard error, never a saved status label.
         % Domain failures and toolbox errors from the helpers propagate and abort.
         valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) ...
-             && all(Rt_pred > 0) && all(isfinite(lower(:))) ...
-             && all(isfinite(upper(:))) && all(lower(:) <= upper(:)) ...
-             && numel(win.truth_Rt) == horizon ...
-             && all(isfinite(ens(:))) && all(ens(:) > 0);
+            && all(Rt_pred > 0) && all(isfinite(lower(:))) ...
+            && all(isfinite(upper(:))) && all(lower(:) <= upper(:)) ...
+            && numel(win.truth_Rt) == horizon ...
+            && all(isfinite(ens(:))) && all(ens(:) > 0);
         if ~valid
             error('PARTA_03:UnscoreableWindow', ...
                 ['Scenario %s window at origin %d produced an invalid ensemble, ' ...
-                 'invalid intervals, or non-finite forecasts.'], ...
+                'invalid intervals, or non-finite forecasts.'], ...
                 data.scenario_id, win.forecast_origin);
         end
 
@@ -246,121 +244,121 @@ fprintf('=== Forecast Pipeline Complete ===\n\n');
 function [selected_configuration, selected_index, artifact_path] = ...
     local_load_selection(selection_dir, model_type, exo_mode, cfg)
 %LOCAL_LOAD_SELECTION Load and validate the partA_02 model-selection artifact.
-    file_prefix   = sprintf('partA_02_global_hyperparameters_%s_%s', model_type, exo_mode);
-    artifact_path = fullfile(selection_dir, [file_prefix, '.mat']);
+file_prefix   = sprintf('partA_02_global_hyperparameters_%s_%s', model_type, exo_mode);
+artifact_path = fullfile(selection_dir, [file_prefix, '.mat']);
 
-    if ~exist(artifact_path, 'file')
-        error('PARTA_03:MissingSelectionArtifact', ...
-            ['Missing global model-selection artifact: %s. ', ...
-             'Run partA_02_select_global_hyperparameters.m first.'], artifact_path);
-    end
+if ~exist(artifact_path, 'file')
+    error('PARTA_03:MissingSelectionArtifact', ...
+        ['Missing global model-selection artifact: %s. ', ...
+        'Run partA_02_select_global_hyperparameters.m first.'], artifact_path);
+end
 
-    selection = load(artifact_path);
+selection = load(artifact_path);
 
-    if ~isfield(selection, 'selected_configuration') || isempty(selection.selected_configuration)
-        error('PARTA_03:InvalidSelectionArtifact', ...
-            'Selection artifact has no selected_configuration: %s.', artifact_path);
-    end
-    if ~isfield(selection, 'selected_index') || isempty(selection.selected_index)
-        error('PARTA_03:InvalidSelectionArtifact', ...
-            'Selection artifact has no selected_index: %s.', artifact_path);
-    end
-    if ~isfield(selection, 'model_type') || ~strcmp(string(selection.model_type), model_type)
-        error('PARTA_03:SelectionConfigMismatch', ...
-            'Selection artifact model_type does not match active model_type (%s): %s.', ...
-            model_type, artifact_path);
-    end
-    if ~isfield(selection, 'exo_mode') || ~strcmp(string(selection.exo_mode), exo_mode)
-        error('PARTA_03:SelectionConfigMismatch', ...
-            'Selection artifact exo_mode does not match active exo_mode (%s): %s.', ...
-            exo_mode, artifact_path);
-    end
-    if ~isfield(selection, 'cfg_snapshot') || ~isequal(selection.cfg_snapshot, cfg.run_snapshot)
-        error('PARTA_03:SelectionConfigMismatch', ...
-            'Selection artifact is incompatible with the current configuration: %s.', ...
-            artifact_path);
-    end
+if ~isfield(selection, 'selected_configuration') || isempty(selection.selected_configuration)
+    error('PARTA_03:InvalidSelectionArtifact', ...
+        'Selection artifact has no selected_configuration: %s.', artifact_path);
+end
+if ~isfield(selection, 'selected_index') || isempty(selection.selected_index)
+    error('PARTA_03:InvalidSelectionArtifact', ...
+        'Selection artifact has no selected_index: %s.', artifact_path);
+end
+if ~isfield(selection, 'model_type') || ~strcmp(string(selection.model_type), model_type)
+    error('PARTA_03:SelectionConfigMismatch', ...
+        'Selection artifact model_type does not match active model_type (%s): %s.', ...
+        model_type, artifact_path);
+end
+if ~isfield(selection, 'exo_mode') || ~strcmp(string(selection.exo_mode), exo_mode)
+    error('PARTA_03:SelectionConfigMismatch', ...
+        'Selection artifact exo_mode does not match active exo_mode (%s): %s.', ...
+        exo_mode, artifact_path);
+end
+if ~isfield(selection, 'cfg_snapshot') || ~isequal(selection.cfg_snapshot, cfg.run_snapshot)
+    error('PARTA_03:SelectionConfigMismatch', ...
+        'Selection artifact is incompatible with the current configuration: %s.', ...
+        artifact_path);
+end
 
-    selected_configuration = selection.selected_configuration;
-    selected_index         = selection.selected_index;
+selected_configuration = selection.selected_configuration;
+selected_index         = selection.selected_index;
 end
 
 function window_data = local_build_windows(Rt, U_true, S_true, I_true, tspan, ...
     win_endpoints, horizon, pop_size, has_exo)
 %LOCAL_BUILD_WINDOWS Build expanding-window forecast entries for one scenario.
-    n_wins   = numel(win_endpoints);
-    template = struct('forecast_origin', [], 'window_day_idx', [], ...
-        'horizon_indices', [], 't_future', [], 'Rt_past', [], ...
-        'truth_Rt', [], 'U_past', [], 'sirs_state', []);
-    window_data = repmat(template, n_wins, 1);
-    for k = 1:n_wins
-        idx_T = find(tspan == win_endpoints(k), 1);
-        if isempty(idx_T) || idx_T + horizon > numel(Rt)
-            continue;
-        end
-        idx_future = (idx_T + 1 : idx_T + horizon)';
-        t_future   = tspan(idx_future);
-        window_data(k).forecast_origin = win_endpoints(k);
-        window_data(k).window_day_idx  = idx_T;
-        window_data(k).horizon_indices = idx_future;
-        window_data(k).t_future        = t_future(:);   % documented H-by-1 layout
-        window_data(k).Rt_past         = Rt(1:idx_T);
-        window_data(k).truth_Rt        = Rt(idx_future);
-        if has_exo
-            R_at_T = pop_size - S_true(idx_T) - I_true(idx_T);
-            window_data(k).U_past     = U_true(1:idx_T, :);
-            window_data(k).sirs_state = [S_true(idx_T), I_true(idx_T), R_at_T];
-        else
-            window_data(k).U_past     = [];
-            window_data(k).sirs_state = [];
-        end
+n_wins   = numel(win_endpoints);
+template = struct('forecast_origin', [], 'window_day_idx', [], ...
+    'horizon_indices', [], 't_future', [], 'Rt_past', [], ...
+    'truth_Rt', [], 'U_past', [], 'sirs_state', []);
+window_data = repmat(template, n_wins, 1);
+for k = 1:n_wins
+    idx_T = find(tspan == win_endpoints(k), 1);
+    if isempty(idx_T) || idx_T + horizon > numel(Rt)
+        continue;
     end
+    idx_future = (idx_T + 1 : idx_T + horizon)';
+    t_future   = tspan(idx_future);
+    window_data(k).forecast_origin = win_endpoints(k);
+    window_data(k).window_day_idx  = idx_T;
+    window_data(k).horizon_indices = idx_future;
+    window_data(k).t_future        = t_future(:);   % documented H-by-1 layout
+    window_data(k).Rt_past         = Rt(1:idx_T);
+    window_data(k).truth_Rt        = Rt(idx_future);
+    if has_exo
+        R_at_T = pop_size - S_true(idx_T) - I_true(idx_T);
+        window_data(k).U_past     = U_true(1:idx_T, :);
+        window_data(k).sirs_state = [S_true(idx_T), I_true(idx_T), R_at_T];
+    else
+        window_data(k).U_past     = [];
+        window_data(k).sirs_state = [];
+    end
+end
 end
 
 function result = local_empty_window_result()
 %LOCAL_EMPTY_WINDOW_RESULT Preallocate a single detailed forecast-result entry.
-    result = struct( ...
-        'forecast_origin', [], 'window_day_idx', [], 'horizon_indices', [], ...
-        't_future', [], 'Rt_true_future', [], 'Rt_pred', [], ...
-        'lower_bounds', [], 'upper_bounds', [], 'ensemble_paths', [], ...
-        'interval_alphas', [], 'aicc', [], 'resample_seed', [], ...
-        'epidemic_base_seed', [], 'num_exo', []);
+result = struct( ...
+    'forecast_origin', [], 'window_day_idx', [], 'horizon_indices', [], ...
+    't_future', [], 'Rt_true_future', [], 'Rt_pred', [], ...
+    'lower_bounds', [], 'upper_bounds', [], 'ensemble_paths', [], ...
+    'interval_alphas', [], 'aicc', [], 'resample_seed', [], ...
+    'epidemic_base_seed', [], 'num_exo', []);
 end
 
 function local_shutdown_parallel_pool()
 %LOCAL_SHUTDOWN_PARALLEL_POOL Close the local parallel pool before MATLAB exits.
-    pool = gcp('nocreate');
-    if ~isempty(pool)
-        delete(pool);
-    end
+pool = gcp('nocreate');
+if ~isempty(pool)
+    delete(pool);
+end
 end
 
 function seed = local_resample_seed(base, scenario_id, w, model_type, exo_mode)
 %LOCAL_RESAMPLE_SEED Deterministic resample seed for a given window context.
-    seed = local_hash_seed(base, {scenario_id, w, model_type, exo_mode});
+seed = local_hash_seed(base, {scenario_id, w, model_type, exo_mode});
 end
 
 function seed = local_epidemic_seed(base, scenario_id, w, model_type, exo_mode)
 %LOCAL_EPIDEMIC_SEED Deterministic epidemic base seed for a given window context.
-    seed = local_hash_seed(base + 7919, {scenario_id, w, model_type, exo_mode});
+seed = local_hash_seed(base + 7919, {scenario_id, w, model_type, exo_mode});
 end
 
 function seed = local_hash_seed(base, parts)
 %LOCAL_HASH_SEED Map identifiers to a deterministic positive integer seed.
-    modulus = 2147483647;
-    seed    = mod(double(base), modulus);
-    for i = 1:numel(parts)
-        part = parts{i};
-        if ischar(part) || isstring(part)
-            chars = double(char(string(part)));
-        else
-            chars = double(part(:)).';
-        end
-        for c = chars
-            seed = mod(seed * 131 + c + 7, modulus);
-        end
+modulus = 2147483647;
+seed    = mod(double(base), modulus);
+for i = 1:numel(parts)
+    part = parts{i};
+    if ischar(part) || isstring(part)
+        chars = double(char(string(part)));
+    else
+        chars = double(part(:)).';
     end
-    if seed < 1
-        seed = 1;
+    for c = chars
+        seed = mod(seed * 131 + c + 7, modulus);
     end
+end
+if seed < 1
+    seed = 1;
+end
 end
