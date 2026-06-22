@@ -13,6 +13,6 @@ partA_04_interval_summary.csv,Interval scores by Model+ExoMode+Alpha
 partA_04_scenario_calibration_summary.csv,Interval scores by Scenario+Model+ExoMode+Alpha
 partA_04_wis_component_summary.csv,WIS decomposition shares by Model+ExoMode
 partA_04_selection_summary.csv,Selected configuration per Model+ExoMode
-partA_04_candidate_aicc.csv,Per-candidate AICc complexity diagnostic with selection WIS (AICc is not a selector)
+partA_04_candidate_aicc.csv,Per-candidate AICc complexity diagnostic with selection WIS
 partA_04_missing_selection_artifacts.csv,Selection artifacts that were missing
 partA_04_evaluation_settings.csv,Forecast horizon / window / alpha settings
