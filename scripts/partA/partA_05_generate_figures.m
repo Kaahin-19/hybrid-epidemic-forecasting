@@ -1,25 +1,29 @@
-%PARTA_05_GENERATE_FIGURES Generate and export Part A thesis figures.
+%PARTA_05_GENERATE_FIGURES Generate and export Part A thesis figures (PDF).
 %
 %   Description:
-%       Generates Part A figures staged by pipeline artifact availability.
-%       Sections execute independently: scenario trajectories require only
-%       partA_01 artifacts; forecast comparisons require only partA_03
-%       artifacts; evaluation figures require partA_04 artifacts. Sections
-%       skip gracefully when their prerequisites have not yet been generated.
+%       Generates Part A thesis figures as vector PDFs, staged by pipeline
+%       artifact section. Each section is independent and reads only the
+%       artifacts it needs: scenario trajectories from partA_01 truth files,
+%       forecast comparisons from partA_03 forecast files, and evaluation
+%       figures from the partA_04 evaluation MAT artifact. A section whose
+%       artifacts are missing is skipped with a message so the remaining
+%       independent sections still run. This script owns artifact loading,
+%       section ordering, figure and axes layout, export paths, exportgraphics
+%       calls, and figure closing. It draws through three leaf helpers only:
+%       PLOT_SERIES, PLOT_DISTRIBUTION, and APPLY_PANEL_STYLE.
 %
 %   Workflow:
-%       1. Initialize configuration and figure output directory.
-%       2. Load partA_01 truth artifacts and draw scenario trajectories.
-%       3. Scan partA_03 forecast artifacts and draw forecast comparisons.
-%       4. Load partA_04 evaluation artifact and draw WIS distribution.
-%       5. Draw horizon-wise WIS from partA_04 horizon summary table.
-%       6. Draw coverage summary from partA_04 interval summary table.
+%       1. Initialize configuration, output directory, and figure style.
+%       2. Script 1 truth artifacts  -> Rt scenario trajectories.
+%       3. Script 3 forecast artifacts -> fixed-lead forecast comparisons.
+%       4. Script 4 evaluation artifact -> WIS distribution, horizon-wise WIS,
+%          and coverage summary.
+%       5. Local functions.
 %
-%   See also PARTA_CONFIG, PARTA_01_GENERATE_TRUTH, PARTA_03_RUN_FORECASTS,
-%            PARTA_04_EVALUATE_FORECASTS, BUILD_PLOT_SPEC, EXPORT_FIGURE.
+%   See also PARTA_CONFIG, PLOT_SERIES, PLOT_DISTRIBUTION, APPLY_PANEL_STYLE.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-21
+% Modified: 2026-06-22
 
 %% 1. Initialization
 clear; close all; clc;
@@ -27,525 +31,185 @@ clear; close all; clc;
 fprintf('=== Part A Figure Generation ===\n');
 
 cfg = partA_config();
-data_dir = cfg.output.data_dir;
-forecast_dir = cfg.output.forecast_dir;
+data_dir       = cfg.output.data_dir;
+forecast_dir   = cfg.output.forecast_dir;
 evaluation_dir = cfg.output.score_dir;
-table_dir = cfg.output.table_dir;
-figure_dir = cfg.output.fig_dir;
+figure_dir     = cfg.output.fig_dir;
 
 if ~exist(figure_dir, 'dir'), mkdir(figure_dir); end
 
-%% 2. Scenario Trajectories (partA_01 artifacts)
-truth_scenarios = local_load_truth_scenarios(data_dir);
-fprintf('Loaded %d truth artifacts from %s\n', numel(truth_scenarios), data_dir);
+style     = local_figure_style();
+rt_bounds = cfg.Rt.bounds;
 
-rt_spec = build_plot_spec( ...
-    'figure_name', "Part A Rt scenarios", ...
-    'shared_x_label', "Time, $t$ (days)", ...
-    'shared_y_label', "Effective reproduction number, $R_t$", ...
-    'panel_labels', local_panel_labels(numel(truth_scenarios)), ...
-    'panel_label_style', struct('FontSize', 10, 'FontWeight', 'bold'), ...
-    'y_limits', cfg.Rt.bounds, ...
-    'output_path', fullfile(figure_dir, 'partA_05_rt_scenarios.png'), ...
-    'size_cm', [17.0, 10.5]);
-rt_panels = local_rt_scenario_panels(truth_scenarios, rt_spec);
-fig = plot_multi_panel_figure(rt_panels, rt_spec);
-export_figure(fig, rt_spec);
-close(fig);
+%% 2. Script 1 Truth Artifacts: Rt Scenario Trajectories
+truth_files = local_sort_dir_by_name( ...
+    dir(fullfile(data_dir, 'partA_01_truth_*.mat')));
 
-%% 3. Forecast Comparisons (partA_03 artifacts)
+if isempty(truth_files)
+    fprintf('Skipping Rt scenario figure - no partA_01 truth artifacts in %s.\n', data_dir);
+else
+    fprintf('Drawing Rt scenario trajectories from %d truth artifact(s)...\n', ...
+        numel(truth_files));
+    scenarios = local_load_truth_scenarios(truth_files);
+
+    n_panels = numel(scenarios);
+    n_cols = ceil(sqrt(n_panels));
+    n_rows = ceil(n_panels / n_cols);
+
+    fig = figure('Visible', 'off', 'Units', 'centimeters', ...
+        'Position', [2, 2, 17.0, 10.5], 'Color', 'w');
+    tl = tiledlayout(fig, n_rows, n_cols, 'Padding', 'compact', ...
+        'TileSpacing', 'compact');
+
+    for i = 1:n_panels
+        ax = nexttile(tl);
+        panel = local_series_template();
+        panel.type = "line";
+        panel.x = scenarios(i).tspan;
+        panel.y = scenarios(i).Rt_true;
+        panel.color = style.palette(4, :);
+        panel.line_width = style.truth_line_width;
+
+        spec = struct('series', panel, 'style', struct( ...
+            'y_limits', rt_bounds, 'grid', true, ...
+            'axis_font_size', style.axis_font_size, ...
+            'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+        plot_series(ax, spec);
+        local_panel_label(ax, sprintf("(%c)", 'a' + i - 1), style);
+    end
+
+    xlabel(tl, "Time, {\it t} (days)", 'Interpreter', 'tex', ...
+        'FontName', style.font_name, 'FontSize', style.axis_font_size);
+    ylabel(tl, "Effective reproduction number, {\it R}_t", 'Interpreter', 'tex', ...
+        'FontName', style.font_name, 'FontSize', style.axis_font_size);
+
+    local_export_pdf(fig, fullfile(figure_dir, 'partA_05_rt_scenarios.pdf'));
+    close(fig);
+end
+
+%% 3. Script 3 Forecast Artifacts: Fixed-Lead Forecast Comparisons
 forecast_files = local_sort_dir_by_name( ...
     dir(fullfile(forecast_dir, 'partA_03_forecast_*.mat')));
 
 if isempty(forecast_files)
-    fprintf('Skipping forecast comparisons — run partA_03 first.\n');
+    fprintf('Skipping forecast comparisons - no partA_03 forecast artifacts in %s.\n', ...
+        forecast_dir);
 else
-    fprintf('Drawing %d forecast comparison figure(s)...\n', numel(forecast_files));
+    lead = cfg.forecast.plot_lead_time;
+    plot_alphas = sort(cfg.forecast.plot_alphas);
+    fprintf('Drawing %d forecast comparison figure(s) at lead %d day(s)...\n', ...
+        numel(forecast_files), lead);
+
     for f = 1:numel(forecast_files)
-        file_path = fullfile(forecast_files(f).folder, forecast_files(f).name);
-        [forecast_results, fscenario_id, fmodel, fexo] = ...
-            local_load_forecast_file(file_path);
+        loaded = load(fullfile(forecast_files(f).folder, forecast_files(f).name));
+        fc = local_extract_fixed_lead(loaded.forecast_results, lead, plot_alphas);
 
-        truth_idx = find(strcmp({truth_scenarios.scenario_id}, char(fscenario_id)), 1);
-        if isempty(truth_idx)
-            fprintf('Skipping %s — truth scenario %s not found.\n', ...
-                forecast_files(f).name, fscenario_id);
-            continue;
-        end
+        spec = struct('series', local_forecast_series(fc, plot_alphas, style), ...
+            'style', struct('x_label', "Time, {\it t} (days)", ...
+                'y_label', "Effective reproduction number, {\it R}_t", ...
+                'y_limits', rt_bounds, 'grid', true, ...
+                'axis_font_size', style.axis_font_size, ...
+                'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
 
-        plot_name = sprintf('partA_05_forecast_comparison_%s_%s_%s.png', ...
-            char(local_safe_token(fscenario_id)), ...
-            char(local_safe_token(fmodel)), ...
-            char(local_safe_token(fexo)));
-        interval_labels = string(compose('%d%% PI', ...
-            round((1 - sort(double(cfg.forecast.plot_alphas(:)))) * 100)));
-        interval_labels = interval_labels(:);
-        legend_spec = struct( ...
-            'truth_label', "Ground truth", ...
-            'median_label', "Median forecast", ...
-            'interval_labels', interval_labels, ...
-            'location', "northoutside", ...
-            'orientation', "horizontal", ...
-            'box', "off");
+        fig = figure('Visible', 'off', 'Units', 'centimeters', ...
+            'Position', [2, 2, 17.0, 9.0], 'Color', 'w');
+        ax = axes('Parent', fig); %#ok<LAXES>
+        [h, lab] = plot_series(ax, spec);
+        local_apply_legend(ax, h, lab, style, 'horizontal', numel(lab));
 
-        comparison_spec = build_plot_spec( ...
-            'figure_name', "Part A forecast comparison", ...
-            'x_label', "Time, $t$ (days)", ...
-            'y_label', "Effective reproduction number, $R_t$", ...
-            'lead_time', cfg.forecast.plot_lead_time, ...
-            'plot_alphas', cfg.forecast.plot_alphas, ...
-            'y_limits', cfg.Rt.bounds, ...
-            'legend', legend_spec, ...
-            'output_path', fullfile(figure_dir, plot_name), ...
-            'size_cm', [17.0, 9.0]);
-
-        fprintf('Drawing comparison from %s\n', file_path);
-        [comparison_panel, comparison_spec] = local_forecast_comparison_panel( ...
-            forecast_results, truth_scenarios(truth_idx), comparison_spec);
-        local_export_single_panel(comparison_panel, comparison_spec);
+        plot_name = sprintf('partA_05_forecast_comparison_%s_%s_%s.pdf', ...
+            local_safe_token(loaded.scenario_id), ...
+            local_safe_token(loaded.model_type), ...
+            local_safe_token(loaded.exo_mode));
+        local_export_pdf(fig, fullfile(figure_dir, plot_name));
+        close(fig);
     end
 end
 
-%% 4. Model WIS Distribution (partA_04 artifacts)
+%% 4. Script 4 Evaluation Artifact: WIS Distribution, Horizon WIS, Coverage
 evaluation_artifact = fullfile(evaluation_dir, 'partA_04_evaluation_results.mat');
+
 if exist(evaluation_artifact, 'file') ~= 2
-    fprintf('Skipping evaluation figures (sections 4-6) — run partA_04 first.\n');
-    skip_evaluation = true;
+    fprintf('Skipping evaluation figures - no partA_04 evaluation artifact in %s.\n', ...
+        evaluation_dir);
 else
-    skip_evaluation = false;
-    evaluation_data = load(evaluation_artifact);
-    window_scores = evaluation_data.window_scores;
-end
+    fprintf('Drawing evaluation figures from partA_04 artifact...\n');
+    evaluation = load(evaluation_artifact);
+    window_scores    = evaluation.window_scores;
+    horizon_summary  = evaluation.summaries.horizon_summary;
+    interval_summary = evaluation.summaries.interval_summary;
 
-if ~skip_evaluation
-    performance_spec = build_plot_spec( ...
-        'figure_name', "Part A model WIS distribution", ...
-        'x_label', "Model / exogenous mode", ...
-        'y_label', "Window WIS", ...
-        'x_tick_rotation', 30, ...
-        'color_order', local_thesis_color_order(), ...
-        'output_path', fullfile(figure_dir, 'partA_05_model_wis_distribution.png'), ...
-        'legend', struct('location', "northoutside", 'orientation', "horizontal", ...
-            'box', "off", 'font_size', 9), ...
-        'size_cm', [17.0, 9.5]);
-    performance_panel = local_model_wis_distribution_panel(window_scores);
-    local_export_single_panel(performance_panel, performance_spec);
-end
+    %% 4a. Model WIS distribution
+    fig = figure('Visible', 'off', 'Units', 'centimeters', ...
+        'Position', [2, 2, 17.0, 9.5], 'Color', 'w');
+    ax = axes('Parent', fig);
+    dist_spec = struct( ...
+        'x', window_scores.Model + " / " + window_scores.ExoMode, ...
+        'y', window_scores.WindowWIS, ...
+        'group', window_scores.Scenario, ...
+        'color_order', style.palette, ...
+        'style', struct('x_label', "Model / exogenous mode", ...
+            'y_label', "Window WIS", 'x_tick_rotation', 20, 'grid', true, ...
+            'axis_font_size', style.axis_font_size, ...
+            'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+    [hd, ld] = plot_distribution(ax, dist_spec);
+    local_apply_legend(ax, hd, ld, style, 'horizontal', numel(ld));
+    local_export_pdf(fig, fullfile(figure_dir, 'partA_05_model_wis_distribution.pdf'));
+    close(fig);
 
-%% 5. Horizon-wise WIS (partA_04 artifacts)
-if ~skip_evaluation
-    horizon_summary = local_read_table_optional( ...
-        fullfile(table_dir, 'partA_04_horizon_summary.csv'), 'horizon summary');
-    if ~isempty(horizon_summary)
-        horizon_legend = struct( ...
-            'labels', local_model_exo_labels(horizon_summary), ...
-            'location', "northoutside", ...
-            'num_columns', 3, ...
-            'box', "off", ...
-            'font_size', 9);
-        horizon_spec = build_plot_spec( ...
-            'figure_name', "Part A mean WIS by horizon", ...
-            'x_label', "Forecast horizon, $h$ (days)", ...
-            'y_label', "Mean WIS", ...
-            'color_order', local_thesis_color_order(), ...
-            'legend', horizon_legend, ...
-            'output_path', fullfile(figure_dir, 'partA_05_mean_wis_by_horizon.png'), ...
-            'size_cm', [17.0, 9.0]);
-        horizon_panel = local_horizon_wis_panel(horizon_summary, horizon_spec);
-        local_export_single_panel(horizon_panel, horizon_spec);
-    end
-end
+    %% 4b. Horizon-wise mean WIS
+    horizon_series = local_grouped_line_series( ...
+        horizon_summary, 'HorizonIdx', 'MeanWIS', style);
+    fig = figure('Visible', 'off', 'Units', 'centimeters', ...
+        'Position', [2, 2, 17.0, 9.0], 'Color', 'w');
+    ax = axes('Parent', fig);
+    spec = struct('series', horizon_series, 'style', struct( ...
+        'x_label', "Forecast horizon, {\it h} (days)", 'y_label', "Mean WIS", ...
+        'grid', true, 'axis_font_size', style.axis_font_size, ...
+        'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+    [hh, lh] = plot_series(ax, spec);
+    local_apply_legend(ax, hh, lh, style, 'horizontal', 3);
+    local_export_pdf(fig, fullfile(figure_dir, 'partA_05_mean_wis_by_horizon.pdf'));
+    close(fig);
 
-%% 6. Coverage Summary (partA_04 artifacts)
-if ~skip_evaluation
-    interval_summary = local_read_table_optional( ...
-        fullfile(table_dir, 'partA_04_interval_summary.csv'), 'interval summary');
-    if ~isempty(interval_summary)
-        coverage_legend = struct( ...
-            'labels', local_model_exo_labels(interval_summary), ...
-            'reference_label', "Nominal coverage", ...
-            'location', "northoutside", ...
-            'num_columns', 4, ...
-            'box', "off", ...
-            'font_size', 9);
-        coverage_spec = build_plot_spec( ...
-            'figure_name', "Part A coverage summary", ...
-            'x_label', "Nominal coverage", ...
-            'y_label', "Empirical coverage", ...
-            'color_order', local_thesis_color_order(), ...
-            'legend', coverage_legend, ...
-            'x_limits', [0, 1], ...
-            'y_limits', [0, 1], ...
-            'output_path', fullfile(figure_dir, 'partA_05_coverage_summary.png'), ...
-            'size_cm', [16.0, 10.0]);
-        coverage_panel = local_coverage_panel(interval_summary, coverage_spec);
-        local_export_single_panel(coverage_panel, coverage_spec);
-    end
-end
-
-%% 7. Completion
-fprintf('Figures saved under %s\n', figure_dir);
-fprintf('=== Part A Figure Generation Complete ===\n\n');
-
-%% 8. Local Functions - Artifact Loading
-function scenarios = local_load_truth_scenarios(data_dir)
-%LOCAL_LOAD_TRUTH_SCENARIOS Load canonical Part A truth artifacts.
-    truth_files = dir(fullfile(data_dir, 'partA_01_truth_*.mat'));
-    truth_files = local_sort_dir_by_name(truth_files);
-    if isempty(truth_files)
-        error('FIG:NoTruthArtifacts', ...
-            'No Part A truth artifacts found under %s.', data_dir);
-    end
-
-    scenarios = repmat(struct('scenario_id', "", 'scenario_name', "", ...
-        'tspan', [], 'Rt_true', []), numel(truth_files), 1);
-
-    for i = 1:numel(truth_files)
-        artifact_path = fullfile(truth_files(i).folder, truth_files(i).name);
-        loaded = load(artifact_path);
-        scenarios(i).scenario_id = string(loaded.scenario_id);
-        scenarios(i).scenario_name = string(loaded.scenario_name);
-        scenarios(i).tspan = loaded.tspan;
-        scenarios(i).Rt_true = loaded.Rt_true;
-    end
-end
-
-function table_data = local_read_table_optional(table_path, label)
-%LOCAL_READ_TABLE_OPTIONAL Read a Part A table artifact; return empty on missing.
-    if nargin < 2, label = table_path; end
-    if exist(table_path, 'file') ~= 2
-        fprintf('Skipping %s figure — table not found: %s\n', label, table_path);
-        table_data = table();
-        return;
-    end
-    table_data = readtable(table_path);
-end
-
-function [forecast_results, scenario_id, model_type, exo_mode] = ...
-    local_load_forecast_file(file_path)
-%LOCAL_LOAD_FORECAST_FILE Load forecast results and metadata from a partA_03 artifact.
-    loaded = load(file_path);
-    if ~isfield(loaded, 'forecast_results') || isempty(loaded.forecast_results)
-        error('FIG:InvalidForecastArtifact', ...
-            'Forecast artifact has no forecast_results: %s', file_path);
-    end
-    forecast_results = loaded.forecast_results;
-    scenario_id = string(loaded.scenario_id);
-    model_type = string(loaded.model_type);
-    exo_mode = string(loaded.exo_mode);
-end
-
-%% 9. Local Functions - Figure Export
-function local_export_single_panel(panel_data, plot_spec)
-%LOCAL_EXPORT_SINGLE_PANEL Draw, export, and close a single-panel figure.
-    fig = plot_single_panel(panel_data, plot_spec);
-    export_figure(fig, plot_spec);
+    %% 4c. Coverage summary
+    coverage_series = local_grouped_line_series( ...
+        interval_summary, 'NominalCoverage', 'MeanCoverage', style);
+    coverage_series = [coverage_series; local_coverage_reference()];
+    fig = figure('Visible', 'off', 'Units', 'centimeters', ...
+        'Position', [2, 2, 16.0, 10.0], 'Color', 'w');
+    ax = axes('Parent', fig);
+    spec = struct('series', coverage_series, 'style', struct( ...
+        'x_label', "Nominal coverage", 'y_label', "Empirical coverage", ...
+        'x_limits', [0, 1], 'y_limits', [0, 1], 'grid', true, ...
+        'axis_font_size', style.axis_font_size, ...
+        'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+    [hc, lc] = plot_series(ax, spec);
+    local_apply_legend(ax, hc, lc, style, 'horizontal', 4);
+    local_export_pdf(fig, fullfile(figure_dir, 'partA_05_coverage_summary.pdf'));
     close(fig);
 end
 
-%% 10. Local Functions - Panel Assembly
-function panels = local_rt_scenario_panels(scenarios, ~)
-%LOCAL_RT_SCENARIO_PANELS Build generic panels for scenario trajectories.
-    panels = repmat(struct('series', [], 'plot_spec', struct()), ...
-        numel(scenarios), 1);
+fprintf('Figures saved under %s\n', figure_dir);
+fprintf('=== Part A Figure Generation Complete ===\n\n');
 
-    for i = 1:numel(scenarios)
-        [t_values, rt_values] = local_truth_curve(scenarios(i));
-        series = local_empty_series(1);
-        series.type = "line";
-        series.x = t_values;
-        series.y = rt_values;
-        series.legend_visible = false;
-        series.style = struct('Color', [], 'LineWidth', 1.3);
-
-        panels(i).series = series;
-        panels(i).plot_spec = struct('legend', struct('visible', false));
-    end
-end
-
-function panel = local_model_wis_distribution_panel(window_scores)
-%LOCAL_MODEL_WIS_DISTRIBUTION_PANEL Build a WIS boxchart panel.
-    panel = struct('series', []);
-    required_vars = {'WindowWIS', 'Model', 'ExoMode', 'Scenario'};
-    if isempty(window_scores) || ~istable(window_scores) || ...
-            height(window_scores) == 0 || ...
-            ~all(ismember(required_vars, window_scores.Properties.VariableNames))
-        return;
-    end
-
-    valid_idx = isfinite(window_scores.WindowWIS);
-    if ~any(valid_idx)
-        return;
-    end
-
-    plot_data = window_scores(valid_idx, :);
-    config_label = string(plot_data.Model) + " / " + string(plot_data.ExoMode);
-
-    series = local_empty_series(1);
-    series.type = "boxchart";
-    series.x = config_label;
-    series.y = double(plot_data.WindowWIS);
-    series.legend_rank = 1;
-    series.group = string(plot_data.Scenario);
-    series.legend_visible = true;
-    panel.series = series;
-end
-
-function panel = local_horizon_wis_panel(horizon_scores, plot_spec)
-%LOCAL_HORIZON_WIS_PANEL Build line series for horizon-wise WIS.
-    panel = struct('series', []);
-    required_vars = {'Model', 'ExoMode', 'HorizonIdx', 'MeanWIS'};
-    if isempty(horizon_scores) || height(horizon_scores) == 0 || ...
-            ~all(ismember(required_vars, horizon_scores.Properties.VariableNames))
-        return;
-    end
-
-    group_ids = local_group_ids(horizon_scores);
-    groups = unique(group_ids, 'stable');
-    legend_labels = local_legend_labels(plot_spec, groups);
-    series = local_empty_series(0);
-
-    for i = 1:numel(groups)
-        idx = group_ids == groups(i);
-        x_values = double(horizon_scores.HorizonIdx(idx));
-        y_values = double(horizon_scores.MeanWIS(idx));
-        [x_values, y_values] = local_sorted_finite_xy(x_values, y_values);
-        if isempty(x_values)
-            continue;
-        end
-
-        next_series = local_empty_series(1);
-        next_series.type = "line";
-        next_series.x = x_values;
-        next_series.y = y_values;
-        next_series.label = legend_labels(i);
-        next_series.style = struct('LineStyle', '-', 'LineWidth', 1.3, ...
-            'Marker', local_series_marker(i), 'MarkerSize', 3.2);
-        next_series.legend_rank = i;
-        series(end + 1, 1) = next_series; %#ok<AGROW>
-    end
-
-    panel.series = series;
-end
-
-function panel = local_coverage_panel(interval_summary, plot_spec)
-%LOCAL_COVERAGE_PANEL Build line series for empirical coverage.
-    panel = struct('series', []);
-    required_vars = {'Model', 'ExoMode', 'NominalCoverage', 'MeanCoverage'};
-    if isempty(interval_summary) || height(interval_summary) == 0 || ...
-            ~all(ismember(required_vars, interval_summary.Properties.VariableNames))
-        return;
-    end
-
-    nominal_coverage = double(interval_summary.NominalCoverage);
-    group_ids = local_group_ids(interval_summary);
-    groups = unique(group_ids, 'stable');
-    legend_labels = local_legend_labels(plot_spec, groups);
-    series = local_empty_series(0);
-
-    for i = 1:numel(groups)
-        idx = group_ids == groups(i);
-        x_values = double(nominal_coverage(idx));
-        y_values = double(interval_summary.MeanCoverage(idx));
-        [x_values, y_values] = local_sorted_finite_xy(x_values, y_values);
-        if isempty(x_values)
-            continue;
-        end
-
-        next_series = local_empty_series(1);
-        next_series.type = "line";
-        next_series.x = x_values;
-        next_series.y = y_values;
-        next_series.label = legend_labels(i);
-        next_series.style = struct('LineStyle', '-', 'LineWidth', 1.3, ...
-            'Marker', local_series_marker(i), 'MarkerSize', 3.2);
-        next_series.legend_rank = i;
-        series(end + 1, 1) = next_series; %#ok<AGROW>
-    end
-
-    valid_nominal = nominal_coverage(isfinite(nominal_coverage));
-    if ~isempty(valid_nominal)
-        reference_series = local_empty_series(1);
-        reference_series.type = "line";
-        reference_series.x = [min(valid_nominal), max(valid_nominal)];
-        reference_series.y = reference_series.x;
-        reference_series.label = string(plot_spec.legend.reference_label);
-        reference_series.style = struct('Color', [0, 0, 0], ...
-            'LineStyle', '--', 'LineWidth', 1.0);
-        reference_series.legend_rank = numel(series) + 1;
-        series(end + 1, 1) = reference_series;
-    end
-
-    panel.series = series;
-end
-
-function [panel, plot_spec] = local_forecast_comparison_panel( ...
-    forecast_results, truth_curve, plot_spec)
-%LOCAL_FORECAST_COMPARISON_PANEL Build Rt forecast-comparison series.
-    [truth_t, truth_rt] = local_truth_curve(truth_curve);
-    lead_time = round(double(plot_spec.lead_time));
-    plot_alphas = sort(double(plot_spec.plot_alphas(:)))';
-
-    [target_days, median_forecast, lower_forecast, upper_forecast] = ...
-        local_extract_fixed_lead(forecast_results, lead_time, plot_alphas);
-
-    series = local_empty_series(0);
-    interval_labels = local_interval_labels(plot_spec, plot_alphas);
-    interval_colors = local_interval_colors(numel(plot_alphas));
-    interval_face_alpha = linspace(0.14, 0.28, max(1, numel(plot_alphas)));
-
-    for j = 1:numel(plot_alphas)
-        valid_interval = isfinite(target_days) & ...
-            isfinite(lower_forecast(:, j)) & isfinite(upper_forecast(:, j));
-        if nnz(valid_interval) < 2
-            continue;
-        end
-
-        interval_series = local_empty_series(1);
-        interval_series.type = "ribbon";
-        interval_series.x = target_days(valid_interval);
-        interval_series.lower = lower_forecast(valid_interval, j);
-        interval_series.upper = upper_forecast(valid_interval, j);
-        interval_series.label = interval_labels(j);
-        interval_series.style = struct('FaceColor', interval_colors(j, :), ...
-            'FaceAlpha', interval_face_alpha(j), 'EdgeColor', 'none');
-        interval_series.legend_rank = 3 + j;
-        series(end + 1, 1) = interval_series; %#ok<AGROW>
-    end
-
-    truth_series = local_empty_series(1);
-    truth_series.type = "line";
-    truth_series.x = truth_t;
-    truth_series.y = truth_rt;
-    truth_series.label = string(plot_spec.legend.truth_label);
-    truth_series.style = struct('Color', [0, 0, 0], 'LineStyle', '-', ...
-        'LineWidth', 1.4, 'Marker', 'none');
-    truth_series.legend_rank = 1;
-    series(end + 1, 1) = truth_series;
-
-    valid_median = isfinite(target_days) & isfinite(median_forecast);
-    if any(valid_median)
-        median_series = local_empty_series(1);
-        median_series.type = "line";
-        median_series.x = target_days(valid_median);
-        median_series.y = median_forecast(valid_median);
-        median_series.label = string(plot_spec.legend.median_label);
-        median_series.style = struct('Color', [0, 0, 1], 'LineStyle', '--', ...
-            'LineWidth', 1.3, 'Marker', 'o', 'MarkerSize', 3.2);
-        median_series.legend_rank = 2;
-        series(end + 1, 1) = median_series;
-    end
-
-    if ~isfield(plot_spec, 'x_limits') || isempty(plot_spec.x_limits)
-        plot_spec.x_limits = [truth_t(1), truth_t(end)];
-    end
-    panel = struct('series', series);
-end
-
-%% 11. Local Functions - Forecast Extraction
-function [target_days, median_forecast, lower_forecast, upper_forecast] = ...
-    local_extract_fixed_lead(forecast_results, lead_time, plot_alphas)
-%LOCAL_EXTRACT_FIXED_LEAD Extract one forecast lead across windows.
-    num_results = numel(forecast_results);
-    num_alphas = numel(plot_alphas);
-
-    target_days = nan(num_results, 1);
-    median_forecast = nan(num_results, 1);
-    lower_forecast = nan(num_results, num_alphas);
-    upper_forecast = nan(num_results, num_alphas);
-
-    for i = 1:num_results
-        entry = local_normalize_result(forecast_results(i));
-        if numel(entry.pred_Rt) < lead_time || numel(entry.forecast_day) < lead_time
-            continue;
-        end
-
-        median_forecast(i) = entry.pred_Rt(lead_time);
-        target_days(i) = entry.forecast_day(lead_time);
-
-        for j = 1:num_alphas
-            idx_alpha = local_alpha_index(entry.alphas, plot_alphas(j));
-            if isempty(idx_alpha)
-                continue;
-            end
-            if size(entry.lower_Rt, 1) >= lead_time && ...
-                    size(entry.upper_Rt, 1) >= lead_time && ...
-                    size(entry.lower_Rt, 2) >= idx_alpha && ...
-                    size(entry.upper_Rt, 2) >= idx_alpha
-                lower_forecast(i, j) = entry.lower_Rt(lead_time, idx_alpha);
-                upper_forecast(i, j) = entry.upper_Rt(lead_time, idx_alpha);
-            end
-        end
-    end
-end
-
-function entry = local_normalize_result(raw_entry)
-%LOCAL_NORMALIZE_RESULT Read canonical forecast-result fields.
-    entry = struct();
-    entry.pred_Rt = double(raw_entry.Rt_pred(:));
-    entry.lower_Rt = double(raw_entry.lower_bounds);
-    entry.upper_Rt = double(raw_entry.upper_bounds);
-    entry.alphas = double(raw_entry.interval_alphas(:));
-    entry.forecast_day = double(raw_entry.t_future(:));
-end
-
-function idx = local_alpha_index(stored_alphas, target_alpha)
-%LOCAL_ALPHA_INDEX Match a displayed alpha to stored intervals.
-    stored_alphas = double(stored_alphas(:));
-    [min_diff, idx] = min(abs(stored_alphas - target_alpha));
-    if isempty(idx) || min_diff > 1e-8
-        idx = [];
-    end
-end
-
-%% 12. Local Functions - Plot Labels and Series Helpers
-function series = local_empty_series(n)
-%LOCAL_EMPTY_SERIES Create generic panel-series placeholders.
-    series = repmat(struct('type', "line", 'x', [], 'y', [], ...
-        'lower', [], 'upper', [], 'group', [], 'label', "", ...
-        'style', struct(), 'legend_visible', true, 'legend_rank', 1), n, 1);
-end
-
-function [t_values, rt_values] = local_truth_curve(truth_curve)
-%LOCAL_TRUTH_CURVE Extract a truth Rt trajectory.
-    t_values = double(truth_curve.tspan(:));
-    rt_values = double(truth_curve.Rt_true(:));
-end
-
-function labels = local_panel_labels(num_panels)
-%LOCAL_PANEL_LABELS Build compact alphabetical panel labels.
-    labels = strings(num_panels, 1);
-    for i = 1:num_panels
-        labels(i) = sprintf('(%s)', char('a' + i - 1));
-    end
-end
-
-function labels = local_legend_labels(plot_spec, groups)
-%LOCAL_LEGEND_LABELS Resolve plotted group labels.
-    labels = string(plot_spec.legend.labels);
-    labels = labels(1:numel(groups));
-end
-
-function labels = local_interval_labels(plot_spec, plot_alphas)
-%LOCAL_INTERVAL_LABELS Resolve forecast-interval legend text.
-    labels = string(plot_spec.legend.interval_labels);
-    labels = labels(1:numel(plot_alphas));
-end
-
-function labels = local_model_exo_labels(summary_table)
-%LOCAL_MODEL_EXO_LABELS Build model/exogenous legend labels.
-    group_ids = local_group_ids(summary_table);
-    labels = unique(group_ids, 'stable');
-end
-
-function marker = local_series_marker(idx)
-%LOCAL_SERIES_MARKER Cycle distinguishable line markers.
-    markers = {'o', 's', '^', 'd', 'v', '>', '<', 'p', 'h'};
-    marker = markers{mod(idx - 1, numel(markers)) + 1};
+%% 5. Local Functions - Style
+function style = local_figure_style()
+%LOCAL_FIGURE_STYLE Return shared Part A figure style constants.
+    style = struct();
+    style.font_name        = "Arial";
+    style.axis_font_size   = 9;
+    style.tick_font_size   = 8;
+    style.legend_font_size = 8;
+    style.panel_font_size  = 9;
+    style.line_width       = 1.2;
+    style.truth_line_width = 1.3;
+    style.marker_size      = 3.5;
+    style.palette          = local_thesis_color_order();
 end
 
 function colors = local_thesis_color_order()
-%LOCAL_THESIS_COLOR_ORDER Return the Part A figure colour order.
+%LOCAL_THESIS_COLOR_ORDER Return the Part A categorical colour order.
     colors = [
         0.902, 0.624, 0.000;   % orange
         0.337, 0.706, 0.914;   % sky blue
@@ -556,41 +220,191 @@ function colors = local_thesis_color_order()
 end
 
 function colors = local_interval_colors(num_intervals)
-%LOCAL_INTERVAL_COLORS Build stable forecast-interval colours.
-    base_colors = [0.30, 0.65, 0.95; 0.10, 0.45, 0.85; ...
-        0.08, 0.32, 0.66; 0.04, 0.20, 0.46];
-    if num_intervals <= size(base_colors, 1)
-        colors = base_colors(1:num_intervals, :);
-    else
-        colors = lines(num_intervals);
+%LOCAL_INTERVAL_COLORS Return light solid fills for forecast interval bands.
+    base_colors = [
+        0.80, 0.88, 0.97;   % lightest (widest band)
+        0.62, 0.76, 0.92;
+        0.45, 0.64, 0.86;
+        0.30, 0.52, 0.78];
+    colors = base_colors(1:num_intervals, :);
+end
+
+function marker = local_series_marker(idx)
+%LOCAL_SERIES_MARKER Cycle distinguishable line markers.
+    markers = ["o", "s", "^", "d", "v", ">", "<", "p", "h"];
+    marker = markers(mod(idx - 1, numel(markers)) + 1);
+end
+
+%% 6. Local Functions - Artifact Loading
+function scenarios = local_load_truth_scenarios(truth_files)
+%LOCAL_LOAD_TRUTH_SCENARIOS Load Part A truth trajectories from partA_01 artifacts.
+    scenarios = repmat(struct('scenario_id', "", 'scenario_name', "", ...
+        'tspan', [], 'Rt_true', []), numel(truth_files), 1);
+    for i = 1:numel(truth_files)
+        loaded = load(fullfile(truth_files(i).folder, truth_files(i).name));
+        scenarios(i).scenario_id   = loaded.scenario_id;
+        scenarios(i).scenario_name = loaded.scenario_name;
+        scenarios(i).tspan         = loaded.tspan;
+        scenarios(i).Rt_true       = loaded.Rt_true;
     end
 end
 
-%% 13. Local Functions - Utilities
-function group_ids = local_group_ids(summary_table)
-%LOCAL_GROUP_IDS Build model/exogenous group identifiers.
-    group_ids = string(summary_table.Model) + " / " + string(summary_table.ExoMode);
+%% 7. Local Functions - Forecast Series Assembly
+function fc = local_extract_fixed_lead(forecast_results, lead, plot_alphas)
+%LOCAL_EXTRACT_FIXED_LEAD Collect fixed-lead forecast values across windows.
+    num_windows = numel(forecast_results);
+    num_alphas = numel(plot_alphas);
+
+    target_days = nan(num_windows, 1);
+    truth = nan(num_windows, 1);
+    median_forecast = nan(num_windows, 1);
+    lower = nan(num_windows, num_alphas);
+    upper = nan(num_windows, num_alphas);
+
+    for w = 1:num_windows
+        result = forecast_results(w);
+        target_days(w) = result.t_future(lead);
+        truth(w) = result.Rt_true_future(lead);
+        median_forecast(w) = result.Rt_pred(lead);
+        for k = 1:num_alphas
+            col = local_alpha_index(result.interval_alphas, plot_alphas(k));
+            lower(w, k) = result.lower_bounds(lead, col);
+            upper(w, k) = result.upper_bounds(lead, col);
+        end
+    end
+
+    [target_days, order] = sort(target_days);
+    fc = struct('target_days', target_days, 'truth', truth(order), ...
+        'median', median_forecast(order), 'lower', lower(order, :), ...
+        'upper', upper(order, :));
 end
 
-function [x_values, y_values] = local_sorted_finite_xy(x_values, y_values)
-%LOCAL_SORTED_FINITE_XY Filter finite points and sort by x value.
-    x_values = double(x_values(:));
-    y_values = double(y_values(:));
-    valid_idx = isfinite(x_values) & isfinite(y_values);
-    x_values = x_values(valid_idx);
-    y_values = y_values(valid_idx);
-    [x_values, order] = sort(x_values);
-    y_values = y_values(order);
+function col = local_alpha_index(interval_alphas, target_alpha)
+%LOCAL_ALPHA_INDEX Locate the stored interval column for a requested alpha.
+    col = find(abs(interval_alphas - target_alpha) <= 1e-8, 1);
+    if isempty(col)
+        error('FIG:AlphaNotFound', ...
+            'Requested plot alpha %.4g is not among the stored interval alphas.', ...
+            target_alpha);
+    end
+end
+
+function series = local_forecast_series(fc, plot_alphas, style)
+%LOCAL_FORECAST_SERIES Assemble bands, truth, and median; bands drawn first.
+    num_alphas = numel(plot_alphas);
+    fill_colors = local_interval_colors(num_alphas);
+    pi_labels = compose("%d%% PI", round((1 - plot_alphas) * 100));
+
+    series = repmat(local_series_template(), num_alphas + 2, 1);
+
+    for k = 1:num_alphas
+        series(k).type = "ribbon";
+        series(k).x = fc.target_days;
+        series(k).lower = fc.lower(:, k);
+        series(k).upper = fc.upper(:, k);
+        series(k).face_color = fill_colors(k, :);
+        series(k).label = pi_labels(k);
+    end
+
+    idx_truth = num_alphas + 1;
+    series(idx_truth).type = "line";
+    series(idx_truth).x = fc.target_days;
+    series(idx_truth).y = fc.truth;
+    series(idx_truth).color = [0, 0, 0];
+    series(idx_truth).line_width = style.truth_line_width;
+    series(idx_truth).label = "Ground truth";
+
+    idx_median = num_alphas + 2;
+    series(idx_median).type = "line";
+    series(idx_median).x = fc.target_days;
+    series(idx_median).y = fc.median;
+    series(idx_median).color = style.palette(4, :);
+    series(idx_median).line_style = "--";
+    series(idx_median).line_width = style.line_width;
+    series(idx_median).marker = "o";
+    series(idx_median).marker_size = style.marker_size;
+    series(idx_median).label = "Median forecast";
+end
+
+%% 8. Local Functions - Evaluation Series Assembly
+function series = local_grouped_line_series(summary, x_var, y_var, style)
+%LOCAL_GROUPED_LINE_SERIES Build one line series per model/exogenous group.
+    group_ids = summary.Model + " / " + summary.ExoMode;
+    groups = unique(group_ids, 'stable');
+    series = repmat(local_series_template(), numel(groups), 1);
+
+    for i = 1:numel(groups)
+        idx = group_ids == groups(i);
+        [x_values, order] = sort(summary.(x_var)(idx));
+        y_values = summary.(y_var)(idx);
+        series(i).type = "line";
+        series(i).x = x_values;
+        series(i).y = y_values(order);
+        series(i).color = style.palette(mod(i - 1, size(style.palette, 1)) + 1, :);
+        series(i).line_width = style.line_width;
+        series(i).marker = local_series_marker(i);
+        series(i).marker_size = style.marker_size;
+        series(i).label = groups(i);
+    end
+end
+
+function series = local_coverage_reference()
+%LOCAL_COVERAGE_REFERENCE Build the nominal=empirical reference diagonal.
+    series = local_series_template();
+    series.type = "reference";
+    series.x = [0; 1];
+    series.y = [0; 1];
+    series.color = [0, 0, 0];
+    series.line_style = "--";
+    series.line_width = 1.0;
+    series.label = "Nominal = empirical";
+end
+
+%% 9. Local Functions - Layout, Export, and Utilities
+function series = local_series_template()
+%LOCAL_SERIES_TEMPLATE Uniform empty series struct for PLOT_SERIES input.
+    series = struct('type', "line", 'x', [], 'y', [], 'lower', [], 'upper', [], ...
+        'color', [], 'line_style', "-", 'line_width', 1.0, ...
+        'marker', "none", 'marker_size', 4, 'face_color', [], ...
+        'face_alpha', 1, 'label', "");
+end
+
+function local_panel_label(ax, label_text, style)
+%LOCAL_PANEL_LABEL Place a bold panel label in the top-left of an axes.
+    text(ax, 0.04, 0.94, label_text, 'Units', 'normalized', ...
+        'FontName', style.font_name, 'FontSize', style.panel_font_size, ...
+        'FontWeight', 'bold', 'Interpreter', 'tex', ...
+        'HorizontalAlignment', 'left', 'VerticalAlignment', 'top');
+end
+
+function local_apply_legend(ax, handles, labels, style, orientation, num_columns)
+%LOCAL_APPLY_LEGEND Attach a shared legend outside the data region.
+    if isempty(handles)
+        return;
+    end
+    lg = legend(ax, handles, labels);
+    lg.Interpreter = 'tex';
+    lg.FontName = style.font_name;
+    lg.FontSize = style.legend_font_size;
+    lg.Box = 'off';
+    lg.Location = 'northoutside';
+    lg.Orientation = orientation;
+    lg.NumColumns = num_columns;
+end
+
+function local_export_pdf(fig, output_path)
+%LOCAL_EXPORT_PDF Export a figure as a vector PDF.
+    exportgraphics(fig, output_path, 'ContentType', 'vector');
 end
 
 function token = local_safe_token(value)
-%LOCAL_SAFE_TOKEN Convert values into filename-safe tokens.
-    token = regexprep(string(value), '[^A-Za-z0-9]+', '_');
+%LOCAL_SAFE_TOKEN Convert a value into a filename-safe token.
+    token = regexprep(value, '[^A-Za-z0-9]+', '_');
     token = regexprep(token, '^_+|_+$', '');
 end
 
 function sorted_files = local_sort_dir_by_name(files)
-%LOCAL_SORT_DIR_BY_NAME Sort a dir struct by file name.
+%LOCAL_SORT_DIR_BY_NAME Sort a dir struct array by file name.
     if isempty(files)
         sorted_files = files;
         return;
