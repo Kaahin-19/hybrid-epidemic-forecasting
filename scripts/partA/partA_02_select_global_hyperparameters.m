@@ -50,15 +50,15 @@ if isempty(file_list)
         'No synthetic truth files found in %s. Run partA_01 first.', data_dir);
 end
 
-horizon  = cfg.forecast.horizon;
-pop_size = cfg.sirs.pop_size;
-n_scenarios = numel(file_list);
+horizon       = cfg.forecast.horizon;
+pop_size      = cfg.sirs.pop_size;
+num_scenarios = numel(file_list);
 scenario_template = struct( ...
     'scenario_id', "", ...
     'num_exo', 0, ...
     'windows', [], ...
     'window_data', struct('Rt_past', {}, 'truth_Rt', {}, 'U_past', {}, 'sirs_state', {}));
-scenario_data = repmat(scenario_template, n_scenarios, 1);
+scenario_data = repmat(scenario_template, num_scenarios, 1);
 
 for i = 1:numel(file_list)
     loaded = load(fullfile(data_dir, file_list(i).name));
@@ -67,15 +67,6 @@ for i = 1:numel(file_list)
     S_true = loaded.S_true;
     I_true = loaded.I_true;
     tspan  = loaded.tspan;
-
-    assert(isnumeric(Rt)     && iscolumn(Rt),     'PARTA_02:BadArtifact', ...
-        'Rt_true must be a numeric column vector in partA_01 artifact.');
-    assert(isnumeric(S_true) && iscolumn(S_true), 'PARTA_02:BadArtifact', ...
-        'S_true must be a numeric column vector in partA_01 artifact.');
-    assert(isnumeric(I_true) && iscolumn(I_true), 'PARTA_02:BadArtifact', ...
-        'I_true must be a numeric column vector in partA_01 artifact.');
-    assert(isnumeric(tspan)  && iscolumn(tspan),  'PARTA_02:BadArtifact', ...
-        'tspan must be a numeric column vector in partA_01 artifact.');
 
     switch exo_mode
         case "None"
@@ -96,9 +87,6 @@ for i = 1:numel(file_list)
     scenario_data(i).scenario_id = string(loaded.scenario_id);
     scenario_data(i).num_exo     = num_exo;
 
-    % Intended forecast-origin set: every window with a full horizon of truth,
-    % derived only from min_window/step_size/horizon and the available truth
-    % length. Every candidate is evaluated on the same intended windows.
     built    = local_build_windows(Rt, U_true, S_true, I_true, ...
         tspan, win_endpoints, horizon, pop_size, num_exo > 0);
     has_full = arrayfun(@(w) numel(w.truth_Rt) == horizon, built);
@@ -138,7 +126,6 @@ num_candidates = size(candidate_grid, 1);
 
 scenario_ids  = [scenario_data.scenario_id];
 window_counts = arrayfun(@(s) numel(s.windows), scenario_data(:)');
-num_scenarios = numel(scenario_data);
 
 if isempty(gcp('nocreate'))
     parpool('Processes', cfg.run.num_workers);
@@ -157,9 +144,6 @@ num_draws  = cfg.intervals.num_draws;
 wis_alphas = cfg.forecast.wis_alphas;
 sirs_cfg   = cfg.sirs;
 
-% Build the SIRS stepper template once per worker, not once per window. The model
-% depends only on fixed cfg.sirs fields, so it is reused across all candidates,
-% scenarios, windows, and draws.
 sirs_stepper_const = parallel.pool.Constant(@() sirs_init(sirs_cfg, ...
     struct('solver', 'uds', 'compile', false, 'seed', base_seed)));
 
@@ -173,8 +157,8 @@ candidate_domain_failures   = zeros(num_candidates, 1);
 candidate_feasible          = false(num_candidates, 1);
 candidate_evaluated_windows             = zeros(num_candidates, 1);
 candidate_early_rejected                = false(num_candidates, 1);
-candidate_first_domain_failure_scenario = strings(num_candidates, 1);  % "" = no failure
-candidate_first_domain_failure_window   = nan(num_candidates, 1);      % NaN = no failure
+candidate_first_domain_failure_scenario = strings(num_candidates, 1);
+candidate_first_domain_failure_window   = nan(num_candidates, 1);
 
 parfor idx = 1:num_candidates
     params    = candidate_grid(idx, :);
@@ -182,7 +166,7 @@ parfor idx = 1:num_candidates
     scen_aicc = nan(1, num_scenarios);
     scenario_data_local = scenario_data_const.Value;
 
-    intended_count       = sum(window_counts);   % full intended count, fixed regardless of early exit
+    intended_count       = sum(window_counts);
     completed_count      = 0;
     domain_failure_count = 0;
     evaluated_count      = 0;
@@ -218,8 +202,7 @@ parfor idx = 1:num_candidates
 
                 valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) ...
                     && all(Rt_pred > 0) && all(isfinite(lower(:))) ...
-                    && all(isfinite(upper(:))) && all(lower(:) <= upper(:)) ...
-                    && numel(truth_Rt) == horizon;
+                    && all(isfinite(upper(:))) && all(lower(:) <= upper(:));
                 if ~valid
                     error('PARTA_02:UnscoreableWindow', ...
                         'Forecast window produced invalid intervals or non-finite WIS.');
@@ -236,11 +219,11 @@ parfor idx = 1:num_candidates
                 completed_count = completed_count + 1;
             catch ME
                 if strcmp(ME.identifier, 'EPIDEMIC:SusceptibleBelowThreshold')
-                    domain_failure_count   = domain_failure_count + 1;  % at most 1: we break
+                    domain_failure_count   = domain_failure_count + 1;
                     early_rejected         = true;
-                    first_failure_scenario = data.scenario_id;  % e.g. "A3"; window_wis(w) stays Inf
-                    first_failure_window   = data.windows(w);   % forecast-origin endpoint time
-                    break;                                      % stop remaining windows in this scenario
+                    first_failure_scenario = data.scenario_id;
+                    first_failure_window   = data.windows(w);
+                    break;
                 else
                     rethrow(ME);
                 end
@@ -248,11 +231,9 @@ parfor idx = 1:num_candidates
         end
 
         if early_rejected
-            break;                                              % stop remaining scenarios
+            break;
         end
 
-        % Plain mean over intended windows: a domain failure leaves that window at
-        % Inf, which propagates. AICc stays a finite-only mean.
         scen_wis(s)  = mean(window_wis);
         scen_aicc(s) = local_mean_finite(window_aicc);
     end
@@ -273,7 +254,7 @@ parfor idx = 1:num_candidates
     if feasible
         global_mean_wis(idx) = mean(scen_wis);
     else
-        global_mean_wis(idx) = Inf;     % infeasible -> Inf, never NaN, never selectable
+        global_mean_wis(idx) = Inf;
     end
 end
 
