@@ -60,7 +60,7 @@ scenario_template = struct( ...
     'window_data', struct('Rt_past', {}, 'truth_Rt', {}, 'U_past', {}, 'sirs_state', {}));
 scenario_data = repmat(scenario_template, num_scenarios, 1);
 
-for i = 1:numel(file_list)
+for i = 1:num_scenarios
     loaded = load(fullfile(data_dir, file_list(i).name));
 
     Rt     = loaded.Rt_true;
@@ -102,7 +102,7 @@ for i = 1:numel(file_list)
     end
 
     fprintf('Prepared scenario %d/%d (%s): %d intended windows\n', ...
-        i, numel(file_list), loaded.scenario_id, numel(scenario_data(i).window_data));
+        i, num_scenarios, loaded.scenario_id, numel(scenario_data(i).window_data));
 end
 
 switch model_type
