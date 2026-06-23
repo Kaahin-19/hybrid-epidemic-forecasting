@@ -35,3 +35,6 @@ report/stages/
 
 # Third-party IEEE publication generator assets
 third_party/IEEE_publication_generator/*
+
+# Recovery files
+.recovery
