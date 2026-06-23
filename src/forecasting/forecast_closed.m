@@ -14,16 +14,11 @@ function [point_path, ensemble_paths, fit_info] = forecast_closed(model_type, pa
 %       innovations under resample_seed, and propagates closed-loop bootstrap
 %       paths on the Rt scale. At each horizon step the forecast Rt drives a SIRS
 %       epidemic step whose output state determines the next exogenous covariate.
-%       Every draw must complete the full horizon with finite, positive Rt and an
-%       in-domain SIRS state. A draw that produces a non-finite or non-positive Rt
-%       raises FORECAST_CLOSED:InvalidForecastDraw. sirs_step raises
-%       EPIDEMIC:SusceptibleBelowThreshold when the current state's susceptible
-%       count is at or below the floor; an explicit post-step check raises the
-%       same error when the returned state crosses the floor at any lead,
-%       including the final one. Degenerate fits raise
-%       FORECAST_CLOSED:ConstantSeries, :InsufficientHistory, or
-%       :InsufficientResiduals, and toolbox fit errors propagate unchanged. The
-%       function never returns an all-NaN fallback and never computes WIS.
+%       The susceptible-domain threshold is enforced both on entry to sirs_step
+%       (before beta is computed) and after each advance to guard the returned
+%       state. Fails fast if the series is constant, the history is too short,
+%       any bootstrap draw produces a non-finite or non-positive Rt, or the
+%       forecasted SIRS state crosses the susceptible-domain threshold.
 %
 %   Inputs:
 %       model_type         - "ARX", "N4SID", or "SSEST".
@@ -139,9 +134,6 @@ for d = 1:num_draws
             error('FORECAST_CLOSED:InvalidForecastDraw', ...
                 'Bootstrap draw produced a non-finite or non-positive Rt.');
         end
-        % sirs_step guards the current state's susceptible floor before
-        % computing beta; the post-step check guards the returned state at
-        % every lead, including the final one.
         [state, stepper] = sirs_step(stepper, state, Rt_next);
         if state(1) <= min_susceptible
             error('EPIDEMIC:SusceptibleBelowThreshold', ...
@@ -213,8 +205,6 @@ for d = 1:num_draws
             error('FORECAST_CLOSED:InvalidForecastDraw', ...
                 'Bootstrap draw produced a non-finite or non-positive Rt.');
         end
-        % sirs_step guards the current state; the post-step check guards the
-        % returned state at every lead, including the final one.
         [state, stepper] = sirs_step(stepper, state, Rt_next);
         if state(1) <= min_susceptible
             error('EPIDEMIC:SusceptibleBelowThreshold', ...

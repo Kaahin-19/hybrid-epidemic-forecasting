@@ -10,13 +10,9 @@ function [point_path, ensemble_paths, fit_info] = forecast_open(model_type, para
 %       Fits an AR or output-only state-space model to log(Rt_past), computes
 %       one-step prediction residuals via the fitted recursion, resamples
 %       centred residuals as innovations under resample_seed, and propagates
-%       horizon-step bootstrap paths on the Rt scale (exponentiated). Every draw
-%       must complete the full horizon with finite, positive Rt; a draw that
-%       produces a non-finite or non-positive Rt raises
-%       FORECAST_OPEN:InvalidForecastDraw. Degenerate fits raise
-%       FORECAST_OPEN:ConstantSeries, :InsufficientHistory, or
-%       :InsufficientResiduals, and toolbox fit errors propagate unchanged. The
-%       function never returns an all-NaN fallback and never computes WIS.
+%       horizon-step bootstrap paths on the Rt scale. Fails fast if the series
+%       is constant, the history is too short, or any bootstrap draw produces a
+%       non-finite or non-positive Rt.
 %
 %   Inputs:
 %       model_type    - "AR", "N4SID", or "SSEST".

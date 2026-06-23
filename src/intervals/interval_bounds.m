@@ -5,22 +5,22 @@ function [lower_bounds, upper_bounds, Rt_pred] = interval_bounds(ensemble, alpha
 %       [lower_bounds, upper_bounds, Rt_pred] = interval_bounds(ensemble, alphas)
 %
 %   Description:
-%       Filters ensemble columns to those that are entirely finite and lie
-%       strictly within (1e-2, 1e2). If the number of valid columns is less
-%       than max(2, ceil(0.2 * M)), all outputs are NaN. Otherwise computes
-%       the per-horizon median across valid ensemble draws and, for each alpha_k, the
-%       (alpha_k/2) and (1 - alpha_k/2) quantiles across valid columns as
-%       the lower and upper bounds.
+%       Reduces a bootstrap Rt ensemble to per-horizon quantile bounds and a
+%       predictive median, using only ensemble columns that are entirely finite
+%       and within the expected Rt domain. If too few valid columns remain,
+%       all outputs are NaN.
 %
 %   Inputs:
-%       ensemble - H×M matrix of bootstrap Rt draws (NaN marks invalid draws).
-%       alphas   - 1×K vector of miscoverage rates (0 < alpha_k < 1).
+%       ensemble - H×M matrix of bootstrap Rt draws.
+%       alphas   - K×1 vector of miscoverage rates (0 < alpha_k < 1).
 %
 %   Outputs:
 %       lower_bounds - H×K lower quantile bounds, or NaN(H,K) if insufficient
 %                      valid draws.
 %       upper_bounds - H×K upper quantile bounds, or NaN(H,K) if insufficient
 %                      valid draws.
+%       Rt_pred      - H×1 predictive median across valid draws, or NaN(H,1)
+%                      if insufficient valid draws.
 %
 %   See also FORECAST_OPEN, FORECAST_CLOSED, COMPUTE_WIS.
 %
@@ -28,7 +28,6 @@ function [lower_bounds, upper_bounds, Rt_pred] = interval_bounds(ensemble, alpha
 
     [H, M] = size(ensemble);
     K      = numel(alphas);
-    alphas = reshape(double(alphas), 1, K);
 
     Rt_lo = 1e-2;
     Rt_hi = 1e2;

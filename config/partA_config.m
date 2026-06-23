@@ -168,10 +168,7 @@ cfg.run_snapshot = struct( ...
 cfg.intervals.seed = 1234;
 cfg.intervals.method = "closed_loop_monte_carlo";
 cfg.intervals.num_draws = 60;
-cfg.intervals.min_residual_std = 1e-6;
-cfg.intervals.use_common_random_numbers = true;
 cfg.intervals.include_epidemic_seed_variation = true;
-cfg.intervals.final_num_draws = cfg.intervals.num_draws;
 
 %% 10. Output Artifacts
 thisDir  = fileparts(mfilename('fullpath'));
