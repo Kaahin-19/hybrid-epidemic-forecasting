@@ -5,22 +5,18 @@
 %       Part A expanding-window forecast protocol, then selects one global
 %       configuration by WIS with a one-standard-error parsimony rule.
 %
-%       A feasible candidate completes all intended forecast windows with zero
-%       SIRS susceptible-domain failures. A candidate that leaves the susceptible
-%       domain is infeasible, is early-rejected at the first failed window, and
-%       is masked with Inf so it cannot be selected.
-%
-%       Other unscoreable outputs, such as invalid intervals or non-finite WIS,
-%       are treated as errors and stop evaluation immediately.
+%       Candidates that leave the SIRS susceptible domain are rejected. Other
+%       unscoreable forecast outputs stop the script immediately.
 %
 %   Workflow:
 %       1. Load Part A truth artifacts and build forecast windows.
-%       2. Evaluate each candidate configuration across scenarios.
+%       2. Evaluate candidate configurations across all scenarios.
 %       3. Select the simplest candidate within one standard error of the raw
 %          best global WIS.
-%       4. Save the model-selection artifact and diagnostics.
+%       4. Save the model-selection result.
 %
-%   See also PARTA_01_GENERATE_TRUTH, PARTA_CONFIG, FORECAST_OPEN, FORECAST_CLOSED, INTERVAL_BOUNDS, SIRS_INIT, COMPUTE_WIS.
+%   See also PARTA_01_GENERATE_TRUTH, PARTA_CONFIG, FORECAST_OPEN, ...
+%            FORECAST_CLOSED, INTERVAL_BOUNDS, SIRS_INIT, COMPUTE_WIS.
 %
 % A. M. Kaahin 2026-05-31
 % Modified: 2026-06-21
@@ -36,12 +32,12 @@ exo_mode   = cfg.run.exo_mode;
 
 fprintf('Configuration: Model = %s | Exogenous Mode = %s\n', model_type, exo_mode);
 
-selectionDir = cfg.output.model_selection_dir;
-if ~exist(selectionDir, 'dir')
-    mkdir(selectionDir);
+selection_dir = cfg.output.model_selection_dir;
+if ~exist(selection_dir, 'dir')
+    mkdir(selection_dir);
 end
 
-%% 2. Data Loading and Candidate Setup
+%% 2. Scenario Preparation
 data_dir  = cfg.output.data_dir;
 file_list = dir(fullfile(data_dir, 'partA_01_truth_*.mat'));
 
@@ -53,6 +49,7 @@ end
 horizon       = cfg.forecast.horizon;
 pop_size      = cfg.sirs.pop_size;
 num_scenarios = numel(file_list);
+
 scenario_template = struct( ...
     'scenario_id', "", ...
     'num_exo', 0, ...
@@ -81,30 +78,32 @@ for i = 1:num_scenarios
             error('PARTA_02:UnknownExoMode', 'Unsupported exo_mode: %s', exo_mode);
     end
 
-    num_exo       = size(U_true, 2);
     win_endpoints = cfg.forecast.min_window : cfg.forecast.step_size : (numel(Rt) - horizon);
 
-    scenario_data(i).scenario_id = string(loaded.scenario_id);
-    scenario_data(i).num_exo     = num_exo;
+    [windows, window_data] = local_build_windows(Rt, U_true, S_true, I_true, ...
+        tspan, win_endpoints, horizon, pop_size, ~isempty(U_true));
 
-    built    = local_build_windows(Rt, U_true, S_true, I_true, ...
-        tspan, win_endpoints, horizon, pop_size, num_exo > 0);
-    has_full = arrayfun(@(w) numel(w.truth_Rt) == horizon, built);
-
-    scenario_data(i).windows     = win_endpoints(has_full);
-    scenario_data(i).window_data = built(has_full);
-
-    if isempty(scenario_data(i).window_data)
+    if isempty(window_data)
         error('PARTA_02:NoForecastWindows', ...
             ['Scenario %s has no intended forecast windows; check ' ...
             'min_window/step_size/horizon against the truth length.'], ...
             loaded.scenario_id);
     end
 
+    scenario_data(i).scenario_id = string(loaded.scenario_id);
+    scenario_data(i).num_exo     = size(U_true, 2);
+    scenario_data(i).windows     = windows;
+    scenario_data(i).window_data = window_data;
+
     fprintf('Prepared scenario %d/%d (%s): %d intended windows\n', ...
-        i, num_scenarios, loaded.scenario_id, numel(scenario_data(i).window_data));
+        i, num_scenarios, loaded.scenario_id, numel(window_data));
 end
 
+scenario_ids          = [scenario_data.scenario_id];
+window_counts         = arrayfun(@(s) numel(s.windows), scenario_data(:)');
+intended_window_count = sum(window_counts);
+
+%% 3. Candidate Grid
 switch model_type
     case "AR"
         candidate_grid = (1:cfg.forecast.max_ar_order)';
@@ -122,83 +121,63 @@ switch model_type
     otherwise
         error('PARTA_02:UnknownModel', 'Unsupported model type: %s', model_type);
 end
+
 num_candidates = size(candidate_grid, 1);
 
-scenario_ids  = [scenario_data.scenario_id];
-window_counts = arrayfun(@(s) numel(s.windows), scenario_data(:)');
+%% 4. Candidate Evaluation
+fprintf('Stage: Evaluating %d candidate configurations across %d scenarios\n', ...
+    num_candidates, num_scenarios);
 
 if isempty(gcp('nocreate'))
     parpool('Processes', cfg.run.num_workers);
     pool_cleanup = onCleanup(@local_shutdown_parallel_pool);
 end
 
-scenario_data_const = parallel.pool.Constant(scenario_data);
-
-%% 3. Candidate Evaluation
-fprintf('Stage: Evaluating %d candidate configurations across %d scenarios\n', ...
-    num_candidates, num_scenarios);
-
 base_seed  = cfg.intervals.seed;
-vary       = cfg.intervals.include_epidemic_seed_variation;
 num_draws  = cfg.intervals.num_draws;
 wis_alphas = cfg.forecast.wis_alphas;
-sirs_cfg   = cfg.sirs;
+vary       = cfg.intervals.include_epidemic_seed_variation;
 
-sirs_stepper_const = parallel.pool.Constant(@() sirs_init(sirs_cfg, ...
-    struct('solver', 'uds', 'compile', false, 'seed', base_seed)));
+scenario_data_const = parallel.pool.Constant(scenario_data);
 
-candidate_scores            = inf(num_candidates, num_scenarios);
-global_mean_wis             = inf(num_candidates, 1);
-candidate_aicc              = nan(num_candidates, num_scenarios);
-global_mean_aicc            = nan(num_candidates, 1);
-candidate_intended_windows  = zeros(num_candidates, 1);
-candidate_completed_windows = zeros(num_candidates, 1);
-candidate_domain_failures   = zeros(num_candidates, 1);
-candidate_feasible          = false(num_candidates, 1);
-candidate_evaluated_windows             = zeros(num_candidates, 1);
-candidate_early_rejected                = false(num_candidates, 1);
-candidate_first_domain_failure_scenario = strings(num_candidates, 1);
-candidate_first_domain_failure_window   = nan(num_candidates, 1);
+if exo_mode == "None"
+    sirs_stepper_const = [];
+else
+    sirs_stepper_const = parallel.pool.Constant(@() sirs_init(cfg.sirs, ...
+        struct('solver', 'uds', 'compile', false, 'seed', base_seed)));
+end
+
+candidate_scores = inf(num_candidates, num_scenarios);
+global_mean_wis  = inf(num_candidates, 1);
 
 parfor idx = 1:num_candidates
-    params    = candidate_grid(idx, :);
-    scen_wis  = nan(1, num_scenarios);
-    scen_aicc = nan(1, num_scenarios);
+    params              = candidate_grid(idx, :);
+    scen_wis            = nan(1, num_scenarios);
+    completed_count     = 0;
+    domain_failure      = false;
     scenario_data_local = scenario_data_const.Value;
 
-    intended_count       = sum(window_counts);
-    completed_count      = 0;
-    domain_failure_count = 0;
-    evaluated_count      = 0;
-    early_rejected       = false;
-    first_failure_scenario = "";
-    first_failure_window   = NaN;
-
     for s = 1:num_scenarios
-        data        = scenario_data_local(s);
-        n_wins      = numel(data.window_data);
-        window_wis  = inf(n_wins, 1);
-        window_aicc = nan(n_wins, 1);
+        data       = scenario_data_local(s);
+        window_wis = inf(numel(data.window_data), 1);
 
-        for w = 1:n_wins
+        for w = 1:numel(data.window_data)
             win    = data.window_data(w);
             r_seed = local_resample_seed(base_seed, data.scenario_id, w, model_type, exo_mode);
-            e_seed = local_epidemic_seed(base_seed, data.scenario_id, w, model_type, exo_mode);
-            evaluated_count = evaluated_count + 1;
 
             try
                 if data.num_exo == 0
-                    [~, ens, fit] = forecast_open(model_type, params, win.Rt_past, ...
+                    [~, ens] = forecast_open(model_type, params, win.Rt_past, ...
                         num_draws, horizon, r_seed);
                 else
+                    e_seed       = local_epidemic_seed(base_seed, data.scenario_id, w, model_type, exo_mode);
                     base_stepper = sirs_stepper_const.Value;
-                    [~, ens, fit] = forecast_closed(model_type, params, ...
+                    [~, ens] = forecast_closed(model_type, params, ...
                         win.Rt_past, win.U_past, win.sirs_state, data.num_exo, ...
                         num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
                 end
 
                 [lower, upper, Rt_pred] = interval_bounds(ens, wis_alphas);
-                truth_Rt = win.truth_Rt;
 
                 valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) ...
                     && all(Rt_pred > 0) && all(isfinite(lower(:))) ...
@@ -208,21 +187,17 @@ parfor idx = 1:num_candidates
                         'Forecast window produced invalid intervals or non-finite WIS.');
                 end
 
-                wis_h = compute_wis(truth_Rt, Rt_pred, lower, upper, wis_alphas);
+                wis_h = compute_wis(win.truth_Rt, Rt_pred, lower, upper, wis_alphas);
                 if numel(wis_h) ~= horizon || ~all(isfinite(wis_h))
                     error('PARTA_02:UnscoreableWindow', ...
                         'Forecast window produced invalid intervals or non-finite WIS.');
                 end
 
-                window_wis(w)   = mean(wis_h);
-                window_aicc(w)  = fit.AICc;
+                window_wis(w)  = mean(wis_h);
                 completed_count = completed_count + 1;
             catch ME
                 if strcmp(ME.identifier, 'EPIDEMIC:SusceptibleBelowThreshold')
-                    domain_failure_count   = domain_failure_count + 1;
-                    early_rejected         = true;
-                    first_failure_scenario = data.scenario_id;
-                    first_failure_window   = data.windows(w);
+                    domain_failure = true;
                     break;
                 else
                     rethrow(ME);
@@ -230,37 +205,23 @@ parfor idx = 1:num_candidates
             end
         end
 
-        if early_rejected
+        if domain_failure
             break;
         end
 
-        scen_wis(s)  = mean(window_wis);
-        scen_aicc(s) = local_mean_finite(window_aicc);
+        scen_wis(s) = mean(window_wis);
     end
 
-    feasible = (domain_failure_count == 0) && (completed_count == intended_count);
-
-    candidate_scores(idx, :)         = scen_wis;
-    candidate_aicc(idx, :)           = scen_aicc;
-    global_mean_aicc(idx)            = local_mean_finite(scen_aicc);
-    candidate_intended_windows(idx)  = intended_count;
-    candidate_completed_windows(idx) = completed_count;
-    candidate_domain_failures(idx)   = domain_failure_count;
-    candidate_evaluated_windows(idx)             = evaluated_count;
-    candidate_early_rejected(idx)                = early_rejected;
-    candidate_first_domain_failure_scenario(idx) = first_failure_scenario;
-    candidate_first_domain_failure_window(idx)   = first_failure_window;
-    candidate_feasible(idx)          = feasible;
-    if feasible
-        global_mean_wis(idx) = mean(scen_wis);
-    else
-        global_mean_wis(idx) = Inf;
+    if ~domain_failure && completed_count == intended_window_count
+        candidate_scores(idx, :) = scen_wis;
+        global_mean_wis(idx)     = mean(scen_wis);
     end
 end
 
 fprintf('Stage: Candidate evaluation complete\n');
 clear pool_cleanup
 
+%% 5. Model Selection
 [best_global_wis, raw_best_index] = min(global_mean_wis);
 
 if ~isfinite(best_global_wis)
@@ -269,71 +230,59 @@ if ~isfinite(best_global_wis)
 end
 
 one_se_threshold     = best_global_wis + local_one_se(candidate_scores(raw_best_index, :));
-candidate_complexity = local_candidate_complexity(model_type, candidate_grid, ...
-    scenario_data(1).num_exo);
+candidate_complexity = local_candidate_complexity(model_type, candidate_grid, scenario_data(1).num_exo);
 eligible             = isfinite(global_mean_wis) & (global_mean_wis <= one_se_threshold);
-eligible(raw_best_index) = true;
 selected_index       = local_select_simplest(candidate_complexity, global_mean_wis, eligible);
 
 selected_configuration = candidate_grid(selected_index, :);
 
-%% 4. Artifact Generation
-aggregation_mode = "equal_scenario_mean_over_intended_windows";
-failure_policy   = "early_reject_candidate_on_first_domain_failure; fail_fast_on_nondomain_unscoreable_window";
-cfg_snapshot     = cfg.run_snapshot;
-
-candidate_diagnostics = struct( ...
-    'description', "Fitted-model AICc complexity diagnostic; not a selection criterion.", ...
-    'scenario_ids', scenario_ids, ...
-    'candidate_aicc', candidate_aicc, ...
-    'global_mean_aicc', global_mean_aicc, ...
-    'selected_global_mean_aicc', global_mean_aicc(selected_index), ...
-    'aicc_source', "sys.Report.Fit.AICc per fit, averaged over finite expanding windows then over scenarios", ...
-    'interpretation', "Compare AICc within a model family/likelihood; cross-family AICc differences are weak evidence.");
+%% 6. Artifact Saving
+selection_rule = "minimum_global_wis_with_one_standard_error_parsimony";
+cfg_snapshot   = cfg.run_snapshot;
 
 file_prefix   = sprintf('partA_02_global_hyperparameters_%s_%s', model_type, exo_mode);
-artifact_path = fullfile(selectionDir, [file_prefix, '.mat']);
+artifact_path = fullfile(selection_dir, [file_prefix, '.mat']);
 
 save(artifact_path, ...
     'model_type', 'exo_mode', ...
-    'candidate_grid', 'candidate_scores', 'global_mean_wis', ...
     'selected_configuration', 'selected_index', ...
-    'scenario_ids', 'window_counts', 'cfg_snapshot', ...
-    'wis_alphas', 'aggregation_mode', 'failure_policy', 'best_global_wis', ...
-    'candidate_diagnostics', 'candidate_aicc', 'global_mean_aicc', ...
-    'candidate_intended_windows', 'candidate_completed_windows', ...
-    'candidate_domain_failures', 'candidate_feasible', ...
-    'candidate_evaluated_windows', 'candidate_early_rejected', ...
-    'candidate_first_domain_failure_scenario', 'candidate_first_domain_failure_window');
+    'candidate_grid', 'candidate_scores', 'global_mean_wis', ...
+    'scenario_ids', 'window_counts', ...
+    'cfg_snapshot', 'wis_alphas', ...
+    'best_global_wis', 'one_se_threshold', 'selection_rule');
 
 fprintf('Selected global model configuration: %s\n', mat2str(selected_configuration));
 fprintf('Global model-selection artifact saved to: %s\n', artifact_path);
 fprintf('=== Global Model-Configuration Selection Complete ===\n\n');
 
-%% 5. Local Functions
+%% 7. Local Functions
 
-function window_data = local_build_windows(Rt, U_true, S_true, I_true, tspan, ...
-    win_endpoints, horizon, pop_size, has_exo)
+function [windows, window_data] = local_build_windows(Rt, U_true, S_true, I_true, ...
+    tspan, win_endpoints, horizon, pop_size, has_exo)
 %LOCAL_BUILD_WINDOWS Build expanding-window forecast entries for one scenario.
-n_wins      = numel(win_endpoints);
-template    = struct('Rt_past', [], 'truth_Rt', [], 'U_past', [], 'sirs_state', []);
-window_data = repmat(template, n_wins, 1);
-for k = 1:n_wins
+template = struct('Rt_past', [], 'truth_Rt', [], 'U_past', [], 'sirs_state', []);
+built    = repmat(template, numel(win_endpoints), 1);
+keep     = false(numel(win_endpoints), 1);
+
+for k = 1:numel(win_endpoints)
     idx_T = find(tspan == win_endpoints(k), 1);
     if isempty(idx_T) || idx_T + horizon > numel(Rt)
         continue;
     end
-    window_data(k).Rt_past  = Rt(1:idx_T);
-    window_data(k).truth_Rt = Rt(idx_T + 1 : idx_T + horizon);
+
+    built(k).Rt_past  = Rt(1:idx_T);
+    built(k).truth_Rt = Rt(idx_T + 1 : idx_T + horizon);
+    keep(k) = true;
+
     if has_exo
         R_at_T = pop_size - S_true(idx_T) - I_true(idx_T);
-        window_data(k).U_past     = U_true(1:idx_T, :);
-        window_data(k).sirs_state = [S_true(idx_T), I_true(idx_T), R_at_T];
-    else
-        window_data(k).U_past     = [];
-        window_data(k).sirs_state = [];
+        built(k).U_past     = U_true(1:idx_T, :);
+        built(k).sirs_state = [S_true(idx_T), I_true(idx_T), R_at_T];
     end
 end
+
+windows     = win_endpoints(keep);
+window_data = built(keep);
 end
 
 function local_shutdown_parallel_pool()
@@ -352,17 +301,15 @@ if n < 2
 else
     one_se = std(scenario_scores, 0) / sqrt(n);
 end
-if ~isscalar(one_se) || ~isfinite(one_se) || one_se < 0
-    one_se = 0;
-end
 end
 
 function complexity = local_candidate_complexity(model_type, candidate_grid, num_exo)
 %LOCAL_CANDIDATE_COMPLEXITY Estimated free-parameter count per candidate.
-n = size(candidate_grid, 1);
-complexity = nan(n, 1);
-for i = 1:n
+complexity = nan(size(candidate_grid, 1), 1);
+
+for i = 1:size(candidate_grid, 1)
     row = candidate_grid(i, :);
+
     switch model_type
         case "AR"
             complexity(i) = row(1);
@@ -371,7 +318,7 @@ for i = 1:n
         case {"N4SID", "SSEST"}
             complexity(i) = row(1) + row(2);
         otherwise
-            complexity(i) = sum(row);
+            error('PARTA_02:UnknownModel', 'Unsupported model type: %s', model_type);
     end
 end
 end
@@ -383,16 +330,6 @@ keys = [candidate_complexity(candidate_indices), ...
     global_mean_wis(candidate_indices), candidate_indices];
 keys = sortrows(keys, [1 2 3]);
 idx  = keys(1, 3);
-end
-
-function m = local_mean_finite(v)
-%LOCAL_MEAN_FINITE Mean over finite elements; NaN if none are finite.
-v = v(isfinite(v));
-if isempty(v)
-    m = nan;
-else
-    m = mean(v);
-end
 end
 
 function seed = local_resample_seed(base, scenario_id, w, model_type, exo_mode)
@@ -409,17 +346,21 @@ function seed = local_hash_seed(base, parts)
 %LOCAL_HASH_SEED Map identifiers to a deterministic positive integer seed.
 modulus = 2147483647;
 seed    = mod(double(base), modulus);
+
 for i = 1:numel(parts)
     part = parts{i};
+
     if ischar(part) || isstring(part)
         chars = double(char(string(part)));
     else
         chars = double(part(:)).';
     end
+
     for c = chars
         seed = mod(seed * 131 + c + 7, modulus);
     end
 end
+
 if seed < 1
     seed = 1;
 end
