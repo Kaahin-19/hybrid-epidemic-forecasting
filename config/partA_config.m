@@ -126,7 +126,7 @@ cfg.truth.solver     = "uds";
 cfg.truth.compile    = true;
 
 %% 6. Active Run Configuration
-cfg.run.base_seed = 23487;
+cfg.run.seed = 23487;
 cfg.run.model_type  = string(local_env_or_default('PARTA_MODEL_TYPE', 'ARX'));
 cfg.run.exo_mode    = string(local_env_or_default('PARTA_EXO_MODE', 'I'));
 cfg.run.num_workers = 4;
