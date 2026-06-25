@@ -164,7 +164,6 @@ cfg.run_snapshot = struct( ...
     'truth_seed',                 cfg.truth.seed);
 
 %% 8. Predictive Interval Settings
-cfg.intervals.seed = 1234;
 cfg.intervals.num_draws = 60;
 cfg.intervals.include_epidemic_seed_variation = true;
 
