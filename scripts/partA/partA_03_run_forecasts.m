@@ -42,8 +42,8 @@ selection = local_load_selection(cfg, model_type, exo_mode);
 
 selected_configuration = selection.selected_configuration;
 selected_index         = selection.selected_index;
-snapshot = cfg.snapshot.forecast;
-cfg_snapshot           = selection.snapshot;
+snapshot               = cfg.snapshot.forecast;
+selection_protocol     = selection.snapshot;
 
 fprintf('Using selected configuration: %s\n', mat2str(selected_configuration));
 
