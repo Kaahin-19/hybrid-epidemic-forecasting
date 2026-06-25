@@ -242,7 +242,7 @@ selected_configuration = candidate_grid(selected_index, :);
 
 %% 6. Artifact Saving
 selection_rule = "minimum_global_wis_with_one_standard_error_parsimony";
-cfg_snapshot   = cfg.run_snapshot;
+snapshot   = cfg.snapshot.selection;
 
 file_prefix   = sprintf('partA_02_global_hyperparameters_%s_%s', model_type, exo_mode);
 artifact_path = fullfile(selection_dir, [file_prefix, '.mat']);
@@ -252,7 +252,7 @@ save(artifact_path, ...
     'selected_configuration', 'selected_index', ...
     'candidate_grid', 'candidate_scores', 'global_mean_wis', ...
     'scenario_ids', 'window_counts', ...
-    'cfg_snapshot', 'wis_alphas', ...
+    'snapshot', 'wis_alphas', ...
     'best_global_wis', 'one_se_threshold', 'selection_rule');
 
 fprintf('Selected global model configuration: %s\n', mat2str(selected_configuration));
@@ -336,36 +336,3 @@ keys = sortrows(keys, [1 2 3]);
 idx  = keys(1, 3);
 end
 
-% function seed = local_resample_seed(base, scenario_id, w, model_type, exo_mode)
-% %LOCAL_RESAMPLE_SEED Deterministic resample seed for a given window context.
-% seed = local_hash_seed(base, {scenario_id, w, model_type, exo_mode});
-% end
-
-% function seed = local_epidemic_seed(base, scenario_id, w, model_type, exo_mode)
-% %LOCAL_EPIDEMIC_SEED Deterministic epidemic base seed for a given window context.
-% seed = local_hash_seed(base + 7919, {scenario_id, w, model_type, exo_mode});
-% end
-
-% function seed = local_hash_seed(base, parts)
-% %LOCAL_HASH_SEED Map identifiers to a deterministic positive integer seed.
-% modulus = 2147483647;
-% seed    = mod(double(base), modulus);
-
-% for i = 1:numel(parts)
-%     part = parts{i};
-
-%     if ischar(part) || isstring(part)
-%         chars = double(char(string(part)));
-%     else
-%         chars = double(part(:)).';
-%     end
-
-%     for c = chars
-%         seed = mod(seed * 131 + c + 7, modulus);
-%     end
-% end
-
-% if seed < 1
-%     seed = 1;
-% end
-% end

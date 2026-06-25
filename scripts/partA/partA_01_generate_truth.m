@@ -28,6 +28,7 @@ numTime  = numel(tspan);
 rtBounds = cfg.Rt.bounds;
 dataDir  = cfg.output.data_dir;
 
+
 if ~exist(dataDir, 'dir')
     mkdir(dataDir);
 end
@@ -35,7 +36,7 @@ end
 sim_options = struct( ...
     'solver',  cfg.truth.solver, ...
     'compile', cfg.truth.compile, ...
-    'seed',    cfg.truth.seed);
+    'seed',    cfg.sim.seed);
 
 %% 2. Simulation and Persistence Loop
 fprintf('Saving trajectories to: %s\n', dataDir);
@@ -74,7 +75,9 @@ for i = 1:numel(cfg.scenarios)
         'S_true',        U(1, :)', ...
         'I_true',        U(2, :)', ...
         'tspan',         tspan(:), ...
-        'model_params',  params);
+        'model_params',  params, ...
+        'snapshot',      cfg.snapshot.truth ...
+        );
 
     outPath = fullfile(dataDir, sprintf('partA_01_truth_%s.mat', scenario.id));
     save(outPath, '-struct', 'artifact');
