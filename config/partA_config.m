@@ -120,14 +120,13 @@ cfg.scenarios(4).params      = struct( ...
     );
 
 %% 5. Ground-Truth Simulation
+cfg.truth.seed = 1234;
 cfg.truth.model_type = "SIRS";
 cfg.truth.solver     = "uds";
 cfg.truth.compile    = true;
 
-%% 6. Reproducibility
-cfg.sim.seed = 1234;
-
-%% 7. Active Run Configuration
+%% 6. Active Run Configuration
+cfg.run.base_seed = 23487;
 cfg.run.model_type  = string(local_env_or_default('PARTA_MODEL_TYPE', 'ARX'));
 cfg.run.exo_mode    = string(local_env_or_default('PARTA_EXO_MODE', 'I'));
 cfg.run.num_workers = 4;
@@ -135,7 +134,7 @@ cfg.run.num_workers = 4;
 cfg.run.exo_mode = local_resolve_run_configuration( ...
     cfg.run.model_type, cfg.run.exo_mode);
 
-%% 8. Forecasting Hyperparameters
+%% 7. Forecasting Hyperparameters
 cfg.forecast.min_window = 49;
 cfg.forecast.step_size  = 7;
 cfg.forecast.horizon    = 14;
@@ -162,15 +161,14 @@ cfg.run_snapshot = struct( ...
     'R0_init',                    cfg.sirs.R0_init, ...
     'min_susceptible_fraction',   cfg.sirs.min_susceptible_fraction, ...
     'min_susceptible',            cfg.sirs.min_susceptible, ...
-    'sim_seed',                   cfg.sim.seed);
+    'truth_seed',                 cfg.truth.seed);
 
-%% 9. Predictive Interval Settings
+%% 8. Predictive Interval Settings
 cfg.intervals.seed = 1234;
-cfg.intervals.method = "closed_loop_monte_carlo";
 cfg.intervals.num_draws = 60;
 cfg.intervals.include_epidemic_seed_variation = true;
 
-%% 10. Output Artifacts
+%% 9. Output Artifacts
 thisDir  = fileparts(mfilename('fullpath'));
 repoRoot = fileparts(thisDir);
 

@@ -40,6 +40,8 @@ end
 %% 2. Scenario Preparation
 data_dir  = cfg.output.data_dir;
 file_list = dir(fullfile(data_dir, 'partA_01_truth_*.mat'));
+[~, order] = sort({file_list.name});
+file_list = file_list(order);
 
 if isempty(file_list)
     error('PARTA_02:NoData', ...
@@ -133,7 +135,7 @@ if isempty(gcp('nocreate'))
     pool_cleanup = onCleanup(@local_shutdown_parallel_pool);
 end
 
-base_seed  = cfg.intervals.seed;
+base_seed  = cfg.run.seed;
 num_draws  = cfg.intervals.num_draws;
 wis_alphas = cfg.forecast.wis_alphas;
 vary       = cfg.intervals.include_epidemic_seed_variation;
@@ -162,15 +164,17 @@ parfor idx = 1:num_candidates
         window_wis = inf(numel(data.window_data), 1);
 
         for w = 1:numel(data.window_data)
-            win    = data.window_data(w);
-            r_seed = local_resample_seed(base_seed, data.scenario_id, w, model_type, exo_mode);
+            win         = data.window_data(w);
+
+            window_seed = base_seed + 10000 * s + w;
+            r_seed      = window_seed;
 
             try
                 if data.num_exo == 0
                     [~, ens] = forecast_open(model_type, params, win.Rt_past, ...
                         num_draws, horizon, r_seed);
                 else
-                    e_seed       = local_epidemic_seed(base_seed, data.scenario_id, w, model_type, exo_mode);
+                    e_seed = window_seed + 1000000;
                     base_stepper = sirs_stepper_const.Value;
                     [~, ens] = forecast_closed(model_type, params, ...
                         win.Rt_past, win.U_past, win.sirs_state, data.num_exo, ...
@@ -332,36 +336,36 @@ keys = sortrows(keys, [1 2 3]);
 idx  = keys(1, 3);
 end
 
-function seed = local_resample_seed(base, scenario_id, w, model_type, exo_mode)
-%LOCAL_RESAMPLE_SEED Deterministic resample seed for a given window context.
-seed = local_hash_seed(base, {scenario_id, w, model_type, exo_mode});
-end
+% function seed = local_resample_seed(base, scenario_id, w, model_type, exo_mode)
+% %LOCAL_RESAMPLE_SEED Deterministic resample seed for a given window context.
+% seed = local_hash_seed(base, {scenario_id, w, model_type, exo_mode});
+% end
 
-function seed = local_epidemic_seed(base, scenario_id, w, model_type, exo_mode)
-%LOCAL_EPIDEMIC_SEED Deterministic epidemic base seed for a given window context.
-seed = local_hash_seed(base + 7919, {scenario_id, w, model_type, exo_mode});
-end
+% function seed = local_epidemic_seed(base, scenario_id, w, model_type, exo_mode)
+% %LOCAL_EPIDEMIC_SEED Deterministic epidemic base seed for a given window context.
+% seed = local_hash_seed(base + 7919, {scenario_id, w, model_type, exo_mode});
+% end
 
-function seed = local_hash_seed(base, parts)
-%LOCAL_HASH_SEED Map identifiers to a deterministic positive integer seed.
-modulus = 2147483647;
-seed    = mod(double(base), modulus);
+% function seed = local_hash_seed(base, parts)
+% %LOCAL_HASH_SEED Map identifiers to a deterministic positive integer seed.
+% modulus = 2147483647;
+% seed    = mod(double(base), modulus);
 
-for i = 1:numel(parts)
-    part = parts{i};
+% for i = 1:numel(parts)
+%     part = parts{i};
 
-    if ischar(part) || isstring(part)
-        chars = double(char(string(part)));
-    else
-        chars = double(part(:)).';
-    end
+%     if ischar(part) || isstring(part)
+%         chars = double(char(string(part)));
+%     else
+%         chars = double(part(:)).';
+%     end
 
-    for c = chars
-        seed = mod(seed * 131 + c + 7, modulus);
-    end
-end
+%     for c = chars
+%         seed = mod(seed * 131 + c + 7, modulus);
+%     end
+% end
 
-if seed < 1
-    seed = 1;
-end
-end
+% if seed < 1
+%     seed = 1;
+% end
+% end

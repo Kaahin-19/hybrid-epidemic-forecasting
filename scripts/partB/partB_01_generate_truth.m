@@ -208,7 +208,7 @@ function sim_options = local_sim_options_for_case(cfg, case_cfg, scenario_idx, r
     if logical(case_cfg.process_noise.enabled)
         sim_options.seed = local_process_seed(cfg, case_cfg, scenario_idx, replicate_idx);
     else
-        sim_options.seed = cfg.sim.seed;
+        sim_options.seed = cfg.truth.seed;
     end
 end
 
@@ -222,7 +222,7 @@ function seed = local_process_seed(cfg, case_cfg, scenario_idx, replicate_idx)
     case_block = 100000000;
     scenario_block = 1000000;
     replicate_stride = cfg.process_noise.replicate_seed_stride;
-    seed = cfg.sim.seed + case_block * local_case_seed_index(case_cfg.case_id) + ...
+    seed = cfg.truth.seed + case_block * local_case_seed_index(case_cfg.case_id) + ...
         scenario_block * (scenario_idx - 1) + replicate_stride * (replicate_idx - 1);
 end
 
@@ -232,7 +232,7 @@ function seed = local_noise_seed(cfg, case_cfg, scenario_idx, replicate_idx)
     case_block = 100000000;
     scenario_block = 1000000;
     replicate_stride = cfg.process_noise.replicate_seed_stride;
-    seed = cfg.sim.seed + noise_space + ...
+    seed = cfg.truth.seed + noise_space + ...
         case_block * local_case_seed_index(case_cfg.case_id) + ...
         scenario_block * (scenario_idx - 1) + replicate_stride * (replicate_idx - 1);
 end
