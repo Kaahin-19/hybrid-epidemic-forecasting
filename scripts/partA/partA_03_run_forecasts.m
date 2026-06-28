@@ -150,18 +150,18 @@ for w = 1:numel(window_data)
     r_seed      = window_seed;
 
     if isempty(win.U_past)
-        [~, ensemble_paths] = forecast_open(model_type, params, ...
+        [~, ens] = forecast_open(model_type, params, ...
             win.Rt_past, num_draws, horizon, r_seed);
     else
         e_seed = window_seed + 1000000;
-        [~, ensemble_paths] = forecast_closed(model_type, params, ...
+        [~, ens] = forecast_closed(model_type, params, ...
             win.Rt_past, win.U_past, win.sirs_state, size(win.U_past, 2), ...
             num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
     end
 
-    Rt_pred = median(ensemble_paths, 2);
-    lower   = quantile(ensemble_paths, wis_alphas(:).' / 2, 2);
-    upper   = quantile(ensemble_paths, 1 - wis_alphas(:).' / 2, 2);
+    Rt_pred = median(ens, 2);
+    lower   = quantile(ens, wis_alphas(:).' / 2, 2);
+    upper   = quantile(ens, 1 - wis_alphas(:).' / 2, 2);
 
     valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) ...
         && all(Rt_pred > 0) && all(isfinite(lower(:))) ...
