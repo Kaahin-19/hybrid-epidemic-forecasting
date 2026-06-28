@@ -22,7 +22,7 @@ function Rt = generate_rt_signal(tspan, scenario)
 %   See also PARTA_CONFIG, PARTB_CONFIG, PARTA_01_GENERATE_TRUTH.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-12
+% Modified: 2026-06-28
 
 %% 1. Signal Formula
 signal_type = scenario.signal_type;
