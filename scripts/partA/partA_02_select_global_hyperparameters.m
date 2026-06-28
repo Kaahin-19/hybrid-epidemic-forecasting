@@ -12,8 +12,8 @@
 %       3. Select the simplest configuration within the one-standard-error rule.
 %       4. Save the selected configuration and candidate-score evidence.
 %
-%   See also PARTA_CONFIG, PARTA_03_RUN_FORECASTS, FORECAST_OPEN, ...
-%            FORECAST_CLOSED, INTERVAL_BOUNDS, COMPUTE_WIS.
+%   See also PARTA_CONFIG, PARTA_03_RUN_FORECASTS, BUILD_FORECAST_WINDOWS, ...
+%            FORECAST_OPEN, FORECAST_CLOSED, COMPUTE_WIS.
 %
 % A. M. Kaahin 2026-02-19
 % Modified: 2026-06-28
@@ -48,48 +48,29 @@ horizon       = cfg.forecast.horizon;
 pop_size      = cfg.sirs.pop_size;
 num_scenarios = numel(file_list);
 
-scenario_template = struct('scenario_id', "", 'num_exo', 0, 'windows', [], 'window_data', struct('Rt_past', {}, 'U_past', {}, 'sirs_state', {}, 'truth_Rt', {}));
+scenario_template = struct('scenario_id', "", 'num_exo', 0, 'window_data', []);
 scenario_data = repmat(scenario_template, num_scenarios, 1);
 
 for i = 1:num_scenarios
     loaded = load(fullfile(data_dir, file_list(i).name));
 
-    Rt_true = loaded.Rt_true;
-    S_true = loaded.S_true;
-    I_true = loaded.I_true;
-    tspan  = loaded.tspan;
-
-    switch exo_mode
-        case "None"
-            U_true = [];
-        case "S"
-            U_true = S_true / pop_size;
-        case "I"
-            U_true = I_true / pop_size;
-        case "Both"
-            U_true = [S_true / pop_size, I_true / pop_size];
-        otherwise
-            error('PARTA_02:UnknownExoMode', 'Unsupported exo_mode: %s', exo_mode);
-    end
-
-    win_endpoints = cfg.forecast.min_window : cfg.forecast.step_size : (numel(Rt_true) - horizon);
-
-    [windows, window_data] = local_build_windows(Rt_true, U_true, S_true, I_true, tspan, win_endpoints, horizon, pop_size, ~isempty(U_true));
+    [window_data, num_exo] = build_forecast_windows(loaded.Rt_true, loaded.S_true, ...
+        loaded.I_true, loaded.tspan, exo_mode, pop_size, ...
+        cfg.forecast.min_window, cfg.forecast.step_size, horizon);
 
     if isempty(window_data)
-        error('PARTA_02:NoForecastWindows', ['Scenario %s has no intended forecast windows; check min_window/step_size/horizon against the truth length.'], loaded.scenario_id);
+        error('PARTA_02:NoForecastWindows', 'Scenario %s has no intended forecast windows; check min_window/step_size/horizon against the truth length.', loaded.scenario_id);
     end
 
     scenario_data(i).scenario_id = string(loaded.scenario_id);
-    scenario_data(i).num_exo     = size(U_true, 2);
-    scenario_data(i).windows     = windows;
+    scenario_data(i).num_exo     = num_exo;
     scenario_data(i).window_data = window_data;
 
     fprintf('Prepared scenario %d/%d (%s): %d intended windows\n', ...
         i, num_scenarios, loaded.scenario_id, numel(window_data));
 end
 
-intended_window_count = sum(arrayfun(@(s) numel(s.windows), scenario_data(:)'));
+intended_window_count = sum(arrayfun(@(s) numel(s.window_data), scenario_data(:)'));
 
 %% 3. Candidate Grid
 switch model_type
@@ -157,7 +138,9 @@ parfor idx = 1:num_candidates
                     [~, ens] = forecast_closed(model_type, params, win.Rt_past, win.U_past, win.sirs_state, data.num_exo, num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
                 end
 
-                [lower, upper, Rt_pred] = interval_bounds(ens, wis_alphas);
+                Rt_pred = median(ens, 2);
+                lower   = quantile(ens, wis_alphas(:).' / 2, 2);
+                upper   = quantile(ens, 1 - wis_alphas(:).' / 2, 2);
 
                 valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) && all(Rt_pred > 0) && all(isfinite(lower(:))) && all(isfinite(upper(:))) && all(lower(:) <= upper(:));
                 if ~valid
@@ -236,34 +219,6 @@ fprintf('Global model-selection artifact saved to: %s\n', artifact_path);
 fprintf('=== Global Model-Configuration Selection Complete ===\n\n');
 
 %% 7. Local Functions
-
-function [windows, window_data] = local_build_windows(Rt, U_true, S_true, I_true, tspan, win_endpoints, horizon, pop_size, has_exo)
-%LOCAL_BUILD_WINDOWS Build expanding-window forecast entries for one scenario.
-template = struct('Rt_past', [], 'U_past', [], 'sirs_state', [], 'truth_Rt', []);
-built    = repmat(template, numel(win_endpoints), 1);
-keep     = false(numel(win_endpoints), 1);
-
-for k = 1:numel(win_endpoints)
-    idx_T = find(tspan == win_endpoints(k), 1);
-    if isempty(idx_T) || idx_T + horizon > numel(Rt)
-        continue;
-    end
-
-    built(k).Rt_past = Rt(1:idx_T);
-
-    if has_exo
-        R_at_T = pop_size - S_true(idx_T) - I_true(idx_T);
-        built(k).U_past     = U_true(1:idx_T, :);
-        built(k).sirs_state = [S_true(idx_T); I_true(idx_T); R_at_T];
-    end
-
-    built(k).truth_Rt = Rt(idx_T + 1 : idx_T + horizon);
-    keep(k) = true;
-end
-
-windows     = win_endpoints(keep);
-window_data = built(keep);
-end
 
 function local_shutdown_parallel_pool()
 %LOCAL_SHUTDOWN_PARALLEL_POOL Close the local parallel pool before MATLAB exits.

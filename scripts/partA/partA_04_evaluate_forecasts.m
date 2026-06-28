@@ -23,9 +23,6 @@ clear; close all; clc;
 
 fprintf('=== Part A Forecast Evaluation ===\n');
 
-repo_root = fileparts(fileparts(fileparts(mfilename('fullpath'))));
-addpath(fullfile(repo_root, 'src', 'scoring'));
-
 cfg            = partA_config();
 forecast_dir   = cfg.output.forecast_dir;
 evaluation_dir = cfg.output.score_dir;

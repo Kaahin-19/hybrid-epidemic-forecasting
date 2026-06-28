@@ -13,7 +13,7 @@
 %       4. Save one forecast artifact per scenario.
 %
 %   See also PARTA_CONFIG, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, ...
-%            FORECAST_OPEN, FORECAST_CLOSED, INTERVAL_BOUNDS.
+%            BUILD_FORECAST_WINDOWS, FORECAST_OPEN, FORECAST_CLOSED.
 %
 % A. M. Kaahin 2026-02-19
 % Modified: 2026-06-28
@@ -71,30 +71,12 @@ for i = 1:numel(file_list)
     loaded = load(fullfile(data_dir, file_list(i).name));
 
     scenario_id = string(loaded.scenario_id);
-    Rt_true     = loaded.Rt_true;
-    S_true      = loaded.S_true;
-    I_true      = loaded.I_true;
-    tspan       = loaded.tspan;
 
     fprintf('Processing scenario %d/%d (%s)\n', i, numel(file_list), scenario_id);
 
-    switch exo_mode
-        case "None"
-            U_true = [];
-        case "S"
-            U_true = S_true / pop_size;
-        case "I"
-            U_true = I_true / pop_size;
-        case "Both"
-            U_true = [S_true / pop_size, I_true / pop_size];
-        otherwise
-            error('PARTA_03:UnknownExoMode', 'Unsupported exo_mode: %s', exo_mode);
-    end
-
-    win_endpoints = cfg.forecast.min_window : cfg.forecast.step_size : (numel(Rt_true) - horizon);
-
-    [~, window_data] = local_build_windows(Rt_true, U_true, S_true, I_true, ...
-        tspan, win_endpoints, horizon, pop_size, ~isempty(U_true));
+    window_data = build_forecast_windows(loaded.Rt_true, loaded.S_true, ...
+        loaded.I_true, loaded.tspan, exo_mode, pop_size, ...
+        cfg.forecast.min_window, cfg.forecast.step_size, horizon);
 
     if isempty(window_data)
         error('PARTA_03:NoForecastWindows', ...
@@ -113,8 +95,8 @@ for i = 1:numel(file_list)
         'selected_configuration', selected_configuration, ...
         'snapshot', forecast_snapshot, ...
         'wis_alphas', wis_alphas, ...
-        'tspan', tspan, ...
-        'Rt_true', Rt_true, ...
+        'tspan', loaded.tspan, ...
+        'Rt_true', loaded.Rt_true, ...
         'results', results);
 
     file_prefix = sprintf('partA_03_forecast_%s_%s_%s', ...
@@ -147,39 +129,6 @@ if ~isequaln(selection.snapshot, cfg.snapshot.selection)
 end
 end
 
-function [windows, window_data] = local_build_windows(Rt, U_true, S_true, I_true, ...
-    tspan, win_endpoints, horizon, pop_size, has_exo)
-%LOCAL_BUILD_WINDOWS Build expanding-window forecast entries for one scenario.
-template = struct('window_day', [], 'window_day_idx', [], 'time_horizon', [], ...
-    'Rt_past', [], 'U_past', [], 'sirs_state', [], 'truth_Rt', []);
-built = repmat(template, numel(win_endpoints), 1);
-keep  = false(numel(win_endpoints), 1);
-
-for k = 1:numel(win_endpoints)
-    idx_T = find(tspan == win_endpoints(k), 1);
-    if isempty(idx_T) || idx_T + horizon > numel(Rt)
-        continue;
-    end
-
-    built(k).window_day     = win_endpoints(k);
-    built(k).window_day_idx = idx_T;
-    built(k).time_horizon   = tspan(idx_T + 1 : idx_T + horizon);
-    built(k).Rt_past        = Rt(1:idx_T);
-
-    if has_exo
-        R_at_T = pop_size - S_true(idx_T) - I_true(idx_T);
-        built(k).U_past     = U_true(1:idx_T, :);
-        built(k).sirs_state = [S_true(idx_T); I_true(idx_T); R_at_T];
-    end
-
-    built(k).truth_Rt = Rt(idx_T + 1 : idx_T + horizon);
-    keep(k) = true;
-end
-
-windows     = win_endpoints(keep);
-window_data = built(keep);
-end
-
 function results = local_run_scenario_forecasts( ...
     model_type, exo_mode, params, window_data, ...
     base_stepper, base_seed, num_draws, horizon, wis_alphas, vary, scenario_index)
@@ -210,7 +159,9 @@ for w = 1:numel(window_data)
             num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
     end
 
-    [lower, upper, Rt_pred] = interval_bounds(ensemble_paths, wis_alphas);
+    Rt_pred = median(ensemble_paths, 2);
+    lower   = quantile(ensemble_paths, wis_alphas(:).' / 2, 2);
+    upper   = quantile(ensemble_paths, 1 - wis_alphas(:).' / 2, 2);
 
     valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) ...
         && all(Rt_pred > 0) && all(isfinite(lower(:))) ...

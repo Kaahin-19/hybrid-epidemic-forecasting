@@ -22,7 +22,7 @@ function [wis, components] = compute_wis(truth, pred, lower, upper, alphas)
 %       components - Struct with fields median_term, dispersion,
 %                    underprediction, and overprediction.
 %
-%   See also INTERVAL_BOUNDS, FORECAST_OPEN, FORECAST_CLOSED.
+%   See also FORECAST_OPEN, FORECAST_CLOSED.
 %
 % A. M. Kaahin 2026-06-15
 % Modified: 2026-06-21
