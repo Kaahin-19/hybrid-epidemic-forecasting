@@ -41,9 +41,7 @@ end
 selection = local_load_selection(cfg, model_type, exo_mode);
 
 selected_configuration = selection.selected_configuration;
-selected_index         = selection.selected_index;
-snapshot               = cfg.snapshot.forecast;
-selection_protocol     = selection.snapshot;
+forecast_snapshot      = cfg.snapshot.forecast;
 
 fprintf('Using selected configuration: %s\n', mat2str(selected_configuration));
 
@@ -99,7 +97,7 @@ for i = 1:numel(file_list)
 
     win_endpoints = cfg.forecast.min_window : cfg.forecast.step_size : (numel(Rt_true) - horizon);
 
-    [windows, window_data] = local_build_windows(Rt_true, U_true, S_true, I_true, ...
+    [~, window_data] = local_build_windows(Rt_true, U_true, S_true, I_true, ...
         tspan, win_endpoints, horizon, pop_size, ~isempty(U_true));
 
     if isempty(window_data)
@@ -109,7 +107,7 @@ for i = 1:numel(file_list)
     end
 
     results = local_run_scenario_forecasts( ...
-        model_type, exo_mode, selected_configuration, window_data, windows, ...
+        model_type, exo_mode, selected_configuration, window_data, ...
         base_stepper, base_seed, num_draws, horizon, wis_alphas, vary, i);
 
     artifact = struct( ...
@@ -117,11 +115,8 @@ for i = 1:numel(file_list)
         'model_type', model_type, ...
         'exo_mode', exo_mode, ...
         'selected_configuration', selected_configuration, ...
-        'selected_index', selected_index, ...
-        'snapshot', snapshot, ...
-        'selection_protocol', selection_protocol, ...
+        'snapshot', forecast_snapshot, ...
         'wis_alphas', wis_alphas, ...
-        'windows', windows, ...
         'tspan', tspan, ...
         'Rt_true', Rt_true, ...
         'results', results);
@@ -159,8 +154,8 @@ end
 function [windows, window_data] = local_build_windows(Rt, U_true, S_true, I_true, ...
     tspan, win_endpoints, horizon, pop_size, has_exo)
 %LOCAL_BUILD_WINDOWS Build expanding-window forecast entries for one scenario.
-template = struct('Rt_past', [], 'truth_Rt', [], 'U_past', [], ...
-    'sirs_state', [], 'window_day', [], 'window_day_idx', [], 'time_horizon', []);
+template = struct('window_day', [], 'window_day_idx', [], 'time_horizon', [], ...
+    'Rt_past', [], 'U_past', [], 'sirs_state', [], 'truth_Rt', []);
 built = repmat(template, numel(win_endpoints), 1);
 keep  = false(numel(win_endpoints), 1);
 
@@ -170,18 +165,19 @@ for k = 1:numel(win_endpoints)
         continue;
     end
 
-    built(k).Rt_past        = Rt(1:idx_T);
-    built(k).truth_Rt       = Rt(idx_T + 1 : idx_T + horizon);
     built(k).window_day     = win_endpoints(k);
     built(k).window_day_idx = idx_T;
     built(k).time_horizon   = tspan(idx_T + 1 : idx_T + horizon);
-    keep(k) = true;
+    built(k).Rt_past        = Rt(1:idx_T);
 
     if has_exo
         R_at_T = pop_size - S_true(idx_T) - I_true(idx_T);
         built(k).U_past     = U_true(1:idx_T, :);
         built(k).sirs_state = [S_true(idx_T), I_true(idx_T), R_at_T];
     end
+
+    built(k).truth_Rt = Rt(idx_T + 1 : idx_T + horizon);
+    keep(k) = true;
 end
 
 windows     = win_endpoints(keep);
@@ -189,7 +185,7 @@ window_data = built(keep);
 end
 
 function results = local_run_scenario_forecasts( ...
-    model_type, exo_mode, selected_configuration, window_data, ~, ...
+    model_type, exo_mode, params, window_data, ...
     base_stepper, base_seed, num_draws, horizon, wis_alphas, vary, scenario_index)
 %LOCAL_RUN_SCENARIO_FORECASTS Run selected-model forecasts for one scenario.
 template = struct( ...
@@ -209,11 +205,11 @@ for w = 1:numel(window_data)
     r_seed      = window_seed;
 
     if isempty(win.U_past)
-        [~, ensemble_paths] = forecast_open(model_type, selected_configuration, ...
+        [~, ensemble_paths] = forecast_open(model_type, params, ...
             win.Rt_past, num_draws, horizon, r_seed);
     else
         e_seed = window_seed + 1000000;
-        [~, ensemble_paths] = forecast_closed(model_type, selected_configuration, ...
+        [~, ensemble_paths] = forecast_closed(model_type, params, ...
             win.Rt_past, win.U_past, win.sirs_state, size(win.U_past, 2), ...
             num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
     end
