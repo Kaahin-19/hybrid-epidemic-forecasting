@@ -93,7 +93,7 @@ nb_vec = repmat(nb, 1, num_exo);
 nk_vec = repmat(nk, 1, num_exo);
 sys    = arx(iddata(y, U_past, 1), [na, nb_vec, nk_vec]);
 aicc   = sys.Report.Fit.AICc;
-a_vals = sys.A(2:end);                   % 1×na
+a_vals = sys.A(2:end);
 b_vals = local_extract_b(sys.B, nb, nk, num_exo);
 
 residuals = zeros(T - max_lag, 1);
