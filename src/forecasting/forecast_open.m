@@ -63,7 +63,7 @@ end
 
 sys    = ar(iddata(y, [], 1), p, 'burg');
 aicc   = sys.Report.Fit.AICc;
-a_vals = sys.A(2:end);                    % 1×p AR coefficients
+a_vals = sys.A(2:end);
 
 T         = numel(y);
 residuals = zeros(T - p, 1);
@@ -80,7 +80,7 @@ end
 
 innovations = local_resample(residuals, horizon, num_draws, resample_seed);
 
-seed_vals = y(end - p + 1 : end);         
+seed_vals = y(end - p + 1 : end);
 roll      = [repmat(seed_vals, 1, num_draws); zeros(horizon, num_draws)];
 ensemble  = zeros(horizon, num_draws);
 for h = 1:horizon

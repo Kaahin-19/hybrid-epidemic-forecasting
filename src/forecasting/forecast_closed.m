@@ -170,7 +170,7 @@ x         = X0;
 T         = numel(y);
 residuals = zeros(T, 1);
 for t = 1:T
-    u_col        = U_past(t, :).';         % column for D*u, B*u
+    u_col        = U_past(t, :).';
     y_hat        = C * x + D * u_col;
     e_t          = y(t) - y_hat;
     residuals(t) = e_t;
@@ -196,7 +196,7 @@ for d = 1:num_draws
     stepper.call_count = 0;
     x                  = x_origin;
     state              = sirs_state;
-    u_current          = U_past(end, :).';  % last observed covariate, column for D*u
+    u_current          = U_past(end, :).';
     for h = 1:horizon
         y_hat   = C * x + D * u_current;
         y_next  = y_hat + innovations(h, d);
@@ -250,7 +250,7 @@ end
 end
 
 function u = local_exo_row(state, exo_mode, pop_size)
-%LOCAL_EXO_ROW Row-vector exogenous covariate from epidemic state (for history update).
+%LOCAL_EXO_ROW Row-vector exogenous covariate from epidemic state.
 switch exo_mode
     case "S";    u = state(1) / pop_size;
     case "I";    u = state(2) / pop_size;
@@ -259,7 +259,7 @@ end
 end
 
 function u = local_exo_col(state, exo_mode, pop_size)
-%LOCAL_EXO_COL Column-vector exogenous covariate from epidemic state (for matrix multiply).
+%LOCAL_EXO_COL Column-vector exogenous covariate from epidemic state.
 switch exo_mode
     case "S";    u = state(1) / pop_size;
     case "I";    u = state(2) / pop_size;
