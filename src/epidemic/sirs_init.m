@@ -14,8 +14,7 @@ function stepper = sirs_init(model_params, sim_options)
 %   Inputs:
 %       model_params - Structure with gamma, xi, pop_size, and SIRS stepping
 %                      guard parameters.
-%       sim_options  - Structure with solver ('uds' or 'ssa'), seed, and
-%                      compile fields.
+%       sim_options  - Structure with solver and seed fields.
 %
 %   Outputs:
 %       stepper - Reusable SIRS stepper structure.
@@ -23,17 +22,10 @@ function stepper = sirs_init(model_params, sim_options)
 %   See also PARTA_01_GENERATE_TRUTH, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS, SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-21
+% Modified: 2026-06-28
 
 %% 1. Prepare Inputs
 sim_options.solver  = char(sim_options.solver);
-sim_options.compile = logical(sim_options.compile);
-
-valid_solvers = {'uds', 'ssa'};
-if ~any(strcmp(sim_options.solver, valid_solvers))
-    error('EPIDEMIC:UnsupportedSolver', ...
-        'Unsupported SIRS solver mode: %s. Must be uds or ssa.', sim_options.solver);
-end
 
 epidemic_dir = fileparts(mfilename('fullpath'));
 src_dir      = fileparts(epidemic_dir);
@@ -47,9 +39,7 @@ cd(build_dir);
 %% 2. Model Definition
 model_name = 'SIRS';
 species    = {'S', 'I', 'R'};
-reactions  = {'S > beta*S*I/vol > I', ...
-              'I > gammaI*I > R', ...
-              'R > deltaR*R > S'};
+reactions  = {'S > beta*S*I/vol > I', 'I > gammaI*I > R', 'R > deltaR*R > S'};
 
 rates.beta   = 'ldata_time';
 rates.gammaI = 'gdata';
@@ -69,19 +59,9 @@ beta_driver = repmat(model_params.gamma, 1, numel(umod.tspan));
 %% 3. One-Time URDME Preparation
 mex_stem = ['mexuds_' model_name '_' model_name '_mexrhs'];
 mex_file = fullfile(build_dir, [mex_stem, '.', mexext()]);
+compile_model = exist(mex_file, 'file') ~= 2;
 
-if ~sim_options.compile && exist(mex_file, 'file') ~= 2
-    sim_options.compile = true;
-end
-
-umod = urdme(umod, 'solve', 0, ...
-                   'compile', sim_options.compile, ...
-                   'solver', sim_options.solver, ...
-                   'modelname', model_name, ...
-                   'gdata', gdata, ...
-                   'ldata_time', reshape(beta_driver, ...
-                       [1, numel(umod.vol), numel(umod.tspan)]), ...
-                   'data_time', umod.tspan);
+umod = urdme(umod, 'solve', 0, 'compile', compile_model, 'solver', sim_options.solver, 'modelname', model_name, 'gdata', gdata, 'ldata_time', reshape(beta_driver, [1, numel(umod.vol), numel(umod.tspan)]), 'data_time', umod.tspan);
 
 if strcmp(sim_options.solver, 'uds')
     umod.mexexec = str2func('mexuds');
@@ -89,11 +69,7 @@ else
     umod.mexexec = str2func(umod.mexname);
 end
 
-umod.solve   = 1;
-umod.parse   = 1;
-umod.compile = 0;
-umod.seed    = sim_options.seed;
-umod.U       = [];
+umod.seed = sim_options.seed;
 
 %% 4. Output Assembly
 stepper               = struct();

@@ -28,15 +28,9 @@ numTime  = numel(tspan);
 rtBounds = cfg.Rt.bounds;
 dataDir  = cfg.output.data_dir;
 
-
 if ~exist(dataDir, 'dir')
     mkdir(dataDir);
 end
-
-sim_options = struct( ...
-    'solver',  cfg.truth.solver, ...
-    'compile', cfg.truth.compile, ...
-    'seed',    cfg.truth.seed);
 
 %% 2. Simulation and Persistence Loop
 fprintf('Saving trajectories to: %s\n', dataDir);
@@ -50,37 +44,24 @@ for i = 1:numel(cfg.scenarios)
     Rt_true = generate_rt_signal(tspan, scenario);
 
     if any(Rt_true < rtBounds(1) | Rt_true > rtBounds(2), 'all')
-        error('PARTA:RtOutOfBounds', ...
-            'Generated Rt signal for %s is outside cfg.Rt.bounds.', scenario.id);
+        error('PARTA:RtOutOfBounds', 'Generated Rt signal for %s is outside cfg.Rt.bounds.', scenario.id);
     end
 
-    step_options         = sim_options;
-    step_options.compile = sim_options.compile && (i == 1);
+    step_options         = struct('solver', 'uds', 'seed', 1234);
     stepper              = sirs_init(params, step_options);
 
     U = zeros(3, numTime);
-    U(:, 1) = [params.pop_size - params.I0 - params.R0_init; ...
-        params.I0; ...
-        params.R0_init];
+    U(:, 1) = [params.pop_size - params.I0 - params.R0_init; params.I0; params.R0_init];
 
     for k = 1:(numTime - 1)
         [next_state, stepper] = sirs_step(stepper, U(:, k), Rt_true(k));
-        U(:, k + 1) = reshape(next_state, 3, 1);
+        U(:, k + 1) = next_state;
     end
 
-    snapshot          = cfg.snapshot.truth;
+    snapshot = cfg.snapshot.truth;
     snapshot.scenario = scenario;
 
-    artifact = struct( ...
-        'scenario_id',   scenario.id, ...
-        'scenario_name', scenario.name, ...
-        'Rt_true',       Rt_true(:), ...
-        'S_true',        U(1, :)', ...
-        'I_true',        U(2, :)', ...
-        'tspan',         tspan(:), ...
-        'model_params',  params, ...
-        'snapshot',      snapshot ...
-        );
+    artifact = struct('scenario_id', scenario.id, 'scenario_name', scenario.name, 'Rt_true', Rt_true(:), 'S_true', U(1, :)', 'I_true', U(2, :)', 'tspan', tspan(:), 'model_params', params, 'snapshot', snapshot);
 
     outPath = fullfile(dataDir, sprintf('partA_01_truth_%s.mat', scenario.id));
     save(outPath, '-struct', 'artifact');

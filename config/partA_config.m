@@ -17,7 +17,6 @@ function cfg = partA_config()
 %           .Rt         : Effective reproduction-number constraints for checks.
 %           .sirs       : Biological parameters and SIRS stepping guard.
 %           .scenarios  : Array of structs defining the analytic Rt signals.
-%           .truth      : Ground-truth simulator model, solver, and seed.
 %           .run        : Active execution settings and forecast seed.
 %           .forecast   : Hyperparameters for the hybrid model.
 %           .snapshot   : Artifact compatibility snapshots.
@@ -119,22 +118,15 @@ cfg.scenarios(4).params      = struct( ...
     "denom",    wave_denom ...
     );
 
-%% 5. Ground-Truth Simulation
-cfg.truth.seed = 1234;
-cfg.truth.model_type = "SIRS";
-cfg.truth.solver     = "uds";
-cfg.truth.compile    = true;
-
-%% 6. Active Run Configuration
+%% 5. Active Run Configuration
 cfg.run.seed = 23487;
 cfg.run.model_type  = string(local_env_or_default('PARTA_MODEL_TYPE', 'ARX'));
 cfg.run.exo_mode    = string(local_env_or_default('PARTA_EXO_MODE', 'I'));
 cfg.run.num_workers = 4;
 
-cfg.run.exo_mode = local_resolve_run_configuration( ...
-    cfg.run.model_type, cfg.run.exo_mode);
+cfg.run.exo_mode = local_resolve_run_configuration(cfg.run.model_type, cfg.run.exo_mode);
 
-%% 7. Forecasting Hyperparameters
+%% 6. Forecasting Hyperparameters
 cfg.forecast.min_window = 49;
 cfg.forecast.step_size  = 7;
 cfg.forecast.horizon    = 14;
@@ -149,18 +141,16 @@ cfg.forecast.wis_alphas = [0.05; 0.10; 0.20; 0.50];
 cfg.forecast.plot_alphas    = [0.10, 0.50];
 cfg.forecast.plot_lead_time = 7;
 
-%% 8. Predictive Interval Settings
+%% 7. Predictive Interval Settings
 cfg.intervals.num_draws = 60;
 cfg.intervals.include_epidemic_seed_variation = true;
 
-%% 9. Artifact Compatibility Snapshots
-
+%% 8. Artifact Compatibility Snapshots
 cfg.snapshot.truth = struct( ...
     'T_end', cfg.time.T_end, ...
     'dt', cfg.time.dt, ...
     'Rt_bounds', cfg.Rt.bounds, ...
-    'sirs', cfg.sirs, ...
-    'truth', cfg.truth);
+    'sirs', cfg.sirs);
 
 cfg.snapshot.selection = struct( ...
     'model_type', cfg.run.model_type, ...
@@ -177,8 +167,7 @@ cfg.snapshot.selection = struct( ...
     'wis_alphas', cfg.forecast.wis_alphas, ...
     'num_draws', cfg.intervals.num_draws, ...
     'include_epidemic_seed_variation', cfg.intervals.include_epidemic_seed_variation, ...
-    'sirs', cfg.sirs, ...
-    'truth_seed', cfg.truth.seed);
+    'sirs', cfg.sirs);
 
 cfg.snapshot.forecast = struct( ...
     'model_type', cfg.run.model_type, ...
@@ -190,14 +179,13 @@ cfg.snapshot.forecast = struct( ...
     'wis_alphas', cfg.forecast.wis_alphas, ...
     'num_draws', cfg.intervals.num_draws, ...
     'include_epidemic_seed_variation', cfg.intervals.include_epidemic_seed_variation, ...
-    'sirs', cfg.sirs, ...
-    'truth_seed', cfg.truth.seed);
+    'sirs', cfg.sirs);
 
 cfg.snapshot.figures = struct( ...
     'plot_alphas', cfg.forecast.plot_alphas, ...
     'plot_lead_time', cfg.forecast.plot_lead_time);
 
-%% 10. Output Artifacts
+%% 9. Output Artifacts
 thisDir  = fileparts(mfilename('fullpath'));
 repoRoot = fileparts(thisDir);
 
