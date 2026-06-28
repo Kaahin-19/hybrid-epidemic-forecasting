@@ -1,5 +1,4 @@
-function [point_path, ensemble_paths, fit_info] = forecast_open(model_type, params, ...
-    Rt_past, num_draws, horizon, resample_seed)
+function [point_path, ensemble_paths, fit_info] = forecast_open(model_type, params, Rt_past, num_draws, horizon, resample_seed)
 %FORECAST_OPEN Bootstrap forecast ensemble for output-only models (num_exo == 0).
 %
 %   Syntax:
@@ -38,8 +37,7 @@ switch model_type
     case "AR"
         [ensemble_paths, aicc] = local_ar(y, params(1), num_draws, horizon, resample_seed);
     case {"N4SID", "SSEST"}
-        [ensemble_paths, aicc] = local_ss_open(model_type, y, params(1), ...
-            num_draws, horizon, resample_seed);
+        [ensemble_paths, aicc] = local_ss_open(model_type, y, params(1), num_draws, horizon, resample_seed);
     otherwise
         error('FORECAST_OPEN:UnknownModel', 'Unsupported model type: %s', model_type);
 end
@@ -53,12 +51,10 @@ end
 function [ensemble, aicc] = local_ar(y, p, num_draws, horizon, resample_seed)
 %LOCAL_AR AR bootstrap ensemble on the log scale.
 if std(y) < 1e-8
-    error('FORECAST_OPEN:ConstantSeries', ...
-        'log(Rt_past) is effectively constant (std < 1e-8); cannot fit AR model.');
+    error('FORECAST_OPEN:ConstantSeries', 'log(Rt_past) is effectively constant (std < 1e-8); cannot fit AR model.');
 end
 if numel(y) <= p + 1
-    error('FORECAST_OPEN:InsufficientHistory', ...
-        'AR history too short: numel(y) = %d <= p + 1 = %d.', numel(y), p + 1);
+    error('FORECAST_OPEN:InsufficientHistory', 'AR history too short: numel(y) = %d <= p + 1 = %d.', numel(y), p + 1);
 end
 
 sys    = ar(iddata(y, [], 1), p, 'burg');
@@ -74,8 +70,7 @@ end
 residuals = residuals(isfinite(residuals));
 
 if numel(residuals) < 2
-    error('FORECAST_OPEN:InsufficientResiduals', ...
-        'Fewer than two finite AR residuals available.');
+    error('FORECAST_OPEN:InsufficientResiduals', 'Fewer than two finite AR residuals available.');
 end
 
 innovations = local_resample(residuals, horizon, num_draws, resample_seed);
@@ -89,8 +84,7 @@ for h = 1:horizon
     y_next  = y_hat + innovations(h, :);
     Rt_next = exp(y_next);
     if ~all(isfinite(Rt_next) & Rt_next > 0)
-        error('FORECAST_OPEN:InvalidForecastDraw', ...
-            'Bootstrap draw produced a non-finite or non-positive Rt.');
+        error('FORECAST_OPEN:InvalidForecastDraw', 'Bootstrap draw produced a non-finite or non-positive Rt.');
     end
     ensemble(h, :) = Rt_next;
     roll(p + h, :) = y_next;
@@ -100,8 +94,7 @@ end
 function [ensemble, aicc] = local_ss_open(model_type, y, n, num_draws, horizon, resample_seed)
 %LOCAL_SS_OPEN Output-only state-space bootstrap ensemble on the log scale.
 if std(y) < 1e-8
-    error('FORECAST_OPEN:ConstantSeries', ...
-        'log(Rt_past) is effectively constant (std < 1e-8); cannot fit state-space model.');
+    error('FORECAST_OPEN:ConstantSeries', 'log(Rt_past) is effectively constant (std < 1e-8); cannot fit state-space model.');
 end
 
 data = iddata(y, [], 1);
@@ -128,8 +121,7 @@ x_origin  = x;
 residuals = residuals(isfinite(residuals));
 
 if numel(residuals) < 2
-    error('FORECAST_OPEN:InsufficientResiduals', ...
-        'Fewer than two finite state-space residuals available.');
+    error('FORECAST_OPEN:InsufficientResiduals', 'Fewer than two finite state-space residuals available.');
 end
 
 innovations = local_resample(residuals, horizon, num_draws, resample_seed);
@@ -142,8 +134,7 @@ for d = 1:num_draws
         y_next  = y_hat + innovations(h, d);
         Rt_next = exp(y_next);
         if ~isfinite(Rt_next) || Rt_next <= 0
-            error('FORECAST_OPEN:InvalidForecastDraw', ...
-                'Bootstrap draw produced a non-finite or non-positive Rt.');
+            error('FORECAST_OPEN:InvalidForecastDraw', 'Bootstrap draw produced a non-finite or non-positive Rt.');
         end
         ensemble(h, d) = Rt_next;
         x              = A * x + K_gain * innovations(h, d);

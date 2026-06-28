@@ -1,6 +1,4 @@
-function [point_path, ensemble_paths, fit_info] = forecast_closed(model_type, params, Rt_past, U_past, ...
-    sirs_state, num_exo, num_draws, horizon, exo_mode, base_stepper, ...
-    resample_seed, epidemic_base_seed, vary_epidemic_seed)
+function [point_path, ensemble_paths, fit_info] = forecast_closed(model_type, params, Rt_past, U_past, sirs_state, num_exo, num_draws, horizon, exo_mode, base_stepper, resample_seed, epidemic_base_seed, vary_epidemic_seed)
 %FORECAST_CLOSED Bootstrap forecast ensemble for models with exogenous inputs (num_exo > 0).
 %
 %   Syntax:
@@ -52,13 +50,9 @@ y = log(Rt_past);
 
 switch model_type
     case "ARX"
-        [ensemble_paths, aicc] = local_arx(y, U_past, params, num_exo, num_draws, ...
-            horizon, exo_mode, base_stepper, sirs_state, ...
-            resample_seed, epidemic_base_seed, vary_epidemic_seed);
+        [ensemble_paths, aicc] = local_arx(y, U_past, params, num_exo, num_draws, horizon, exo_mode, base_stepper, sirs_state, resample_seed, epidemic_base_seed, vary_epidemic_seed);
     case {"N4SID", "SSEST"}
-        [ensemble_paths, aicc] = local_ss_closed(model_type, y, U_past, params(1), ...
-            num_exo, num_draws, horizon, exo_mode, base_stepper, sirs_state, ...
-            resample_seed, epidemic_base_seed, vary_epidemic_seed);
+        [ensemble_paths, aicc] = local_ss_closed(model_type, y, U_past, params(1), num_exo, num_draws, horizon, exo_mode, base_stepper, sirs_state, resample_seed, epidemic_base_seed, vary_epidemic_seed);
     otherwise
         error('FORECAST_CLOSED:UnknownModel', 'Unsupported model type: %s', model_type);
 end
@@ -79,14 +73,12 @@ nk = params(3);
 T  = numel(y);
 
 if std(y) < 1e-8
-    error('FORECAST_CLOSED:ConstantSeries', ...
-        'log(Rt_past) is effectively constant (std < 1e-8); cannot fit ARX model.');
+    error('FORECAST_CLOSED:ConstantSeries', 'log(Rt_past) is effectively constant (std < 1e-8); cannot fit ARX model.');
 end
 
 max_lag = max(na, nk + nb - 1);
 if T - max_lag < 2
-    error('FORECAST_CLOSED:InsufficientHistory', ...
-        'ARX history too short: T - max_lag = %d < 2.', T - max_lag);
+    error('FORECAST_CLOSED:InsufficientHistory', 'ARX history too short: T - max_lag = %d < 2.', T - max_lag);
 end
 
 nb_vec = repmat(nb, 1, num_exo);
@@ -105,8 +97,7 @@ end
 residuals = residuals(isfinite(residuals));
 
 if numel(residuals) < 2
-    error('FORECAST_CLOSED:InsufficientResiduals', ...
-        'Fewer than two finite ARX residuals available.');
+    error('FORECAST_CLOSED:InsufficientResiduals', 'Fewer than two finite ARX residuals available.');
 end
 
 innovations     = local_resample(residuals, horizon, num_draws, resample_seed);
@@ -131,13 +122,11 @@ for d = 1:num_draws
         y_next  = y_hat + innovations(h, d);
         Rt_next = exp(y_next);
         if ~isfinite(Rt_next) || Rt_next <= 0
-            error('FORECAST_CLOSED:InvalidForecastDraw', ...
-                'Bootstrap draw produced a non-finite or non-positive Rt.');
+            error('FORECAST_CLOSED:InvalidForecastDraw', 'Bootstrap draw produced a non-finite or non-positive Rt.');
         end
         [state, stepper] = sirs_step(stepper, state, Rt_next);
         if state(1) <= min_susceptible
-            error('EPIDEMIC:SusceptibleBelowThreshold', ...
-                'Forecasted SIRS state crossed the susceptible-domain threshold.');
+            error('EPIDEMIC:SusceptibleBelowThreshold', 'Forecasted SIRS state crossed the susceptible-domain threshold.');
         end
         ensemble(h, d)   = Rt_next;
         roll_y(T + h)    = y_next;
@@ -151,8 +140,7 @@ function [ensemble, aicc] = local_ss_closed(model_type, y, U_past, n, ~, ...
     resample_seed, epidemic_base_seed, vary_epidemic_seed)
 %LOCAL_SS_CLOSED Closed-loop state-space bootstrap ensemble on the log scale.
 if std(y) < 1e-8
-    error('FORECAST_CLOSED:ConstantSeries', ...
-        'log(Rt_past) is effectively constant (std < 1e-8); cannot fit state-space model.');
+    error('FORECAST_CLOSED:ConstantSeries', 'log(Rt_past) is effectively constant (std < 1e-8); cannot fit state-space model.');
 end
 
 data = iddata(y, U_past, 1);
@@ -180,8 +168,7 @@ x_origin  = x;
 residuals = residuals(isfinite(residuals));
 
 if numel(residuals) < 2
-    error('FORECAST_CLOSED:InsufficientResiduals', ...
-        'Fewer than two finite state-space residuals available.');
+    error('FORECAST_CLOSED:InsufficientResiduals', 'Fewer than two finite state-space residuals available.');
 end
 
 innovations     = local_resample(residuals, horizon, num_draws, resample_seed);
@@ -202,13 +189,11 @@ for d = 1:num_draws
         y_next  = y_hat + innovations(h, d);
         Rt_next = exp(y_next);
         if ~isfinite(Rt_next) || Rt_next <= 0
-            error('FORECAST_CLOSED:InvalidForecastDraw', ...
-                'Bootstrap draw produced a non-finite or non-positive Rt.');
+            error('FORECAST_CLOSED:InvalidForecastDraw', 'Bootstrap draw produced a non-finite or non-positive Rt.');
         end
         [state, stepper] = sirs_step(stepper, state, Rt_next);
         if state(1) <= min_susceptible
-            error('EPIDEMIC:SusceptibleBelowThreshold', ...
-                'Forecasted SIRS state crossed the susceptible-domain threshold.');
+            error('EPIDEMIC:SusceptibleBelowThreshold', 'Forecasted SIRS state crossed the susceptible-domain threshold.');
         end
         u_next         = local_exo_col(state, exo_mode, pop_size);
         x              = A * x + B * u_current + K_gain * innovations(h, d);

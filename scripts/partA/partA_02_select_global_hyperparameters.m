@@ -41,19 +41,14 @@ file_list = dir(fullfile(data_dir, 'partA_01_truth_*.mat'));
 file_list = file_list(order);
 
 if isempty(file_list)
-    error('PARTA_02:NoData', ...
-        'No synthetic truth files found in %s. Run partA_01 first.', data_dir);
+    error('PARTA_02:NoData', 'No synthetic truth files found in %s. Run partA_01 first.', data_dir);
 end
 
 horizon       = cfg.forecast.horizon;
 pop_size      = cfg.sirs.pop_size;
 num_scenarios = numel(file_list);
 
-scenario_template = struct( ...
-    'scenario_id', "", ...
-    'num_exo', 0, ...
-    'windows', [], ...
-    'window_data', struct('Rt_past', {}, 'U_past', {}, 'sirs_state', {}, 'truth_Rt', {}));
+scenario_template = struct('scenario_id', "", 'num_exo', 0, 'windows', [], 'window_data', struct('Rt_past', {}, 'U_past', {}, 'sirs_state', {}, 'truth_Rt', {}));
 scenario_data = repmat(scenario_template, num_scenarios, 1);
 
 for i = 1:num_scenarios
@@ -79,14 +74,10 @@ for i = 1:num_scenarios
 
     win_endpoints = cfg.forecast.min_window : cfg.forecast.step_size : (numel(Rt_true) - horizon);
 
-    [windows, window_data] = local_build_windows(Rt_true, U_true, S_true, I_true, ...
-        tspan, win_endpoints, horizon, pop_size, ~isempty(U_true));
+    [windows, window_data] = local_build_windows(Rt_true, U_true, S_true, I_true, tspan, win_endpoints, horizon, pop_size, ~isempty(U_true));
 
     if isempty(window_data)
-        error('PARTA_02:NoForecastWindows', ...
-            ['Scenario %s has no intended forecast windows; check ' ...
-            'min_window/step_size/horizon against the truth length.'], ...
-            loaded.scenario_id);
+        error('PARTA_02:NoForecastWindows', ['Scenario %s has no intended forecast windows; check min_window/step_size/horizon against the truth length.'], loaded.scenario_id);
     end
 
     scenario_data(i).scenario_id = string(loaded.scenario_id);
@@ -105,15 +96,10 @@ switch model_type
     case "AR"
         candidate_grid = (1:cfg.forecast.max_ar_order)';
     case "ARX"
-        [P, NB, NK] = ndgrid( ...
-            1:cfg.forecast.max_ar_order, ...
-            1:cfg.forecast.max_exo_order, ...
-            1:cfg.forecast.max_exo_delay);
+        [P, NB, NK] = ndgrid(1:cfg.forecast.max_ar_order, 1:cfg.forecast.max_exo_order, 1:cfg.forecast.max_exo_delay);
         candidate_grid = [P(:), NB(:), NK(:)];
     case {"N4SID", "SSEST"}
-        [N_order, D_order] = ndgrid( ...
-            1:cfg.forecast.max_state_order, ...
-            cfg.forecast.state_diff_orders);
+        [N_order, D_order] = ndgrid(1:cfg.forecast.max_state_order, cfg.forecast.state_diff_orders);
         candidate_grid = [N_order(:), D_order(:)];
     otherwise
         error('PARTA_02:UnknownModel', 'Unsupported model type: %s', model_type);
@@ -122,8 +108,7 @@ end
 num_candidates = size(candidate_grid, 1);
 
 %% 4. Candidate Evaluation
-fprintf('Stage: Evaluating %d candidate configurations across %d scenarios\n', ...
-    num_candidates, num_scenarios);
+fprintf('Stage: Evaluating %d candidate configurations across %d scenarios\n', num_candidates, num_scenarios);
 
 if isempty(gcp('nocreate'))
     parpool('Processes', cfg.run.num_workers);
@@ -140,8 +125,7 @@ scenario_data_const = parallel.pool.Constant(scenario_data);
 if exo_mode == "None"
     sirs_stepper_const = [];
 else
-    sirs_stepper_const = parallel.pool.Constant(@() sirs_init(cfg.sirs, ...
-        struct('solver', 'uds', 'compile', false, 'seed', base_seed)));
+    sirs_stepper_const = parallel.pool.Constant(@() sirs_init(cfg.sirs, struct('solver', 'uds', 'seed', base_seed)));
 end
 
 candidate_scores = inf(num_candidates, num_scenarios);
@@ -166,30 +150,23 @@ parfor idx = 1:num_candidates
 
             try
                 if data.num_exo == 0
-                    [~, ens] = forecast_open(model_type, params, win.Rt_past, ...
-                        num_draws, horizon, r_seed);
+                    [~, ens] = forecast_open(model_type, params, win.Rt_past, num_draws, horizon, r_seed);
                 else
                     e_seed = window_seed + 1000000;
                     base_stepper = sirs_stepper_const.Value;
-                    [~, ens] = forecast_closed(model_type, params, ...
-                        win.Rt_past, win.U_past, win.sirs_state, data.num_exo, ...
-                        num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
+                    [~, ens] = forecast_closed(model_type, params, win.Rt_past, win.U_past, win.sirs_state, data.num_exo, num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
                 end
 
                 [lower, upper, Rt_pred] = interval_bounds(ens, wis_alphas);
 
-                valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) ...
-                    && all(Rt_pred > 0) && all(isfinite(lower(:))) ...
-                    && all(isfinite(upper(:))) && all(lower(:) <= upper(:));
+                valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) && all(Rt_pred > 0) && all(isfinite(lower(:))) && all(isfinite(upper(:))) && all(lower(:) <= upper(:));
                 if ~valid
-                    error('PARTA_02:UnscoreableWindow', ...
-                        'Forecast window produced invalid intervals or non-finite WIS.');
+                    error('PARTA_02:UnscoreableWindow', 'Forecast window produced invalid intervals or non-finite WIS.');
                 end
 
                 wis_h = compute_wis(win.truth_Rt, Rt_pred, lower, upper, wis_alphas);
                 if numel(wis_h) ~= horizon || ~all(isfinite(wis_h))
-                    error('PARTA_02:UnscoreableWindow', ...
-                        'Forecast window produced invalid intervals or non-finite WIS.');
+                    error('PARTA_02:UnscoreableWindow', 'Forecast window produced invalid intervals or non-finite WIS.');
                 end
 
                 window_wis(w)  = mean(wis_h);
@@ -224,8 +201,7 @@ clear pool_cleanup
 [best_global_wis, raw_best_index] = min(global_mean_wis);
 
 if ~isfinite(best_global_wis)
-    error('PARTA_02:NoFeasibleCandidate', ...
-        'No candidate completed all intended windows without domain failures.');
+    error('PARTA_02:NoFeasibleCandidate', 'No candidate completed all intended windows without domain failures.');
 end
 
 one_se_threshold     = best_global_wis + local_one_se(candidate_scores(raw_best_index, :));
@@ -261,8 +237,7 @@ fprintf('=== Global Model-Configuration Selection Complete ===\n\n');
 
 %% 7. Local Functions
 
-function [windows, window_data] = local_build_windows(Rt, U_true, S_true, I_true, ...
-    tspan, win_endpoints, horizon, pop_size, has_exo)
+function [windows, window_data] = local_build_windows(Rt, U_true, S_true, I_true, tspan, win_endpoints, horizon, pop_size, has_exo)
 %LOCAL_BUILD_WINDOWS Build expanding-window forecast entries for one scenario.
 template = struct('Rt_past', [], 'U_past', [], 'sirs_state', [], 'truth_Rt', []);
 built    = repmat(template, numel(win_endpoints), 1);
@@ -279,7 +254,7 @@ for k = 1:numel(win_endpoints)
     if has_exo
         R_at_T = pop_size - S_true(idx_T) - I_true(idx_T);
         built(k).U_past     = U_true(1:idx_T, :);
-        built(k).sirs_state = [S_true(idx_T), I_true(idx_T), R_at_T];
+        built(k).sirs_state = [S_true(idx_T); I_true(idx_T); R_at_T];
     end
 
     built(k).truth_Rt = Rt(idx_T + 1 : idx_T + horizon);

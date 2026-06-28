@@ -63,8 +63,7 @@ vary       = cfg.intervals.include_epidemic_seed_variation;
 if exo_mode == "None"
     base_stepper = [];
 else
-    base_stepper = sirs_init(cfg.sirs, ...
-        struct('solver', 'uds', 'compile', false, 'seed', base_seed));
+    base_stepper = sirs_init(cfg.sirs, struct('solver', 'uds', 'seed', base_seed));
 end
 
 %% 4. Scenario Forecast Loop
@@ -170,7 +169,7 @@ for k = 1:numel(win_endpoints)
     if has_exo
         R_at_T = pop_size - S_true(idx_T) - I_true(idx_T);
         built(k).U_past     = U_true(1:idx_T, :);
-        built(k).sirs_state = [S_true(idx_T), I_true(idx_T), R_at_T];
+        built(k).sirs_state = [S_true(idx_T); I_true(idx_T); R_at_T];
     end
 
     built(k).truth_Rt = Rt(idx_T + 1 : idx_T + horizon);
