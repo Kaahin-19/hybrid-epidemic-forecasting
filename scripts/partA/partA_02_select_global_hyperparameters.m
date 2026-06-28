@@ -232,7 +232,6 @@ fprintf('Global model-selection artifact saved to: %s\n', artifact_path);
 fprintf('=== Global Model-Configuration Selection Complete ===\n\n');
 
 %% 7. Local Functions
-
 function local_shutdown_parallel_pool()
 %LOCAL_SHUTDOWN_PARALLEL_POOL Close the local parallel pool before MATLAB exits.
 pool = gcp('nocreate');

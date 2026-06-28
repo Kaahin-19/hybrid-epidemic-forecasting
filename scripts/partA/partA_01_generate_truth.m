@@ -12,10 +12,10 @@
 %       2. Generate each configured effective-Rt signal and check bounds.
 %       3. Simulate and save one SIRS truth artifact per scenario.
 %
-%   See also PARTA_CONFIG, GENERATE_RT_SIGNAL, SIRS_INIT, SIRS_STEP.
+%   See also PARTA_CONFIG, SIRS_INIT, SIRS_STEP.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-21
+% Modified: 2026-06-28
 
 %% 1. Initialization
 clear; close all; clc;
@@ -41,7 +41,17 @@ for i = 1:numel(cfg.scenarios)
 
     fprintf('  - Processing %s (%s)... ', scenario.id, scenario.name);
 
-    Rt_true = generate_rt_signal(tspan, scenario);
+    sp = scenario.params;
+    switch scenario.signal_type
+        case "seasonal"
+            Rt_true = sp.center + sp.amp * sin((2 * pi / sp.period) * tspan);
+        case "sigmoid"
+            Rt_true = sp.high + (sp.low - sp.high) ./ (1 + exp(-sp.k * (tspan - sp.t0)));
+        case "multi_wave"
+            Rt_true = sp.baseline + sp.A1*exp(-((tspan-sp.mu1).^2)/sp.denom) + sp.A2*exp(-((tspan-sp.mu2).^2)/sp.denom) + sp.A3*exp(-((tspan-sp.mu3).^2)/sp.denom) + sp.A4*exp(-((tspan-sp.mu4).^2)/sp.denom);
+        otherwise
+            error('PARTA:UnsupportedSignal', 'Unsupported Rt signal type: %s.', scenario.signal_type);
+    end
 
     if any(Rt_true < rtBounds(1) | Rt_true > rtBounds(2), 'all')
         error('PARTA:RtOutOfBounds', 'Generated Rt signal for %s is outside cfg.Rt.bounds.', scenario.id);
