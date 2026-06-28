@@ -68,6 +68,4 @@ for i = 1:numel(cfg.scenarios)
 
     fprintf('Saved\n');
 end
-
-%% 3. Completion
 fprintf('=== Part A Synthetic Truth Generation Complete ===\n\n');

@@ -24,42 +24,28 @@ function Rt = generate_rt_signal(tspan, scenario)
 % A. M. Kaahin 2026-05-31
 % Modified: 2026-06-12
 
-    %% 1. Signal Formula
-    signal_type = scenario.signal_type;
-    params = scenario.params;
-    switch signal_type
-        case "seasonal"
-            Rt = local_rt_seasonal(tspan, params);
+%% 1. Signal Formula
+signal_type = scenario.signal_type;
+p = scenario.params;
+t = tspan;
 
-        case "sigmoid"
-            Rt = local_rt_sigmoid(tspan, params);
+switch signal_type
+    case "seasonal"
+        Rt = p.center + p.amp * sin((2*pi/p.period) * t);
 
-        case "multi_wave"
-            Rt = local_rt_multi_wave(tspan, params);
+    case "sigmoid"
+        Rt = p.high + (p.low - p.high) ./ (1 + exp(-p.k * (t - p.t0)));
 
-        otherwise
-            error('SCENARIO:UnsupportedGenerator', ...
-                'Unsupported Rt signal type: %s.', signal_type);
-    end
+    case "multi_wave"
+        peak1 = p.A1 * exp(-((t - p.mu1).^2) / p.denom);
+        peak2 = p.A2 * exp(-((t - p.mu2).^2) / p.denom);
+        peak3 = p.A3 * exp(-((t - p.mu3).^2) / p.denom);
+        peak4 = p.A4 * exp(-((t - p.mu4).^2) / p.denom);
 
+        Rt = p.baseline + peak1 + peak2 + peak3 + peak4;
+
+    otherwise
+        error('SCENARIO:UnsupportedGenerator', ...
+            'Unsupported Rt signal type: %s.', signal_type);
 end
-
-function Rt = local_rt_seasonal(t, p)
-%LOCAL_RT_SEASONAL Sinusoidal seasonal Rt trajectory.
-    Rt = p.center + p.amp * sin((2*pi/p.period) * t);
-end
-
-function Rt = local_rt_sigmoid(t, p)
-%LOCAL_RT_SIGMOID Smooth intervention-like Rt transition.
-    Rt = p.high + (p.low - p.high) ./ (1 + exp(-p.k * (t - p.t0)));
-end
-
-function Rt = local_rt_multi_wave(t, p)
-%LOCAL_RT_MULTI_WAVE Gaussian multi-wave Rt trajectory.
-    peak1 = p.A1 * exp(-((t - p.mu1).^2) / p.denom);
-    peak2 = p.A2 * exp(-((t - p.mu2).^2) / p.denom);
-    peak3 = p.A3 * exp(-((t - p.mu3).^2) / p.denom);
-    peak4 = p.A4 * exp(-((t - p.mu4).^2) / p.denom);
-
-    Rt = p.baseline + peak1 + peak2 + peak3 + peak4;
 end
