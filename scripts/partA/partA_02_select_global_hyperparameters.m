@@ -56,13 +56,13 @@ scenario_template = struct( ...
     'scenario_id', "", ...
     'num_exo', 0, ...
     'windows', [], ...
-    'window_data', struct('Rt_past', {}, 'truth_Rt', {}, 'U_past', {}, 'sirs_state', {}));
+    'window_data', struct('Rt_past', {}, 'U_past', {}, 'sirs_state', {}, 'truth_Rt', {}));
 scenario_data = repmat(scenario_template, num_scenarios, 1);
 
 for i = 1:num_scenarios
     loaded = load(fullfile(data_dir, file_list(i).name));
 
-    Rt     = loaded.Rt_true;
+    Rt_true = loaded.Rt_true;
     S_true = loaded.S_true;
     I_true = loaded.I_true;
     tspan  = loaded.tspan;
@@ -80,9 +80,9 @@ for i = 1:num_scenarios
             error('PARTA_02:UnknownExoMode', 'Unsupported exo_mode: %s', exo_mode);
     end
 
-    win_endpoints = cfg.forecast.min_window : cfg.forecast.step_size : (numel(Rt) - horizon);
+    win_endpoints = cfg.forecast.min_window : cfg.forecast.step_size : (numel(Rt_true) - horizon);
 
-    [windows, window_data] = local_build_windows(Rt, U_true, S_true, I_true, ...
+    [windows, window_data] = local_build_windows(Rt_true, U_true, S_true, I_true, ...
         tspan, win_endpoints, horizon, pop_size, ~isempty(U_true));
 
     if isempty(window_data)
@@ -101,9 +101,7 @@ for i = 1:num_scenarios
         i, num_scenarios, loaded.scenario_id, numel(window_data));
 end
 
-scenario_ids          = [scenario_data.scenario_id];
-window_counts         = arrayfun(@(s) numel(s.windows), scenario_data(:)');
-intended_window_count = sum(window_counts);
+intended_window_count = sum(arrayfun(@(s) numel(s.windows), scenario_data(:)'));
 
 %% 3. Candidate Grid
 switch model_type
@@ -241,19 +239,24 @@ selected_index       = local_select_simplest(candidate_complexity, global_mean_w
 selected_configuration = candidate_grid(selected_index, :);
 
 %% 6. Artifact Saving
-selection_rule = "minimum_global_wis_with_one_standard_error_parsimony";
-snapshot   = cfg.snapshot.selection;
+selection_snapshot = cfg.snapshot.selection;
+valid_candidates   = isfinite(global_mean_wis);
+
+candidate_grid   = candidate_grid(valid_candidates, :);
+candidate_scores = candidate_scores(valid_candidates, :);
+global_mean_wis  = global_mean_wis(valid_candidates);
 
 file_prefix   = sprintf('partA_02_global_hyperparameters_%s_%s', model_type, exo_mode);
 artifact_path = fullfile(selection_dir, [file_prefix, '.mat']);
 
-save(artifact_path, ...
-    'model_type', 'exo_mode', ...
-    'selected_configuration', 'selected_index', ...
-    'candidate_grid', 'candidate_scores', 'global_mean_wis', ...
-    'scenario_ids', 'window_counts', ...
-    'snapshot', 'wis_alphas', ...
-    'best_global_wis', 'one_se_threshold', 'selection_rule');
+artifact = struct( ...
+    'selected_configuration', selected_configuration, ...
+    'snapshot', selection_snapshot, ...
+    'candidate_grid', candidate_grid, ...
+    'candidate_scores', candidate_scores, ...
+    'global_mean_wis', global_mean_wis);
+
+save(artifact_path, '-struct', 'artifact');
 
 fprintf('Selected global model configuration: %s\n', mat2str(selected_configuration));
 fprintf('Global model-selection artifact saved to: %s\n', artifact_path);
@@ -264,7 +267,7 @@ fprintf('=== Global Model-Configuration Selection Complete ===\n\n');
 function [windows, window_data] = local_build_windows(Rt, U_true, S_true, I_true, ...
     tspan, win_endpoints, horizon, pop_size, has_exo)
 %LOCAL_BUILD_WINDOWS Build expanding-window forecast entries for one scenario.
-template = struct('Rt_past', [], 'truth_Rt', [], 'U_past', [], 'sirs_state', []);
+template = struct('Rt_past', [], 'U_past', [], 'sirs_state', [], 'truth_Rt', []);
 built    = repmat(template, numel(win_endpoints), 1);
 keep     = false(numel(win_endpoints), 1);
 
@@ -274,15 +277,16 @@ for k = 1:numel(win_endpoints)
         continue;
     end
 
-    built(k).Rt_past  = Rt(1:idx_T);
-    built(k).truth_Rt = Rt(idx_T + 1 : idx_T + horizon);
-    keep(k) = true;
+    built(k).Rt_past = Rt(1:idx_T);
 
     if has_exo
         R_at_T = pop_size - S_true(idx_T) - I_true(idx_T);
         built(k).U_past     = U_true(1:idx_T, :);
         built(k).sirs_state = [S_true(idx_T), I_true(idx_T), R_at_T];
     end
+
+    built(k).truth_Rt = Rt(idx_T + 1 : idx_T + horizon);
+    keep(k) = true;
 end
 
 windows     = win_endpoints(keep);
