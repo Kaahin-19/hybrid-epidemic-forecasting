@@ -1,33 +1,27 @@
 function cfg = partA_config()
-%PARTA_CONFIG Configuration for Part A: Synthetic Validation.
-%
-%   Syntax:
-%       cfg = partA_config()
+%PARTA_CONFIG Configure Part A synthetic-validation experiments.
 %
 %   Description:
-%       Serves as the central configuration for Part A experiments. It
-%       defines the simulation environment, analytic effective-Rt scenarios,
-%       SIRS ground-truth parameters, and forecasting hyperparameters. The
-%       active model family and exogenous-input setting can be overridden
-%       externally through environment variables.
+%       Defines the Part A time grid, effective-Rt scenarios, SIRS parameters,
+%       active model configuration, forecasting protocol, predictive interval
+%       settings, artifact snapshots, and output paths.
 %
 %   Outputs:
 %       cfg - Structure containing:
-%           .time       : Simulation duration and step size.
-%           .Rt         : Effective reproduction-number constraints for checks.
-%           .sirs       : Biological parameters and SIRS stepping guard.
-%           .scenarios  : Array of structs defining the analytic Rt signals.
-%           .run        : Active execution settings and forecast seed.
-%           .forecast   : Hyperparameters for the hybrid model.
+%           .time       : Simulation duration and time grid.
+%           .Rt         : Effective reproduction-number bounds.
+%           .sirs       : SIRS parameters and stepping guard.
+%           .scenarios  : Analytic effective-Rt scenario definitions.
+%           .run        : Active model, exogenous-input mode, seed, and workers.
+%           .forecast   : Forecast windows, model orders, WIS levels, and plot settings.
+%           .intervals  : Predictive interval simulation settings.
 %           .snapshot   : Artifact compatibility snapshots.
-%           .output     : Absolute paths for data and artifact storage.
+%           .output     : Data, result, figure, and table paths.
 %
-%   See also PARTA_01_GENERATE_TRUTH, ...
-%            PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, ...
-%            PARTA_03_RUN_FORECASTS, PARTA_04_EVALUATE_FORECASTS.
+%   See also PARTA_01_GENERATE_TRUTH, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS, PARTA_04_EVALUATE_FORECASTS, PARTA_05_GENERATE_FIGURES.
 %
 % A. M. Kaahin 2026-02-18
-% Modified: 2026-06-21
+% Modified: 2026-06-28
 
 cfg = struct();
 
@@ -36,7 +30,7 @@ cfg.time.T_end = 365;
 cfg.time.dt    = 1;
 cfg.time.tspan = 0:cfg.time.dt:cfg.time.T_end;
 
-%% 2. Effective-Reproduction-Number Admissibility Constraints
+%% 2. Effective-Reproduction-Number Bounds
 cfg.Rt.bounds = [0.5, 2.0];
 
 %% 3. SIRS Simulation Parameters
@@ -49,77 +43,36 @@ cfg.sirs.R0_init  = 0;
 cfg.sirs.min_susceptible_fraction = 0.05;
 cfg.sirs.min_susceptible = cfg.sirs.min_susceptible_fraction * cfg.sirs.pop_size;
 
-%% 4. Scenario Slots
-cfg.scenarios = repmat(struct( ...
-    "id", "", ...
-    "name", "", ...
-    "signal_type", "", ...
-    "params", struct(), ...
-    "model_params", struct() ...
-    ), 1, 4);
+%% 4. Scenario Definitions
+cfg.scenarios = repmat(struct("id", "", "name", "", "signal_type", "", "params", struct()), 1, 4);
 
 T_end      = cfg.time.T_end;
 wave_space = T_end / 5;
 wave_denom = (wave_space^2) / 8;
 wave_scale = 0.27;
 
-% Slot A1
 cfg.scenarios(1).id          = "A1";
 cfg.scenarios(1).name        = "Seasonal Forcing";
 cfg.scenarios(1).signal_type = "seasonal";
-cfg.scenarios(1).params      = struct( ...
-    "center", 1, ...
-    "amp",    0.18, ...
-    "period", T_end ...
-    );
+cfg.scenarios(1).params      = struct("center", 1, "amp", 0.18, "period", T_end);
 
-% Slot A2
 cfg.scenarios(2).id          = "A2";
 cfg.scenarios(2).name        = "Policy Intervention";
 cfg.scenarios(2).signal_type = "sigmoid";
-cfg.scenarios(2).params = struct( ...
-    "high", 1.30, ...
-    "low",  0.65, ...
-    "t0",   51, ...
-    "k",    4 / 14 ...
-    );
+cfg.scenarios(2).params      = struct("high", 1.30, "low", 0.65, "t0", 51, "k", 4 / 14);
 
-% Slot A3
 cfg.scenarios(3).id          = "A3";
 cfg.scenarios(3).name        = "Damped Recurrent Waves";
 cfg.scenarios(3).signal_type = "multi_wave";
-cfg.scenarios(3).params      = struct( ...
-    "baseline", 0.90, ...
-    "mu1",      1 * wave_space, ...
-    "A1",       wave_scale * 1.00, ...
-    "mu2",      2 * wave_space, ...
-    "A2",       wave_scale * 0.95, ...
-    "mu3",      3 * wave_space, ...
-    "A3",       wave_scale * 0.95^2, ...
-    "mu4",      4 * wave_space, ...
-    "A4",       wave_scale * 0.95^3, ...
-    "denom",    wave_denom ...
-    );
+cfg.scenarios(3).params      = struct("baseline", 0.90, "mu1", 1 * wave_space, "A1", wave_scale * 1.00, "mu2", 2 * wave_space, "A2", wave_scale * 0.95, "mu3", 3 * wave_space, "A3", wave_scale * 0.95^2, "mu4", 4 * wave_space, "A4", wave_scale * 0.95^3, "denom", wave_denom);
 
-% Slot A4
 cfg.scenarios(4).id          = "A4";
 cfg.scenarios(4).name        = "Amplifying Recurrent Waves";
 cfg.scenarios(4).signal_type = "multi_wave";
-cfg.scenarios(4).params      = struct( ...
-    "baseline", 0.90, ...
-    "mu1",      1 * wave_space, ...
-    "A1",       wave_scale * 1.00, ...
-    "mu2",      2 * wave_space, ...
-    "A2",       wave_scale * 1.05, ...
-    "mu3",      3 * wave_space, ...
-    "A3",       wave_scale * 1.05^2, ...
-    "mu4",      4 * wave_space, ...
-    "A4",       wave_scale * 1.05^3, ...
-    "denom",    wave_denom ...
-    );
+cfg.scenarios(4).params      = struct("baseline", 0.90, "mu1", 1 * wave_space, "A1", wave_scale * 1.00, "mu2", 2 * wave_space, "A2", wave_scale * 1.05, "mu3", 3 * wave_space, "A3", wave_scale * 1.05^2, "mu4", 4 * wave_space, "A4", wave_scale * 1.05^3, "denom", wave_denom);
 
 %% 5. Active Run Configuration
-cfg.run.seed = 23487;
+cfg.run.seed        = 23487;
 cfg.run.model_type  = string(local_env_or_default('PARTA_MODEL_TYPE', 'ARX'));
 cfg.run.exo_mode    = string(local_env_or_default('PARTA_EXO_MODE', 'I'));
 cfg.run.num_workers = 4;
@@ -131,13 +84,13 @@ cfg.forecast.min_window = 49;
 cfg.forecast.step_size  = 7;
 cfg.forecast.horizon    = 14;
 
-cfg.forecast.max_ar_order       = 2;
-cfg.forecast.max_exo_order      = 2;
-cfg.forecast.max_exo_delay      = 2;
-cfg.forecast.max_state_order    = 2;
-cfg.forecast.state_diff_orders  = 0;
+cfg.forecast.max_ar_order      = 2;
+cfg.forecast.max_exo_order     = 2;
+cfg.forecast.max_exo_delay     = 2;
+cfg.forecast.max_state_order   = 2;
+cfg.forecast.state_diff_orders = 0;
 
-cfg.forecast.wis_alphas = [0.05; 0.10; 0.20; 0.50];
+cfg.forecast.wis_alphas     = [0.05; 0.10; 0.20; 0.50];
 cfg.forecast.plot_alphas    = [0.10, 0.50];
 cfg.forecast.plot_lead_time = 7;
 
@@ -146,46 +99,13 @@ cfg.intervals.num_draws = 60;
 cfg.intervals.include_epidemic_seed_variation = true;
 
 %% 8. Artifact Compatibility Snapshots
-cfg.snapshot.truth = struct( ...
-    'T_end', cfg.time.T_end, ...
-    'dt', cfg.time.dt, ...
-    'Rt_bounds', cfg.Rt.bounds, ...
-    'sirs', cfg.sirs);
+cfg.snapshot.truth = struct("T_end", cfg.time.T_end, "dt", cfg.time.dt, "Rt_bounds", cfg.Rt.bounds, "sirs", cfg.sirs);
 
-cfg.snapshot.selection = struct( ...
-    'model_type', cfg.run.model_type, ...
-    'exo_mode', cfg.run.exo_mode, ...
-    'seed', cfg.run.seed, ...
-    'min_window', cfg.forecast.min_window, ...
-    'step_size', cfg.forecast.step_size, ...
-    'horizon', cfg.forecast.horizon, ...
-    'max_ar_order', cfg.forecast.max_ar_order, ...
-    'max_exo_order', cfg.forecast.max_exo_order, ...
-    'max_exo_delay', cfg.forecast.max_exo_delay, ...
-    'max_state_order', cfg.forecast.max_state_order, ...
-    'state_diff_orders', cfg.forecast.state_diff_orders, ...
-    'wis_alphas', cfg.forecast.wis_alphas, ...
-    'num_draws', cfg.intervals.num_draws, ...
-    'include_epidemic_seed_variation', cfg.intervals.include_epidemic_seed_variation, ...
-    'sirs', cfg.sirs);
+cfg.snapshot.selection = struct("model_type", cfg.run.model_type, "exo_mode", cfg.run.exo_mode, "seed", cfg.run.seed, "min_window", cfg.forecast.min_window, "step_size", cfg.forecast.step_size, "horizon", cfg.forecast.horizon, "max_ar_order", cfg.forecast.max_ar_order, "max_exo_order", cfg.forecast.max_exo_order, "max_exo_delay", cfg.forecast.max_exo_delay, "max_state_order", cfg.forecast.max_state_order, "state_diff_orders", cfg.forecast.state_diff_orders, "wis_alphas", cfg.forecast.wis_alphas, "num_draws", cfg.intervals.num_draws, "include_epidemic_seed_variation", cfg.intervals.include_epidemic_seed_variation, "sirs", cfg.sirs);
 
-cfg.snapshot.forecast = struct( ...
-    'model_type', cfg.run.model_type, ...
-    'exo_mode', cfg.run.exo_mode, ...
-    'seed', cfg.run.seed, ...
-    'min_window', cfg.forecast.min_window, ...
-    'step_size', cfg.forecast.step_size, ...
-    'horizon', cfg.forecast.horizon, ...
-    'wis_alphas', cfg.forecast.wis_alphas, ...
-    'num_draws', cfg.intervals.num_draws, ...
-    'include_epidemic_seed_variation', cfg.intervals.include_epidemic_seed_variation, ...
-    'sirs', cfg.sirs);
+cfg.snapshot.forecast = struct("model_type", cfg.run.model_type, "exo_mode", cfg.run.exo_mode, "seed", cfg.run.seed, "min_window", cfg.forecast.min_window, "step_size", cfg.forecast.step_size, "horizon", cfg.forecast.horizon, "wis_alphas", cfg.forecast.wis_alphas, "num_draws", cfg.intervals.num_draws, "include_epidemic_seed_variation", cfg.intervals.include_epidemic_seed_variation, "sirs", cfg.sirs);
 
-cfg.snapshot.figures = struct( ...
-    'plot_alphas', cfg.forecast.plot_alphas, ...
-    'plot_lead_time', cfg.forecast.plot_lead_time);
-
-%% 9. Output Artifacts
+%% 9. Output Paths
 thisDir  = fileparts(mfilename('fullpath'));
 repoRoot = fileparts(thisDir);
 
@@ -196,37 +116,35 @@ cfg.output.forecast_dir        = fullfile(cfg.output.root_dir, "forecasts");
 cfg.output.score_dir           = fullfile(cfg.output.root_dir, "evaluation");
 cfg.output.fig_dir             = fullfile(cfg.output.root_dir, "figures");
 cfg.output.table_dir           = fullfile(cfg.output.root_dir, "tables");
-cfg.output.log_dir             = fullfile(cfg.output.root_dir, "logs");
 
 end
 
 function value = local_env_or_default(env_name, default_value)
+%LOCAL_ENV_OR_DEFAULT Return environment value or default string.
 value = getenv(env_name);
+
 if isempty(value)
     value = default_value;
 end
 end
 
 function exo_mode = local_resolve_run_configuration(model_type, exo_mode)
+%LOCAL_RESOLVE_RUN_CONFIGURATION Resolve active model and exogenous-input mode.
 valid_models    = ["AR", "ARX", "N4SID", "SSEST"];
 valid_exo_modes = ["None", "S", "I", "Both"];
 
 if ~any(strcmp(model_type, valid_models))
-    error('CFG:InvalidRunModel', ...
-        'Unsupported PARTA_MODEL_TYPE value: %s.', string(model_type));
+    error('CFG:InvalidRunModel', 'Unsupported PARTA_MODEL_TYPE value: %s.', string(model_type));
 end
 
 if ~any(strcmp(exo_mode, valid_exo_modes))
-    error('CFG:InvalidRunExo', ...
-        'Unsupported PARTA_EXO_MODE value: %s.', string(exo_mode));
+    error('CFG:InvalidRunExo', 'Unsupported PARTA_EXO_MODE value: %s.', string(exo_mode));
 end
 
 if model_type == "AR" && exo_mode ~= "None"
-    warning('CFG:ArExo', ...
-        'AR is strictly autoregressive. Forcing EXO_MODE to None.');
+    warning('CFG:ArExo', 'AR is strictly autoregressive. Forcing EXO_MODE to None.');
     exo_mode = "None";
 elseif model_type == "ARX" && exo_mode == "None"
-    error('CFG:ArxExo', ...
-        'ARX requires exogenous covariates. Set EXO_MODE to S, I, or Both.');
+    error('CFG:ArxExo', 'ARX requires exogenous covariates. Set EXO_MODE to S, I, or Both.');
 end
 end
