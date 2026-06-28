@@ -1,25 +1,22 @@
-%PARTA_03_RUN_FORECASTS Run final Part A expanding-window forecasts.
+%PARTA_03_RUN_FORECASTS Run final Part A forecasts.
 %
 %   Description:
-%       Runs the final Part A expanding-window forecasts using the globally
-%       selected configuration from Script 2. Each scenario is forecast with the
-%       selected model only, and one compact forecast artifact is saved per
-%       scenario for evaluation and figure generation.
-%
-%       This script does not perform model selection, scoring, plotting, or
-%       table generation.
+%       Generates final expanding-window Rt forecasts for each synthetic
+%       scenario using the selected model configuration. Exports one forecast
+%       artifact per scenario containing the forecast median, prediction
+%       intervals, forecast horizon times, and matching truth windows.
 %
 %   Workflow:
-%       1. Load configuration and selected Script 2 model-selection artifact.
-%       2. Load each Part A truth artifact and build forecast windows.
-%       3. Run selected-model forecasts for all windows in each scenario.
-%       4. Save one compact forecast artifact per scenario.
+%       1. Load the selected model configuration.
+%       2. Build forecast windows for each synthetic scenario.
+%       3. Run final forecasts with the selected configuration.
+%       4. Save one forecast artifact per scenario.
 %
 %   See also PARTA_CONFIG, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, ...
-%            FORECAST_OPEN, FORECAST_CLOSED, INTERVAL_BOUNDS, SIRS_INIT.
+%            FORECAST_OPEN, FORECAST_CLOSED, INTERVAL_BOUNDS.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-06-21
+% Modified: 2026-06-28
 
 %% 1. Initialization
 clear; close all; clc;

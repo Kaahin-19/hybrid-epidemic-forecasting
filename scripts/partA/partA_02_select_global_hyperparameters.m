@@ -1,25 +1,22 @@
-%PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS Select global Part A model configuration.
+%PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS Select Part A model hyperparameters.
 %
 %   Description:
-%       Evaluates candidate AR/ARX/state-space model configurations using the
-%       Part A expanding-window forecast protocol, then selects one global
-%       configuration by WIS with a one-standard-error parsimony rule.
-%
-%       Candidates that leave the SIRS susceptible domain are rejected. Other
-%       unscoreable forecast outputs stop the script immediately.
+%       Evaluates candidate model configurations across all synthetic Rt
+%       scenarios using expanding-window forecasts and WIS scoring. Exports
+%       the selected configuration together with the valid candidate grid and
+%       global candidate scores.
 %
 %   Workflow:
-%       1. Load Part A truth artifacts and build forecast windows.
+%       1. Load synthetic truth trajectories and build forecast windows.
 %       2. Evaluate candidate configurations across all scenarios.
-%       3. Select the simplest candidate within one standard error of the raw
-%          best global WIS.
-%       4. Save the model-selection result.
+%       3. Select the simplest configuration within the one-standard-error rule.
+%       4. Save the selected configuration and candidate-score evidence.
 %
-%   See also PARTA_01_GENERATE_TRUTH, PARTA_CONFIG, FORECAST_OPEN, ...
-%            FORECAST_CLOSED, INTERVAL_BOUNDS, SIRS_INIT, COMPUTE_WIS.
+%   See also PARTA_CONFIG, PARTA_03_RUN_FORECASTS, FORECAST_OPEN, ...
+%            FORECAST_CLOSED, INTERVAL_BOUNDS, COMPUTE_WIS.
 %
-% A. M. Kaahin 2026-05-31
-% Modified: 2026-06-21
+% A. M. Kaahin 2026-02-19
+% Modified: 2026-06-28
 
 %% 1. Initialization
 clear; close all; clc;
