@@ -80,7 +80,7 @@ end
 
 innovations = local_resample(residuals, horizon, num_draws, resample_seed);
 
-seed_vals = y(end - p + 1 : end);         % p×1, oldest→newest
+seed_vals = y(end - p + 1 : end);         
 roll      = [repmat(seed_vals, 1, num_draws); zeros(horizon, num_draws)];
 ensemble  = zeros(horizon, num_draws);
 for h = 1:horizon

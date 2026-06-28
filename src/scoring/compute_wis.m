@@ -11,32 +11,36 @@ function [wis, components] = compute_wis(truth, pred, lower, upper, alphas)
 %       matrices, and a K-by-1 vector of miscoverage rates.
 %
 %   Inputs:
-%       truth  - H×1 vector of observed values.
-%       pred   - H×1 vector of predictive medians.
-%       lower  - H×K matrix of lower interval bounds.
-%       upper  - H×K matrix of upper interval bounds.
-%       alphas - Kx1 vector of miscoverage rates.
+%       truth  - H-by-1 vector of observed values.
+%       pred   - H-by-1 vector of predictive medians.
+%       lower  - H-by-K matrix of lower interval bounds.
+%       upper  - H-by-K matrix of upper interval bounds.
+%       alphas - K-by-1 vector of miscoverage rates.
 %
 %   Outputs:
-%       wis        - H×1 per-horizon WIS values.
+%       wis        - H-by-1 per-horizon WIS values.
 %       components - Struct with fields median_term, dispersion,
-%                    underprediction, overprediction.
+%                    underprediction, and overprediction.
 %
 %   See also INTERVAL_BOUNDS, FORECAST_OPEN, FORECAST_CLOSED.
 %
 % A. M. Kaahin 2026-06-15
 % Modified: 2026-06-21
 
+%% 1. Interval Count
 K = numel(alphas);
 
+%% 2. WIS Components
 median_term = 0.5 * abs(truth - pred);
 dispersion  = (upper - lower) .* (alphas.' / 2);
 underpred   = max(lower - truth, 0);
 overpred    = max(truth - upper, 0);
 
+%% 3. Weighted Interval Score
 wis = (1 / (K + 0.5)) * ...
     (median_term + sum(dispersion, 2) + sum(underpred, 2) + sum(overpred, 2));
 
+%% 4. Optional Component Output
 if nargout > 1
     components = struct( ...
         'median_term', median_term, ...

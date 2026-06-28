@@ -339,4 +339,3 @@ keys = [candidate_complexity(candidate_indices), ...
 keys = sortrows(keys, [1 2 3]);
 idx  = keys(1, 3);
 end
-
