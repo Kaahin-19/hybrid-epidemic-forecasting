@@ -1,8 +1,8 @@
-function [point_path, ensemble_paths, fit_info] = forecast_open(model_type, params, Rt_past, num_draws, horizon, resample_seed)
+function [ensemble_paths, fit_info] = forecast_open(model_type, params, Rt_past, num_draws, horizon, resample_seed)
 %FORECAST_OPEN Bootstrap forecast ensemble for output-only models (num_exo == 0).
 %
 %   Syntax:
-%       [point_path, ensemble_paths, fit_info] = forecast_open(model_type, params,
+%       [ensemble_paths, fit_info] = forecast_open(model_type, params,
 %           Rt_past, num_draws, horizon, resample_seed)
 %
 %   Description:
@@ -22,14 +22,14 @@ function [point_path, ensemble_paths, fit_info] = forecast_open(model_type, para
 %       resample_seed - Integer seed for the residual resample RNG.
 %
 %   Outputs:
-%       point_path     - horizon×1 Rt point forecast (median across draws).
 %       ensemble_paths - horizon×num_draws matrix of finite Rt bootstrap draws.
-%       fit_info       - Struct with field AICc (corrected AIC of the fitted model).
+%       fit_info       - Struct with field AICc (corrected AIC of the fitted model);
+%                        a diagnostic that never influences model selection.
 %
 %   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS, FORECAST_CLOSED.
 %
 % A. M. Kaahin 2026-06-15
-% Modified: 2026-06-21
+% Modified: 2026-06-28
 
 y = log(Rt_past);
 
@@ -42,8 +42,7 @@ switch model_type
         error('FORECAST_OPEN:UnknownModel', 'Unsupported model type: %s', model_type);
 end
 
-point_path = median(ensemble_paths, 2);
-fit_info   = struct('AICc', aicc);
+fit_info = struct('AICc', aicc);
 end
 
 %% Local functions

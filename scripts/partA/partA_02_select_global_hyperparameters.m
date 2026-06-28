@@ -3,8 +3,9 @@
 %   Description:
 %       Evaluates candidate model configurations across all synthetic Rt
 %       scenarios using expanding-window forecasts and WIS scoring. Exports
-%       the selected configuration together with the valid candidate grid and
-%       global candidate scores.
+%       the selected configuration together with the valid candidate grid,
+%       global candidate WIS scores, and per-candidate fitted-model AICc as a
+%       diagnostic that never influences selection (WIS is the sole criterion).
 %
 %   Workflow:
 %       1. Load synthetic truth trajectories and build forecast windows.
@@ -111,17 +112,21 @@ end
 
 candidate_scores = inf(num_candidates, num_scenarios);
 global_mean_wis  = inf(num_candidates, 1);
+candidate_aicc   = inf(num_candidates, num_scenarios);
+global_mean_aicc = inf(num_candidates, 1);
 
 parfor idx = 1:num_candidates
     params              = candidate_grid(idx, :);
     scen_wis            = nan(1, num_scenarios);
+    scen_aicc           = nan(1, num_scenarios);
     completed_count     = 0;
     domain_failure      = false;
     scenario_data_local = scenario_data_const.Value;
 
     for s = 1:num_scenarios
-        data       = scenario_data_local(s);
-        window_wis = inf(numel(data.window_data), 1);
+        data        = scenario_data_local(s);
+        window_wis  = inf(numel(data.window_data), 1);
+        window_aicc = nan(numel(data.window_data), 1);
 
         for w = 1:numel(data.window_data)
             win         = data.window_data(w);
@@ -131,11 +136,11 @@ parfor idx = 1:num_candidates
 
             try
                 if data.num_exo == 0
-                    [~, ens] = forecast_open(model_type, params, win.Rt_past, num_draws, horizon, r_seed);
+                    [ens, fit_info] = forecast_open(model_type, params, win.Rt_past, num_draws, horizon, r_seed);
                 else
                     e_seed = window_seed + 1000000;
                     base_stepper = sirs_stepper_const.Value;
-                    [~, ens] = forecast_closed(model_type, params, win.Rt_past, win.U_past, win.sirs_state, data.num_exo, num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
+                    [ens, fit_info] = forecast_closed(model_type, params, win.Rt_past, win.U_past, win.sirs_state, data.num_exo, num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
                 end
 
                 Rt_pred = median(ens, 2);
@@ -152,7 +157,8 @@ parfor idx = 1:num_candidates
                     error('PARTA_02:UnscoreableWindow', 'Forecast window produced invalid intervals or non-finite WIS.');
                 end
 
-                window_wis(w)  = mean(wis_h);
+                window_wis(w)   = mean(wis_h);
+                window_aicc(w)  = fit_info.AICc;
                 completed_count = completed_count + 1;
             catch ME
                 if strcmp(ME.identifier, 'EPIDEMIC:SusceptibleBelowThreshold')
@@ -168,12 +174,15 @@ parfor idx = 1:num_candidates
             break;
         end
 
-        scen_wis(s) = mean(window_wis);
+        scen_wis(s)  = mean(window_wis);
+        scen_aicc(s) = mean(window_aicc);
     end
 
     if ~domain_failure && completed_count == intended_window_count
         candidate_scores(idx, :) = scen_wis;
         global_mean_wis(idx)     = mean(scen_wis);
+        candidate_aicc(idx, :)   = scen_aicc;
+        global_mean_aicc(idx)    = mean(scen_aicc);
     end
 end
 
@@ -201,6 +210,8 @@ valid_candidates   = isfinite(global_mean_wis);
 candidate_grid   = candidate_grid(valid_candidates, :);
 candidate_scores = candidate_scores(valid_candidates, :);
 global_mean_wis  = global_mean_wis(valid_candidates);
+candidate_aicc   = candidate_aicc(valid_candidates, :);
+global_mean_aicc = global_mean_aicc(valid_candidates);
 
 file_prefix   = sprintf('partA_02_global_hyperparameters_%s_%s', model_type, exo_mode);
 artifact_path = fullfile(selection_dir, [file_prefix, '.mat']);
@@ -210,7 +221,9 @@ artifact = struct( ...
     'snapshot', selection_snapshot, ...
     'candidate_grid', candidate_grid, ...
     'candidate_scores', candidate_scores, ...
-    'global_mean_wis', global_mean_wis);
+    'global_mean_wis', global_mean_wis, ...
+    'candidate_aicc', candidate_aicc, ...
+    'global_mean_aicc', global_mean_aicc);
 
 save(artifact_path, '-struct', 'artifact');
 

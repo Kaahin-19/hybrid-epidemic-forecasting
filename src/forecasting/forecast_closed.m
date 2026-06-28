@@ -1,8 +1,8 @@
-function [point_path, ensemble_paths, fit_info] = forecast_closed(model_type, params, Rt_past, U_past, sirs_state, num_exo, num_draws, horizon, exo_mode, base_stepper, resample_seed, epidemic_base_seed, vary_epidemic_seed)
+function [ensemble_paths, fit_info] = forecast_closed(model_type, params, Rt_past, U_past, sirs_state, num_exo, num_draws, horizon, exo_mode, base_stepper, resample_seed, epidemic_base_seed, vary_epidemic_seed)
 %FORECAST_CLOSED Bootstrap forecast ensemble for models with exogenous inputs (num_exo > 0).
 %
 %   Syntax:
-%       [point_path, ensemble_paths, fit_info] = forecast_closed(model_type, params,
+%       [ensemble_paths, fit_info] = forecast_closed(model_type, params,
 %           Rt_past, U_past, sirs_state, num_exo, num_draws, horizon, exo_mode,
 %           base_stepper, resample_seed, epidemic_base_seed, vary_epidemic_seed)
 %
@@ -37,14 +37,14 @@ function [point_path, ensemble_paths, fit_info] = forecast_closed(model_type, pa
 %       vary_epidemic_seed - Logical; if true, each draw receives a distinct seed.
 %
 %   Outputs:
-%       point_path     - horizon×1 Rt point forecast (median across draws).
 %       ensemble_paths - horizon×num_draws matrix of finite Rt bootstrap draws.
-%       fit_info       - Struct with field AICc (corrected AIC of the fitted model).
+%       fit_info       - Struct with field AICc (corrected AIC of the fitted model);
+%                        a diagnostic that never influences model selection.
 %
 %   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS, FORECAST_OPEN, SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-15
-% Modified: 2026-06-21
+% Modified: 2026-06-28
 
 y = log(Rt_past);
 
@@ -57,8 +57,7 @@ switch model_type
         error('FORECAST_CLOSED:UnknownModel', 'Unsupported model type: %s', model_type);
 end
 
-point_path = median(ensemble_paths, 2);
-fit_info   = struct('AICc', aicc);
+fit_info = struct('AICc', aicc);
 end
 
 %% Local functions
