@@ -48,7 +48,12 @@ for i = 1:numel(cfg.scenarios)
         case "sigmoid"
             Rt_true = sp.high + (sp.low - sp.high) ./ (1 + exp(-sp.k * (tspan - sp.t0)));
         case "multi_wave"
-            Rt_true = sp.baseline + sp.A1*exp(-((tspan-sp.mu1).^2)/sp.denom) + sp.A2*exp(-((tspan-sp.mu2).^2)/sp.denom) + sp.A3*exp(-((tspan-sp.mu3).^2)/sp.denom) + sp.A4*exp(-((tspan-sp.mu4).^2)/sp.denom);
+            peak1 = sp.A1 * exp(-((tspan - sp.mu1).^2) / sp.denom);
+            peak2 = sp.A2 * exp(-((tspan - sp.mu2).^2) / sp.denom);
+            peak3 = sp.A3 * exp(-((tspan - sp.mu3).^2) / sp.denom);
+            peak4 = sp.A4 * exp(-((tspan - sp.mu4).^2) / sp.denom);
+
+            Rt_true = sp.baseline + peak1 + peak2 + peak3 + peak4;
         otherwise
             error('PARTA:UnsupportedSignal', 'Unsupported Rt signal type: %s.', scenario.signal_type);
     end

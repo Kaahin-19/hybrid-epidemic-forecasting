@@ -49,8 +49,7 @@ file_list = dir(fullfile(data_dir, 'partA_01_truth_*.mat'));
 file_list = file_list(order);
 
 if isempty(file_list)
-    error('PARTA_03:NoData', ...
-        'No synthetic truth files found in %s. Run partA_01 first.', data_dir);
+    error('PARTA_03:NoData', 'No synthetic truth files found in %s. Run partA_01 first.', data_dir);
 end
 
 horizon    = cfg.forecast.horizon;
@@ -74,33 +73,17 @@ for i = 1:numel(file_list)
 
     fprintf('Processing scenario %d/%d (%s)\n', i, numel(file_list), scenario_id);
 
-    window_data = build_forecast_windows(loaded.Rt_true, loaded.S_true, ...
-        loaded.I_true, loaded.tspan, exo_mode, pop_size, ...
-        cfg.forecast.min_window, cfg.forecast.step_size, horizon);
+    window_data = build_forecast_windows(loaded.Rt_true, loaded.S_true, loaded.I_true, loaded.tspan, exo_mode, pop_size, cfg.forecast.min_window, cfg.forecast.step_size, horizon);
 
     if isempty(window_data)
-        error('PARTA_03:NoForecastWindows', ...
-            ['Scenario %s has no forecast windows; check min_window, ' ...
-            'step_size, horizon, and truth length.'], scenario_id);
+        error('PARTA_03:NoForecastWindows', ['Scenario %s has no forecast windows; check min_window, ' 'step_size, horizon, and truth length.'], scenario_id);
     end
 
-    results = local_run_scenario_forecasts( ...
-        model_type, exo_mode, selected_configuration, window_data, ...
-        base_stepper, base_seed, num_draws, horizon, wis_alphas, vary, i);
+    results = local_run_scenario_forecasts(model_type, exo_mode, selected_configuration, window_data, base_stepper, base_seed, num_draws, horizon, wis_alphas, vary, i);
 
-    artifact = struct( ...
-        'scenario_id', scenario_id, ...
-        'model_type', model_type, ...
-        'exo_mode', exo_mode, ...
-        'selected_configuration', selected_configuration, ...
-        'snapshot', forecast_snapshot, ...
-        'wis_alphas', wis_alphas, ...
-        'tspan', loaded.tspan, ...
-        'Rt_true', loaded.Rt_true, ...
-        'results', results);
+    artifact = struct('scenario_id', scenario_id, 'model_type', model_type, 'exo_mode', exo_mode, 'selected_configuration', selected_configuration, 'snapshot', forecast_snapshot, 'wis_alphas', wis_alphas, 'tspan', loaded.tspan, 'Rt_true', loaded.Rt_true, 'results', results);
 
-    file_prefix = sprintf('partA_03_forecast_%s_%s_%s', ...
-        scenario_id, model_type, exo_mode);
+    file_prefix = sprintf('partA_03_forecast_%s_%s_%s', scenario_id, model_type, exo_mode);
     artifact_path = fullfile(forecast_dir, [file_prefix, '.mat']);
 
     save(artifact_path, '-struct', 'artifact');
@@ -117,30 +100,19 @@ file_prefix = sprintf('partA_02_global_hyperparameters_%s_%s', model_type, exo_m
 artifact_path = fullfile(cfg.output.model_selection_dir, [file_prefix, '.mat']);
 
 if ~exist(artifact_path, 'file')
-    error('PARTA_03:MissingSelectionArtifact', ...
-        'Missing model-selection artifact: %s. Run partA_02 first.', artifact_path);
+    error('PARTA_03:MissingSelectionArtifact', 'Missing model-selection artifact: %s. Run partA_02 first.', artifact_path);
 end
 
 selection = load(artifact_path);
 
 if ~isequaln(selection.snapshot, cfg.snapshot.selection)
-    error('PARTA_03:SelectionConfigMismatch', ...
-        'Script 2 model-selection artifact does not match the current Part A selection protocol.');
+    error('PARTA_03:SelectionConfigMismatch', 'Script 2 model-selection artifact does not match the current Part A selection protocol');
 end
 end
 
-function results = local_run_scenario_forecasts( ...
-    model_type, exo_mode, params, window_data, ...
-    base_stepper, base_seed, num_draws, horizon, wis_alphas, vary, scenario_index)
+function results = local_run_scenario_forecasts( model_type, exo_mode, params, window_data, base_stepper, base_seed, num_draws, horizon, wis_alphas, vary, scenario_index)
 %LOCAL_RUN_SCENARIO_FORECASTS Run selected-model forecasts for one scenario.
-template = struct( ...
-    'window_day', [], ...
-    'window_day_idx', [], ...
-    'time_horizon', [], ...
-    'truth_Rt_window', [], ...
-    'forecast_median', [], ...
-    'forecast_lower', [], ...
-    'forecast_upper', []);
+template = struct('window_day', [], 'window_day_idx', [], 'time_horizon', [], 'truth_Rt_window', [], 'forecast_median', [], 'forecast_lower', [], 'forecast_upper', []);
 results = repmat(template, numel(window_data), 1);
 
 for w = 1:numel(window_data)
@@ -150,34 +122,28 @@ for w = 1:numel(window_data)
     r_seed      = window_seed;
 
     if isempty(win.U_past)
-        ens = forecast_open(model_type, params, ...
-            win.Rt_past, num_draws, horizon, r_seed);
+        ens = forecast_open(model_type, params, win.Rt_past, num_draws, horizon, r_seed);
     else
         e_seed = window_seed + 1000000;
-        ens = forecast_closed(model_type, params, ...
-            win.Rt_past, win.U_past, win.sirs_state, size(win.U_past, 2), ...
-            num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
+        ens = forecast_closed(model_type, params, win.Rt_past, win.U_past, win.sirs_state, size(win.U_past, 2), num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
     end
 
     Rt_pred = median(ens, 2);
     lower   = quantile(ens, wis_alphas(:).' / 2, 2);
     upper   = quantile(ens, 1 - wis_alphas(:).' / 2, 2);
 
-    valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) ...
-        && all(Rt_pred > 0) && all(isfinite(lower(:))) ...
-        && all(isfinite(upper(:))) && all(lower(:) <= upper(:));
+    valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) && all(Rt_pred > 0) && all(isfinite(lower(:))) && all(isfinite(upper(:))) && all(lower(:) <= upper(:));
 
     if ~valid
-        error('PARTA_03:UnscoreableWindow', ...
-            'Forecast window produced invalid intervals.');
+        error('PARTA_03:UnscoreableWindow', 'Forecast window produced invalid intervals.');
     end
 
-    results(w).window_day      = win.window_day;
-    results(w).window_day_idx  = win.window_day_idx;
-    results(w).time_horizon    = win.time_horizon;
+    results(w).window_day = win.window_day;
+    results(w).window_day_idx = win.window_day_idx;
+    results(w).time_horizon = win.time_horizon;
     results(w).truth_Rt_window = win.truth_Rt;
     results(w).forecast_median = Rt_pred;
-    results(w).forecast_lower  = lower;
-    results(w).forecast_upper  = upper;
+    results(w).forecast_lower = lower;
+    results(w).forecast_upper = upper;
 end
 end

@@ -32,19 +32,15 @@ if ~exist(evaluation_dir, 'dir'), mkdir(evaluation_dir); end
 if ~exist(table_dir, 'dir'), mkdir(table_dir); end
 
 %% 2. Forecast Artifact Evaluation
-forecast_files = local_sort_dir_by_name( ...
-    dir(fullfile(forecast_dir, 'partA_03_forecast_*.mat')));
+forecast_files = local_sort_dir_by_name(dir(fullfile(forecast_dir, 'partA_03_forecast_*.mat')));
 
 if isempty(forecast_files)
-    error('PARTA_04:NoForecastArtifacts', ...
-        'No forecast artifacts found under %s. Run partA_03 first.', forecast_dir);
+    error('PARTA_04:NoForecastArtifacts', 'No forecast artifacts found under %s. Run partA_03 first.', forecast_dir);
 end
 
-[window_scores, horizon_scores, interval_scores] = ...
-    local_evaluate_forecasts(forecast_files);
+[window_scores, horizon_scores, interval_scores] = local_evaluate_forecasts(forecast_files);
 
-fprintf('Evaluated %d forecast windows and %d horizon rows.\n', ...
-    height(window_scores), height(horizon_scores));
+fprintf('Evaluated %d forecast windows and %d horizon rows.\n', height(window_scores), height(horizon_scores));
 
 %% 3. Score Summaries
 summaries = local_summarize_scores(window_scores, horizon_scores, interval_scores);
@@ -57,16 +53,11 @@ save(evaluation_artifact, 'window_scores', 'horizon_scores', 'summaries');
 fprintf('Evaluation artifact saved to: %s\n', evaluation_artifact);
 
 %% 5. Save Tables
-local_write_table(table_dir, 'partA_04_window_scores.csv', ...
-    window_scores);
-local_write_table(table_dir, 'partA_04_horizon_scores.csv', ...
-    horizon_scores);
-local_write_table(table_dir, 'partA_04_scenario_summary.csv', ...
-    summaries.scenario_summary);
-local_write_table(table_dir, 'partA_04_horizon_summary.csv', ...
-    summaries.horizon_summary);
-local_write_table(table_dir, 'partA_04_interval_summary.csv', ...
-    summaries.interval_summary);
+local_write_table(table_dir, 'partA_04_window_scores.csv', window_scores);
+local_write_table(table_dir, 'partA_04_horizon_scores.csv', horizon_scores);
+local_write_table(table_dir, 'partA_04_scenario_summary.csv', summaries.scenario_summary);
+local_write_table(table_dir, 'partA_04_horizon_summary.csv', summaries.horizon_summary);
+local_write_table(table_dir, 'partA_04_interval_summary.csv', summaries.interval_summary);
 
 fprintf('=== Part A Forecast Evaluation Complete ===\n\n');
 
@@ -83,8 +74,7 @@ for i = 1:num_files
     artifact_path = fullfile(forecast_files(i).folder, forecast_files(i).name);
     loaded = load(artifact_path);
 
-    [window_blocks{i}, horizon_blocks{i}, interval_blocks{i}] = ...
-        local_score_forecast_artifact(loaded);
+    [window_blocks{i}, horizon_blocks{i}, interval_blocks{i}] = local_score_forecast_artifact(loaded);
 end
 
 window_scores   = vertcat(window_blocks{:});

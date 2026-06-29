@@ -55,9 +55,7 @@ scenario_data = repmat(scenario_template, num_scenarios, 1);
 for i = 1:num_scenarios
     loaded = load(fullfile(data_dir, file_list(i).name));
 
-    [window_data, num_exo] = build_forecast_windows(loaded.Rt_true, loaded.S_true, ...
-        loaded.I_true, loaded.tspan, exo_mode, pop_size, ...
-        cfg.forecast.min_window, cfg.forecast.step_size, horizon);
+    [window_data, num_exo] = build_forecast_windows(loaded.Rt_true, loaded.S_true, loaded.I_true, loaded.tspan, exo_mode, pop_size, cfg.forecast.min_window, cfg.forecast.step_size, horizon);
 
     if isempty(window_data)
         error('PARTA_02:NoForecastWindows', 'Scenario %s has no intended forecast windows; check min_window/step_size/horizon against the truth length.', loaded.scenario_id);
@@ -67,8 +65,7 @@ for i = 1:num_scenarios
     scenario_data(i).num_exo     = num_exo;
     scenario_data(i).window_data = window_data;
 
-    fprintf('Prepared scenario %d/%d (%s): %d intended windows\n', ...
-        i, num_scenarios, loaded.scenario_id, numel(window_data));
+    fprintf('Prepared scenario %d/%d (%s): %d intended windows\n', i, num_scenarios, loaded.scenario_id, numel(window_data));
 end
 
 intended_window_count = sum(arrayfun(@(s) numel(s.window_data), scenario_data(:)'));
@@ -97,13 +94,12 @@ if isempty(gcp('nocreate'))
     pool_cleanup = onCleanup(@local_shutdown_parallel_pool);
 end
 
-base_seed  = cfg.run.seed;
-num_draws  = cfg.intervals.num_draws;
-wis_alphas = cfg.forecast.wis_alphas;
-vary       = cfg.intervals.include_epidemic_seed_variation;
+base_seed = cfg.run.seed;
+num_draws = cfg.intervals.num_draws;
+vary      = cfg.intervals.include_epidemic_seed_variation;
 
 scenario_data_const = parallel.pool.Constant(scenario_data);
-
+wis_alphas_const    = parallel.pool.Constant(cfg.forecast.wis_alphas(:));
 if exo_mode == "None"
     sirs_stepper_const = [];
 else
@@ -122,14 +118,14 @@ parfor idx = 1:num_candidates
     completed_count     = 0;
     domain_failure      = false;
     scenario_data_local = scenario_data_const.Value;
-
+    wis_alphas_local    = wis_alphas_const.Value;
     for s = 1:num_scenarios
         data        = scenario_data_local(s);
         window_wis  = inf(numel(data.window_data), 1);
         window_aicc = nan(numel(data.window_data), 1);
 
         for w = 1:numel(data.window_data)
-            win         = data.window_data(w);
+            win = data.window_data(w);
 
             window_seed = base_seed + 10000 * s + w;
             r_seed      = window_seed;
@@ -140,21 +136,24 @@ parfor idx = 1:num_candidates
                 else
                     e_seed = window_seed + 1000000;
                     base_stepper = sirs_stepper_const.Value;
-                    [ens, fit_info] = forecast_closed(model_type, params, win.Rt_past, win.U_past, win.sirs_state, data.num_exo, num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
+
+                        [ens, fit_info] = forecast_closed(model_type, params, win.Rt_past, win.U_past, win.sirs_state, data.num_exo, num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
                 end
 
                 Rt_pred = median(ens, 2);
-                lower   = quantile(ens, wis_alphas(:).' / 2, 2);
-                upper   = quantile(ens, 1 - wis_alphas(:).' / 2, 2);
+                lower   = quantile(ens, wis_alphas_local.' / 2, 2);
+                upper   = quantile(ens, 1 - wis_alphas_local.' / 2, 2);
 
-                valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) && all(Rt_pred > 0) && all(isfinite(lower(:))) && all(isfinite(upper(:))) && all(lower(:) <= upper(:));
+                    valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) && all(Rt_pred > 0) && all(isfinite(lower(:))) && all(isfinite(upper(:))) && all(lower(:) <= upper(:));
+
                 if ~valid
-                    error('PARTA_02:UnscoreableWindow', 'Forecast window produced invalid intervals or non-finite WIS.');
+                        error('PARTA_02:UnscoreableWindow', 'Forecast window produced invalid intervals or non-finite WIS.');
                 end
 
-                wis_h = compute_wis(win.truth_Rt, Rt_pred, lower, upper, wis_alphas);
+                    wis_h = compute_wis(win.truth_Rt, Rt_pred, lower, upper, wis_alphas_local);
+
                 if numel(wis_h) ~= horizon || ~all(isfinite(wis_h))
-                    error('PARTA_02:UnscoreableWindow', 'Forecast window produced invalid intervals or non-finite WIS.');
+                        error('PARTA_02:UnscoreableWindow', 'Forecast window produced invalid intervals or non-finite WIS.');
                 end
 
                 window_wis(w)   = mean(wis_h);
@@ -187,7 +186,7 @@ parfor idx = 1:num_candidates
 end
 
 fprintf('Stage: Candidate evaluation complete\n');
-clear pool_cleanup
+clear pool_cleanup scenario_data_const wis_alphas_const sirs_stepper_const
 
 %% 5. Model Selection
 [best_global_wis, raw_best_index] = min(global_mean_wis);
@@ -216,14 +215,7 @@ global_mean_aicc = global_mean_aicc(valid_candidates);
 file_prefix   = sprintf('partA_02_global_hyperparameters_%s_%s', model_type, exo_mode);
 artifact_path = fullfile(selection_dir, [file_prefix, '.mat']);
 
-artifact = struct( ...
-    'selected_configuration', selected_configuration, ...
-    'snapshot', selection_snapshot, ...
-    'candidate_grid', candidate_grid, ...
-    'candidate_scores', candidate_scores, ...
-    'global_mean_wis', global_mean_wis, ...
-    'candidate_aicc', candidate_aicc, ...
-    'global_mean_aicc', global_mean_aicc);
+artifact = struct('selected_configuration', selected_configuration, 'snapshot', selection_snapshot, 'candidate_grid', candidate_grid, 'candidate_scores', candidate_scores, 'global_mean_wis', global_mean_wis, 'candidate_aicc', candidate_aicc, 'global_mean_aicc', global_mean_aicc);
 
 save(artifact_path, '-struct', 'artifact');
 
@@ -273,8 +265,7 @@ end
 function idx = local_select_simplest(candidate_complexity, global_mean_wis, eligible)
 %LOCAL_SELECT_SIMPLEST Simplest eligible candidate; ties broken by WIS then index.
 candidate_indices = find(eligible);
-keys = [candidate_complexity(candidate_indices), ...
-    global_mean_wis(candidate_indices), candidate_indices];
+keys = [candidate_complexity(candidate_indices), global_mean_wis(candidate_indices), candidate_indices];
 keys = sortrows(keys, [1 2 3]);
 idx  = keys(1, 3);
 end

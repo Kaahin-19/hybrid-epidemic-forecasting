@@ -33,27 +33,39 @@ function [handles, labels] = plot_series(ax, spec)
 %
 %   See also APPLY_PANEL_STYLE, PLOT_DISTRIBUTION.
 %
-% A. M. Kaahin 2026-06-22
+% A. M. Kaahin 2026-06-29
 
 %% 1. Draw Series In Order
 was_held = ishold(ax);
 hold(ax, 'on');
 
-handles = gobjects(0, 1);
-labels = strings(0, 1);
+n_series = numel(spec.series);
+handles = gobjects(n_series, 1);
+labels = strings(n_series, 1);
+n_labelled = 0;
 
-for i = 1:numel(spec.series)
+for i = 1:n_series
     s = spec.series(i);
+
     if s.type == "ribbon"
         h = local_draw_ribbon(ax, s);
     else
         h = local_draw_line(ax, s);
     end
-    if isfield(s, 'label') && strlength(s.label) > 0
-        handles(end + 1, 1) = h;
-        labels(end + 1, 1) = s.label;
+
+    if isfield(s, 'label')
+        label = string(s.label);
+
+        if strlength(label) > 0
+            n_labelled = n_labelled + 1;
+            handles(n_labelled, 1) = h;
+            labels(n_labelled, 1) = label;
+        end
     end
 end
+
+handles = handles(1:n_labelled, 1);
+labels = labels(1:n_labelled, 1);
 
 if ~was_held
     hold(ax, 'off');
@@ -70,6 +82,7 @@ end
 function h = local_draw_line(ax, s)
 %LOCAL_DRAW_LINE Draw a single line or reference series.
 args = {};
+
 if isfield(s, 'color') && ~isempty(s.color)
     args = [args, {'Color', s.color}];
 end
@@ -85,6 +98,7 @@ end
 if isfield(s, 'marker_size') && ~isempty(s.marker_size)
     args = [args, {'MarkerSize', s.marker_size}];
 end
+
 h = plot(ax, s.x, s.y, args{:});
 end
 
@@ -92,8 +106,10 @@ function h = local_draw_ribbon(ax, s)
 %LOCAL_DRAW_RIBBON Draw a shaded interval band between lower and upper bounds.
 x_patch = [s.x; flipud(s.x)];
 y_patch = [s.lower; flipud(s.upper)];
+
 face_color = local_series_field(s, 'face_color', [0.6, 0.6, 0.6]);
 face_alpha = local_series_field(s, 'face_alpha', 1);
+
 h = fill(ax, x_patch, y_patch, face_color, ...
     'FaceAlpha', face_alpha, 'EdgeColor', 'none');
 end

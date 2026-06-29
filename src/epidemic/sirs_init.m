@@ -19,7 +19,8 @@ function stepper = sirs_init(model_params, sim_options)
 %   Outputs:
 %       stepper - Reusable SIRS stepper structure.
 %
-%   See also PARTA_01_GENERATE_TRUTH, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS, SIRS_STEP.
+%   See also PARTA_01_GENERATE_TRUTH, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, ... 
+%            PARTA_03_RUN_FORECASTS, SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-01
 % Modified: 2026-06-28

@@ -77,8 +77,7 @@ else
 
     ylabel(tl, "Effective reproduction number, {\it R}_t", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
 
-    exportgraphics(fig, fullfile(figure_dir, 'partA_05_rt_scenarios.pdf'), ...
-        'ContentType', 'vector');
+    exportgraphics(fig, fullfile(figure_dir, 'partA_05_rt_scenarios.pdf'), 'ContentType', 'vector');
     close(fig);
 end
 
@@ -89,8 +88,7 @@ else
     lead        = cfg.forecast.plot_lead_time;
     plot_alphas = sort(cfg.forecast.plot_alphas);
 
-    fprintf('Drawing %d forecast comparison figure(s) at lead %d day(s)...\n', ...
-        numel(forecast_files), lead);
+    fprintf('Drawing %d forecast comparison figure(s) at lead %d day(s)...\n', numel(forecast_files), lead);
 
     for f = 1:numel(forecast_files)
         loaded = load(fullfile(forecast_files(f).folder, forecast_files(f).name));
@@ -125,8 +123,7 @@ else
     horizon_summary  = evaluation.summaries.horizon_summary;
     interval_summary = evaluation.summaries.interval_summary;
 
-    fig = figure('Visible', 'off', 'Units', 'centimeters', ...
-        'Position', [2, 2, 17.0, 9.5], 'Color', 'w');
+    fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 9.5], 'Color', 'w');
 
     ax = axes('Parent', fig);
 
@@ -135,15 +132,12 @@ else
     [h, labels] = plot_distribution(ax, dist_spec);
     local_apply_legend(ax, h, labels, style, numel(labels));
 
-    exportgraphics(fig, fullfile(figure_dir, 'partA_05_model_wis_distribution.pdf'), ...
-        'ContentType', 'vector');
+    exportgraphics(fig, fullfile(figure_dir, 'partA_05_model_wis_distribution.pdf'), 'ContentType', 'vector');
     close(fig);
 
-    horizon_series = local_grouped_line_series( ...
-        horizon_summary, 'HorizonIdx', 'MeanWIS', style);
+    horizon_series = local_grouped_line_series(horizon_summary, 'HorizonIdx', 'MeanWIS', style);
 
-    fig = figure('Visible', 'off', 'Units', 'centimeters', ...
-        'Position', [2, 2, 17.0, 9.0], 'Color', 'w');
+    fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 9.0], 'Color', 'w');
 
     ax = axes('Parent', fig);
 
@@ -152,8 +146,7 @@ else
     [h, labels] = plot_series(ax, spec);
     local_apply_legend(ax, h, labels, style, 3);
 
-    exportgraphics(fig, fullfile(figure_dir, 'partA_05_mean_wis_by_horizon.pdf'), ...
-        'ContentType', 'vector');
+    exportgraphics(fig, fullfile(figure_dir, 'partA_05_mean_wis_by_horizon.pdf'), 'ContentType', 'vector');
     close(fig);
 
     coverage_series = local_grouped_line_series(interval_summary, 'NominalCoverage', 'MeanCoverage', style);
