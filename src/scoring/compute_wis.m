@@ -37,15 +37,10 @@ underpred   = max(lower - truth, 0);
 overpred    = max(truth - upper, 0);
 
 %% 3. Weighted Interval Score
-wis = (1 / (K + 0.5)) * ...
-    (median_term + sum(dispersion, 2) + sum(underpred, 2) + sum(overpred, 2));
+wis = (1 / (K + 0.5)) * (median_term + sum(dispersion, 2) + sum(underpred, 2) + sum(overpred, 2));
 
 %% 4. Optional Component Output
 if nargout > 1
-    components = struct( ...
-        'median_term', median_term, ...
-        'dispersion', sum(dispersion, 2), ...
-        'underprediction', sum(underpred, 2), ...
-        'overprediction', sum(overpred, 2));
+    components = struct('median_term', median_term, 'dispersion', sum(dispersion, 2), 'underprediction', sum(underpred, 2), 'overprediction', sum(overpred, 2));
 end
 end

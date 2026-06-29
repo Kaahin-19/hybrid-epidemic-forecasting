@@ -27,16 +27,11 @@ function point_error = compute_point_error(truth, pred)
 %
 % A. M. Kaahin 2026-06-22
 
-    %% 1. Main Computation
-    error          = pred - truth;
-    squared_error  = error.^2;
-    absolute_error = abs(error);
+%% 1. Main Computation
+error          = pred - truth;
+squared_error  = error.^2;
+absolute_error = abs(error);
 
-    %% 2. Output Assembly
-    point_error = struct( ...
-        'error',          error, ...
-        'squared_error',  squared_error, ...
-        'absolute_error', absolute_error, ...
-        'rmse',           sqrt(mean(squared_error)), ...
-        'mae',            mean(absolute_error));
+%% 2. Output Assembly
+point_error = struct('error', error, 'squared_error', squared_error, 'absolute_error', absolute_error, 'rmse', sqrt(mean(squared_error)), 'mae', mean(absolute_error));
 end

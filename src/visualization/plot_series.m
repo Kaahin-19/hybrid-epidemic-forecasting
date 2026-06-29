@@ -110,8 +110,7 @@ y_patch = [s.lower; flipud(s.upper)];
 face_color = local_series_field(s, 'face_color', [0.6, 0.6, 0.6]);
 face_alpha = local_series_field(s, 'face_alpha', 1);
 
-h = fill(ax, x_patch, y_patch, face_color, ...
-    'FaceAlpha', face_alpha, 'EdgeColor', 'none');
+h = fill(ax, x_patch, y_patch, face_color, 'FaceAlpha', face_alpha, 'EdgeColor', 'none');
 end
 
 function value = local_series_field(s, name, default_value)

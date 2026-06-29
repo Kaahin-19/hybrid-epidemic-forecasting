@@ -27,53 +27,50 @@ function apply_panel_style(ax, opts)
 %
 % A. M. Kaahin 2026-06-22
 
-    %% 1. Resolve Style Options
-    font_name      = local_opt(opts, 'font_name', "Arial");
-    axis_font_size = local_opt(opts, 'axis_font_size', 9);
-    tick_font_size = local_opt(opts, 'tick_font_size', 8);
+%% 1. Resolve Style Options
+font_name      = local_opt(opts, 'font_name', "Arial");
+axis_font_size = local_opt(opts, 'axis_font_size', 9);
+tick_font_size = local_opt(opts, 'tick_font_size', 8);
 
-    %% 2. Base Axis Styling
-    set(ax, 'FontName', font_name, 'FontSize', tick_font_size, ...
-        'TickLabelInterpreter', 'tex', 'Box', 'on', 'Layer', 'top');
+%% 2. Base Axis Styling
+set(ax, 'FontName', font_name, 'FontSize', tick_font_size, 'TickLabelInterpreter', 'tex', 'Box', 'on', 'Layer', 'top');
 
-    if isfield(opts, 'color_order') && ~isempty(opts.color_order)
-        colororder(ax, opts.color_order);
-    end
+if isfield(opts, 'color_order') && ~isempty(opts.color_order)
+    colororder(ax, opts.color_order);
+end
 
-    %% 3. Labels, Limits, and Tick Rotation
-    if isfield(opts, 'x_label') && strlength(opts.x_label) > 0
-        xlabel(ax, opts.x_label, 'Interpreter', 'tex', ...
-            'FontName', font_name, 'FontSize', axis_font_size);
-    end
-    if isfield(opts, 'y_label') && strlength(opts.y_label) > 0
-        ylabel(ax, opts.y_label, 'Interpreter', 'tex', ...
-            'FontName', font_name, 'FontSize', axis_font_size);
-    end
-    if isfield(opts, 'x_limits') && ~isempty(opts.x_limits)
-        xlim(ax, opts.x_limits);
-    end
-    if isfield(opts, 'y_limits') && ~isempty(opts.y_limits)
-        ylim(ax, opts.y_limits);
-    end
-    if isfield(opts, 'x_tick_rotation') && ~isempty(opts.x_tick_rotation)
-        ax.XTickLabelRotation = opts.x_tick_rotation;
-    end
+%% 3. Labels, Limits, and Tick Rotation
+if isfield(opts, 'x_label') && strlength(opts.x_label) > 0
+    xlabel(ax, opts.x_label, 'Interpreter', 'tex', 'FontName', font_name, 'FontSize', axis_font_size);
+end
+if isfield(opts, 'y_label') && strlength(opts.y_label) > 0
+    ylabel(ax, opts.y_label, 'Interpreter', 'tex', 'FontName', font_name, 'FontSize', axis_font_size);
+end
+if isfield(opts, 'x_limits') && ~isempty(opts.x_limits)
+    xlim(ax, opts.x_limits);
+end
+if isfield(opts, 'y_limits') && ~isempty(opts.y_limits)
+    ylim(ax, opts.y_limits);
+end
+if isfield(opts, 'x_tick_rotation') && ~isempty(opts.x_tick_rotation)
+    ax.XTickLabelRotation = opts.x_tick_rotation;
+end
 
-    %% 4. Grid
-    if isfield(opts, 'grid') && opts.grid
-        grid(ax, 'on');
-        ax.GridAlpha = 0.12;
-        ax.GridLineStyle = ':';
-    else
-        grid(ax, 'off');
-    end
+%% 4. Grid
+if isfield(opts, 'grid') && opts.grid
+    grid(ax, 'on');
+    ax.GridAlpha = 0.12;
+    ax.GridLineStyle = ':';
+else
+    grid(ax, 'off');
+end
 end
 
 function value = local_opt(opts, name, default_value)
 %LOCAL_OPT Return an option field value or its default.
-    if isfield(opts, name) && ~isempty(opts.(name))
-        value = opts.(name);
-    else
-        value = default_value;
-    end
+if isfield(opts, name) && ~isempty(opts.(name))
+    value = opts.(name);
+else
+    value = default_value;
+end
 end

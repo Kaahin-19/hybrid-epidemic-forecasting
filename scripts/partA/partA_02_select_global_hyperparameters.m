@@ -137,23 +137,23 @@ parfor idx = 1:num_candidates
                     e_seed = window_seed + 1000000;
                     base_stepper = sirs_stepper_const.Value;
 
-                        [ens, fit_info] = forecast_closed(model_type, params, win.Rt_past, win.U_past, win.sirs_state, data.num_exo, num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
+                    [ens, fit_info] = forecast_closed(model_type, params, win.Rt_past, win.U_past, win.sirs_state, data.num_exo, num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
                 end
 
                 Rt_pred = median(ens, 2);
                 lower   = quantile(ens, wis_alphas_local.' / 2, 2);
                 upper   = quantile(ens, 1 - wis_alphas_local.' / 2, 2);
 
-                    valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) && all(Rt_pred > 0) && all(isfinite(lower(:))) && all(isfinite(upper(:))) && all(lower(:) <= upper(:));
+                valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) && all(Rt_pred > 0) && all(isfinite(lower(:))) && all(isfinite(upper(:))) && all(lower(:) <= upper(:));
 
                 if ~valid
-                        error('PARTA_02:UnscoreableWindow', 'Forecast window produced invalid intervals or non-finite WIS.');
+                    error('PARTA_02:UnscoreableWindow', 'Forecast window produced invalid intervals or non-finite WIS.');
                 end
 
-                    wis_h = compute_wis(win.truth_Rt, Rt_pred, lower, upper, wis_alphas_local);
+                wis_h = compute_wis(win.truth_Rt, Rt_pred, lower, upper, wis_alphas_local);
 
                 if numel(wis_h) ~= horizon || ~all(isfinite(wis_h))
-                        error('PARTA_02:UnscoreableWindow', 'Forecast window produced invalid intervals or non-finite WIS.');
+                    error('PARTA_02:UnscoreableWindow', 'Forecast window produced invalid intervals or non-finite WIS.');
                 end
 
                 window_wis(w)   = mean(wis_h);

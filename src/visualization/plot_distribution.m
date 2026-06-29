@@ -27,26 +27,25 @@ function [handles, labels] = plot_distribution(ax, spec)
 %
 % A. M. Kaahin 2026-06-22
 
-    %% 1. Draw Grouped Boxchart
-    if isfield(spec, 'color_order') && ~isempty(spec.color_order)
-        colororder(ax, spec.color_order);
-    end
+%% 1. Draw Grouped Boxchart
+if isfield(spec, 'color_order') && ~isempty(spec.color_order)
+    colororder(ax, spec.color_order);
+end
 
-    x_cat = categorical(spec.x);
-    if isfield(spec, 'group') && ~isempty(spec.group)
-        group_cat = categorical(spec.group);
-        handles = boxchart(ax, x_cat, spec.y, 'GroupByColor', group_cat, ...
-            'MarkerStyle', '.', 'MarkerSize', 3);
-        labels = string(categories(group_cat));
-    else
-        handles = boxchart(ax, x_cat, spec.y, 'MarkerStyle', '.', 'MarkerSize', 3);
-        labels = strings(0, 1);
-    end
+x_cat = categorical(spec.x);
+if isfield(spec, 'group') && ~isempty(spec.group)
+    group_cat = categorical(spec.group);
+    handles = boxchart(ax, x_cat, spec.y, 'GroupByColor', group_cat, 'MarkerStyle', '.', 'MarkerSize', 3);
+    labels = string(categories(group_cat));
+else
+    handles = boxchart(ax, x_cat, spec.y, 'MarkerStyle', '.', 'MarkerSize', 3);
+    labels = strings(0, 1);
+end
 
-    %% 2. Apply Shared Styling
-    if isfield(spec, 'style')
-        apply_panel_style(ax, spec.style);
-    else
-        apply_panel_style(ax, struct());
-    end
+%% 2. Apply Shared Styling
+if isfield(spec, 'style')
+    apply_panel_style(ax, spec.style);
+else
+    apply_panel_style(ax, struct());
+end
 end
