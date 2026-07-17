@@ -79,6 +79,7 @@ cfg.partB.robustness_cases = robustness_cases;
 cfg.partB.observation_noise.reporting_fraction    = 0.4;
 cfg.partB.observation_noise.dispersion            = 10;
 cfg.partB.observation_noise.smoothing_window_days = 7;
+cfg.partB.observation_noise.num_replicates = 10;
 
 %% 6. Process Noise
 cfg.partB.process_noise.num_replicates        = 10;

@@ -10,7 +10,7 @@
 %       2. Generate analytic Rt signals inline for each scenario.
 %       3. Simulate latent SIRS or SEIR epidemic truth.
 %       4. Build model-visible inputs.
-%       5. Save one dataset artifact per case/scenario/replicate.
+%       5. Save successful dataset artifacts and record generation status.
 %
 %   See also PARTB_CONFIG, ESTIMATE_RT_RENEWAL, SIRS_INIT, SIRS_STEP.
 %
@@ -34,10 +34,18 @@ if ~exist(dataDir, 'dir')
     mkdir(dataDir);
 end
 
+statusPath = fullfile(dataDir, 'partB_01_generation_status.mat');
+known_domain_errors = ["EPIDEMIC:SusceptibleBelowThreshold", "PARTB:SusceptibleDepleted"];
+generation_status = local_initialize_generation_status(cfg);
+run_completed = false;
+save(statusPath, 'generation_status', 'run_completed');
+
 %% 2. Dataset Generation
 fprintf('Saving datasets to: %s\n', dataDir);
 
-artifact_count = 0;
+artifact_count       = 0;
+domain_failure_count = 0;
+status_index         = 0;
 
 for ci = 1:numel(cfg.partB.robustness_cases)
     case_def = cfg.partB.robustness_cases(ci);
@@ -71,73 +79,139 @@ for ci = 1:numel(cfg.partB.robustness_cases)
         truth_solver = local_truth_solver(case_def);
 
         for ri = 1:num_reps
+            status_index = status_index + 1;
             process_seed = local_process_seed(cfg, ci, si, ri);
             noise_seed   = local_noise_seed(cfg, ci, si, ri);
+            outPath      = fullfile(dataDir, char(generation_status(status_index).output_filename));
 
             fprintf('  - %s / %s / rep%03d ... ', case_def.case_id, scenario.id, ri);
 
-            switch case_def.truth_model
-                case "SIRS"
-                    pop_size = cfg.sirs.pop_size;
-                    [S_true, I_true, R_true] = local_simulate_sirs_truth(cfg.sirs, Rt_true, case_def.solver, process_seed);
-                    E_true         = [];
-                    incidence_true = local_derive_incidence(Rt_true_col, I_true, cfg.sirs.gamma);
-                    local_validate_truth({S_true, I_true, R_true}, incidence_true, pop_size);
-                case "SEIR"
-                    pop_size = cfg.partB.seir.pop_size;
-                    [S_true, E_true, I_true, R_true, incidence_true] = local_simulate_seir_truth(cfg.partB.seir, Rt_true, case_def.solver, process_seed);
-                    local_validate_truth({S_true, E_true, I_true, R_true}, incidence_true, pop_size);
-                otherwise
-                    error('PARTB:UnsupportedTruthModel', 'Unsupported truth model: %s.', case_def.truth_model);
+            try
+                switch case_def.truth_model
+                    case "SIRS"
+                        pop_size = cfg.sirs.pop_size;
+                        [S_true, I_true, R_true] = local_simulate_sirs_truth(cfg.sirs, Rt_true, case_def.solver, process_seed);
+                        E_true         = [];
+                        incidence_true = local_derive_incidence(Rt_true_col, I_true, cfg.sirs.gamma);
+                        local_validate_truth({S_true, I_true, R_true}, incidence_true, pop_size);
+                    case "SEIR"
+                        pop_size = cfg.partB.seir.pop_size;
+                        [S_true, E_true, I_true, R_true, incidence_true] = local_simulate_seir_truth(cfg.partB.seir, Rt_true, case_def.solver, process_seed);
+                        local_validate_truth({S_true, E_true, I_true, R_true}, incidence_true, pop_size);
+                    otherwise
+                        error('PARTB:UnsupportedTruthModel', 'Unsupported truth model: %s.', case_def.truth_model);
+                end
+
+                [Rt_model_input, Rt_model_input_valid_mask, incidence_observed, incidence_model_input] = local_apply_observation_model(case_def, cfg, incidence_true, Rt_true_col, noise_seed);
+
+                artifact = struct();
+                artifact.case_id                   = case_def.case_id;
+                artifact.case_name                 = case_def.case_name;
+                artifact.scenario_id               = scenario.id;
+                artifact.scenario_name             = scenario.name;
+                artifact.replicate_id              = sprintf('rep%03d', ri);
+                artifact.replicate_index           = ri;
+                artifact.truth_model               = case_def.truth_model;
+                artifact.requested_solver          = case_def.solver;
+                artifact.truth_solver              = truth_solver;
+                artifact.tspan                     = tspan(:);
+                artifact.Rt_true                   = Rt_true_col;
+                artifact.Rt_model_input            = Rt_model_input;
+                artifact.Rt_model_input_valid_mask = Rt_model_input_valid_mask;
+                artifact.S_true                    = S_true;
+                artifact.I_true                    = I_true;
+                artifact.R_true                    = R_true;
+                artifact.E_true                    = E_true;
+                artifact.S_model_input             = S_true;
+                artifact.I_model_input             = I_true;
+                artifact.E_model_input             = E_true;
+                artifact.incidence_true            = incidence_true;
+                artifact.incidence_observed        = incidence_observed;
+                artifact.incidence_model_input     = incidence_model_input;
+                artifact.process_seed              = process_seed;
+                artifact.noise_seed                = noise_seed;
+                artifact.snapshot                  = local_cfg_snapshot(cfg, case_def, scenario);
+
+                save(outPath, '-struct', 'artifact');
+
+                generation_status(status_index).status = "saved";
+                artifact_count = artifact_count + 1;
+                fprintf('Saved\n');
+            catch ME
+                generation_status(status_index).error_id      = string(ME.identifier);
+                generation_status(status_index).error_message = string(ME.message);
+
+                if any(string(ME.identifier) == known_domain_errors)
+                    if exist(outPath, 'file') == 2
+                        delete(outPath);
+                    end
+
+                    generation_status(status_index).status = "domain_failure";
+                    domain_failure_count = domain_failure_count + 1;
+                    fprintf('Domain failure (%s): %s\n', ME.identifier, ME.message);
+                else
+                    save(statusPath, 'generation_status', 'run_completed');
+                    rethrow(ME);
+                end
             end
 
-            [Rt_model_input, Rt_model_input_valid_mask, incidence_observed, incidence_model_input] = local_apply_observation_model(case_def, cfg, incidence_true, Rt_true_col, noise_seed);
-
-            artifact = struct();
-            artifact.case_id                   = case_def.case_id;
-            artifact.case_name                 = case_def.case_name;
-            artifact.scenario_id               = scenario.id;
-            artifact.scenario_name             = scenario.name;
-            artifact.replicate_id              = sprintf('rep%03d', ri);
-            artifact.replicate_index           = ri;
-            artifact.truth_model               = case_def.truth_model;
-            artifact.requested_solver          = case_def.solver;
-            artifact.truth_solver              = truth_solver;
-            artifact.tspan                     = tspan(:);
-            artifact.Rt_true                   = Rt_true_col;
-            artifact.Rt_model_input            = Rt_model_input;
-            artifact.Rt_model_input_valid_mask = Rt_model_input_valid_mask;
-            artifact.S_true                    = S_true;
-            artifact.I_true                    = I_true;
-            artifact.R_true                    = R_true;
-            artifact.E_true                    = E_true;
-            artifact.S_model_input             = S_true;
-            artifact.I_model_input             = I_true;
-            artifact.E_model_input             = E_true;
-            artifact.incidence_true            = incidence_true;
-            artifact.incidence_observed        = incidence_observed;
-            artifact.incidence_model_input     = incidence_model_input;
-            artifact.process_seed              = process_seed;
-            artifact.noise_seed                = noise_seed;
-            artifact.snapshot                  = local_cfg_snapshot(cfg, case_def, scenario);
-
-            outPath = fullfile(dataDir, sprintf('partB_01_dataset_%s_%s_%s.mat', case_def.case_id, scenario.id, artifact.replicate_id));
-            save(outPath, '-struct', 'artifact');
-
-            artifact_count = artifact_count + 1;
-            fprintf('Saved\n');
+            save(statusPath, 'generation_status', 'run_completed');
         end
     end
 end
 
 %% 3. Completion Check
+run_completed = true;
+save(statusPath, 'generation_status', 'run_completed');
+
 fprintf('Generated %d dataset artifacts.\n', artifact_count);
+fprintf('Recorded %d domain failures.\n', domain_failure_count);
+fprintf('Generation status saved to: %s\n', statusPath);
 fprintf('=== Part B Robustness Dataset Generation Complete ===\n\n');
 
 %% 4. Local Functions
+function generation_status = local_initialize_generation_status(cfg)
+%LOCAL_INITIALIZE_GENERATION_STATUS Preallocate one pending entry per expected attempt.
+total_attempts = 0;
+for ci = 1:numel(cfg.partB.robustness_cases)
+    total_attempts = total_attempts + numel(cfg.scenarios) * local_num_replicates(cfg.partB.robustness_cases(ci), cfg);
+end
+
+entry = struct('case_id', "", 'scenario_id', "", 'replicate_id', "", 'status', "pending", 'error_id', "", 'error_message', "", 'output_filename', "");
+generation_status = repmat(entry, total_attempts, 1);
+index = 0;
+
+for ci = 1:numel(cfg.partB.robustness_cases)
+    case_def = cfg.partB.robustness_cases(ci);
+    num_reps = local_num_replicates(case_def, cfg);
+
+    for si = 1:numel(cfg.scenarios)
+        scenario = cfg.scenarios(si);
+
+        for ri = 1:num_reps
+            index = index + 1;
+            replicate_id = sprintf('rep%03d', ri);
+
+            generation_status(index).case_id         = case_def.case_id;
+            generation_status(index).scenario_id     = scenario.id;
+            generation_status(index).replicate_id    = string(replicate_id);
+            generation_status(index).output_filename = string(sprintf('partB_01_dataset_%s_%s_%s.mat', case_def.case_id, scenario.id, replicate_id));
+        end
+    end
+end
+end
+
 function num_reps = local_num_replicates(case_def, cfg)
 %LOCAL_NUM_REPLICATES Resolve replicate count for a case.
-if case_def.process_noise_enabled
+if case_def.observation_noise_enabled && case_def.process_noise_enabled
+    if cfg.partB.observation_noise.num_replicates ~= cfg.partB.process_noise.num_replicates
+        error('PARTB:ReplicateCountMismatch', 'Observation-noise and process-noise replicate counts must match for combined stress.');
+    end
+
+    num_reps = cfg.partB.process_noise.num_replicates;
+elseif case_def.observation_noise_enabled
+    num_reps = cfg.partB.observation_noise.num_replicates;
+elseif case_def.process_noise_enabled
     num_reps = cfg.partB.process_noise.num_replicates;
 else
     num_reps = 1;
