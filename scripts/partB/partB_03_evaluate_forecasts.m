@@ -365,10 +365,15 @@ scenario_level = local_aggregate(replicate_level, {'Case', 'Scenario', 'Model', 
     'WIS_Ratio',      @(x) mean(x, 'omitnan'), 'WIS_Ratio'});
 
 degradation_summary = local_aggregate(scenario_level, {'Case', 'Model', 'ExoMode'}, { ...
-    'PartA_MeanWIS',     @mean,                   'PartA_WIS'; ...
-    'PartB_MeanWIS',     @mean,                   'PartB_WIS'; ...
-    'MeanWISDifference', @mean,                   'WIS_Difference'; ...
-    'MeanWISRatio',      @(x) mean(x, 'omitnan'), 'WIS_Ratio'});
+    'PartA_MeanWIS',     @mean, 'PartA_WIS'; ...
+    'PartB_MeanWIS',     @mean, 'PartB_WIS'; ...
+    'MeanWISDifference', @mean, 'WIS_Difference'});
+
+degradation_summary.MeanWISRatio = degradation_summary.PartB_MeanWIS ./ degradation_summary.PartA_MeanWIS;
+
+undefined_summary_mask = degradation_summary.PartA_MeanWIS == 0;
+degradation_summary.MeanWISRatio(undefined_summary_mask) = NaN;
+
 degradation_summary.RelativeWISIncrease = degradation_summary.MeanWISRatio - 1;
 end
 
