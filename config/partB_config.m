@@ -104,9 +104,11 @@ cfg.partB.rt_estimation.min_denominator              = 1;
 thisDir  = fileparts(mfilename('fullpath'));
 repoRoot = fileparts(thisDir);
 
-cfg.partB.output.data_dir     = fullfile(repoRoot, "data", "partB");
-cfg.partB.output.root_dir     = fullfile(repoRoot, "results", "partB");
-cfg.partB.output.forecast_dir = fullfile(cfg.partB.output.root_dir, "forecasts");
+cfg.partB.output.data_dir       = fullfile(repoRoot, "data", "partB");
+cfg.partB.output.root_dir       = fullfile(repoRoot, "results", "partB");
+cfg.partB.output.forecast_dir   = fullfile(cfg.partB.output.root_dir, "forecasts");
+cfg.partB.output.evaluation_dir = fullfile(cfg.partB.output.root_dir, "evaluation");
+cfg.partB.output.table_dir      = fullfile(cfg.partB.output.root_dir, "tables");
 
 %% 10. Artifact Provenance Snapshot
 cfg.partB.snapshot = struct();
