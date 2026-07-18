@@ -30,9 +30,10 @@ function cfg = partB_config()
 %% 1. Inherit Part A Configuration
 cfg = partA_config();
 
-%% 2. Experiment Identity
+%% 2. Experiment Identity and Run Configuration
 cfg.partB.experiment_id   = "partB";
 cfg.partB.experiment_name = "Robustness Dataset Generation";
+cfg.partB.run.model_types = ["AR", "ARX"];
 
 %% 3. Truth Simulation Seed
 cfg.partB.truth.seed = 90210;
@@ -103,8 +104,9 @@ cfg.partB.rt_estimation.min_denominator              = 1;
 thisDir  = fileparts(mfilename('fullpath'));
 repoRoot = fileparts(thisDir);
 
-cfg.partB.output.data_dir = fullfile(repoRoot, "data", "partB");
-cfg.partB.output.root_dir = fullfile(repoRoot, "results", "partB");
+cfg.partB.output.data_dir     = fullfile(repoRoot, "data", "partB");
+cfg.partB.output.root_dir     = fullfile(repoRoot, "results", "partB");
+cfg.partB.output.forecast_dir = fullfile(cfg.partB.output.root_dir, "forecasts");
 
 %% 10. Artifact Provenance Snapshot
 cfg.partB.snapshot = struct();
