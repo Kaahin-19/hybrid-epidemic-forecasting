@@ -6,7 +6,7 @@
 %       stress case and WIS degradation relative to the matched Part A
 %       baseline), horizon-wise WIS, replicate-level WIS distributions,
 %       interval calibration, and Script 2 execution outcomes. The script is a
-%       visualization layer only: it never rescoring forecasts, reruns models,
+%       visualization layer only: it never rescores forecasts, reruns models,
 %       retunes configurations, reconstructs Script 3 aggregations, or reads
 %       raw forecast artifacts. Lower WIS is better and a WIS ratio above one
 %       indicates degradation relative to the Part A baseline.
@@ -75,7 +75,7 @@ if ~all(isfield(evaluation, required_top))
     error('PARTB_04:InvalidEvaluationArtifact', 'Evaluation artifact is missing one or more required variables.');
 end
 
-summaries       = evaluation.summaries;
+summaries        = evaluation.summaries;
 required_summary = {'replicate_summary', 'scenario_summary', 'stress_summary', 'horizon_summary', 'interval_summary', 'execution_summary', 'degradation_summary'};
 if ~all(isfield(summaries, required_summary))
     error('PARTB_04:InvalidSummaries', 'summaries is missing one or more required summary tables.');
@@ -126,7 +126,7 @@ end
 
 function local_figure_overview(summaries, style, figure_dir)
 %LOCAL_FIGURE_OVERVIEW Two-panel mean-WIS and WIS-degradation overview across stress cases.
-stress = summaries.stress_summary;
+stress  = summaries.stress_summary;
 degrade = summaries.degradation_summary;
 
 [case_ids, case_labels] = local_case_system(unique(stress.Case), style);
@@ -135,9 +135,11 @@ combo_labels = local_combo_labels(stress);
 fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 8.5], 'Color', 'w');
 tl  = tiledlayout(fig, 1, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
 
-wis_matrix   = local_case_combo_matrix(stress, case_ids, combo_labels, 'MeanWIS');
-scenario_ct  = local_case_scenario_counts(stress, case_ids);
-overview_tick = case_labels + "\newline{\itn} = " + string(scenario_ct) + " scenarios";
+wis_matrix    = local_case_combo_matrix(stress, case_ids, combo_labels, 'MeanWIS');
+scenario_ct   = local_case_scenario_counts(stress, case_ids);
+scenario_word = repmat(" scenarios", numel(scenario_ct), 1);
+scenario_word(scenario_ct == 1) = " scenario";
+overview_tick = case_labels + "\newline{\itn} = " + string(scenario_ct) + scenario_word;
 
 ax = nexttile(tl);
 h = local_grouped_bars(ax, wis_matrix, style);
@@ -167,14 +169,19 @@ fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 
 tl  = tiledlayout(fig, 1, numel(combos), 'Padding', 'compact', 'TileSpacing', 'compact');
 
 for c = 1:numel(combos)
-    combo   = combos(c);
-    rows    = execution_summary(execution_summary.Model == combo.model & execution_summary.ExoMode == combo.exo, :);
+    combo = combos(c);
+    rows  = execution_summary(execution_summary.Model == combo.model & execution_summary.ExoMode == combo.exo, :);
     [case_ids, case_labels] = local_case_system(unique(rows.Case), style);
 
     shares   = zeros(numel(case_ids), 3);
     attempts = zeros(numel(case_ids), 1);
     for i = 1:numel(case_ids)
         r = rows(rows.Case == case_ids(i), :);
+
+        if height(r) ~= 1
+            error('PARTB_04:ExecutionRowCount', 'Expected one execution-summary row for case %s and combination %s, but found %d.', case_ids(i), combo.label, height(r));
+        end
+
         attempts(i) = r.Attempts;
         shares(i, :) = [r.Saved, r.DomainFailures, r.NoWindows] / r.Attempts;
     end
@@ -357,8 +364,11 @@ matrix    = nan(numel(case_ids), numel(combo_labels));
 for i = 1:numel(case_ids)
     for j = 1:numel(combo_labels)
         row = tbl(tbl.Case == case_ids(i) & combo_ids == combo_labels(j), :);
+
         if height(row) == 1
             matrix(i, j) = row.(value_var);
+        elseif height(row) > 1
+            error('PARTB_04:DuplicateSummaryRows', 'Found multiple rows for case %s and combination %s.', case_ids(i), combo_labels(j));
         end
     end
 end
@@ -369,14 +379,25 @@ function counts = local_case_scenario_counts(stress_summary, case_ids)
 counts = zeros(numel(case_ids), 1);
 for i = 1:numel(case_ids)
     rows = stress_summary(stress_summary.Case == case_ids(i), :);
-    counts(i) = max(rows.NumScenarios);
+    case_counts = unique(rows.NumScenarios);
+
+    if numel(case_counts) ~= 1
+        error('PARTB_04:InconsistentScenarioCounts', 'Stress case %s has inconsistent scenario counts across model/exogenous combinations.', case_ids(i));
+    end
+
+    counts(i) = case_counts;
 end
 end
 
 function n_scen = local_scenario_count(stress_summary, case_id, combo)
 %LOCAL_SCENARIO_COUNT Scenario count for one stress case and model/exogenous combination.
 row = stress_summary(stress_summary.Case == case_id & stress_summary.Model == combo.model & stress_summary.ExoMode == combo.exo, :);
-n_scen = row.NumScenarios(1);
+
+if height(row) ~= 1
+    error('PARTB_04:StressRowCount', 'Expected one stress-summary row for case %s and combination %s, but found %d.', case_id, combo.label, height(row));
+end
+
+n_scen = row.NumScenarios;
 end
 
 function word = local_scenario_word(n_scen)
