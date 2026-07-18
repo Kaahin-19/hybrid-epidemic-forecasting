@@ -109,6 +109,7 @@ cfg.partB.output.root_dir       = fullfile(repoRoot, "results", "partB");
 cfg.partB.output.forecast_dir   = fullfile(cfg.partB.output.root_dir, "forecasts");
 cfg.partB.output.evaluation_dir = fullfile(cfg.partB.output.root_dir, "evaluation");
 cfg.partB.output.table_dir      = fullfile(cfg.partB.output.root_dir, "tables");
+cfg.partB.output.fig_dir        = fullfile(cfg.partB.output.root_dir, "figures");
 
 %% 10. Artifact Provenance Snapshot
 cfg.partB.snapshot = struct();
