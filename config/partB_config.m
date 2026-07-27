@@ -5,10 +5,10 @@ function cfg = partB_config()
 %       Extends the Part A configuration with the Part B robustness design.
 %       Part A supplies the shared time grid, effective-Rt bounds, SIRS
 %       parameters, and analytic Rt scenarios. Part B adds the four
-%       robustness cases (observation noise, process noise, structural
+%       robustness cases (noisy Rt input, process noise, structural
 %       mismatch, and combined stress), the SEIR truth parameters used by
-%       the structural-mismatch and combined-stress cases, the observation
-%       model, the renewal-estimation settings, and the Part B output paths.
+%       the structural-mismatch and combined-stress cases, the model-visible
+%       Rt measurement-error setting, and the Part B output paths.
 %
 %   Outputs:
 %       cfg - Structure inheriting all Part A fields plus:
@@ -16,16 +16,17 @@ function cfg = partB_config()
 %           .partB.experiment_name   : Human-readable experiment name.
 %           .partB.truth             : Base seed for truth simulation.
 %           .partB.robustness_cases  : 1x4 robustness-case definitions.
-%           .partB.observation_noise : Reporting and smoothing parameters.
+%           .partB.observation_noise : Rt measurement-error magnitude and
+%                                      replicate count.
 %           .partB.process_noise     : Replicate count and seed stride.
 %           .partB.seir              : SEIR truth parameters.
-%           .partB.rt_estimation     : Renewal-estimator settings.
 %           .partB.output            : Part B data and result paths.
 %           .partB.snapshot          : Artifact provenance snapshot.
 %
-%   See also PARTA_CONFIG, PARTB_01_GENERATE_ROBUSTNESS_DATASETS, ESTIMATE_RT_RENEWAL.
+%   See also PARTA_CONFIG, PARTB_01_GENERATE_ROBUSTNESS_DATASETS.
 %
 % A. M. Kaahin 2026-06-30
+% Modified: 2026-07-27
 
 %% 1. Inherit Part A Configuration
 cfg = partA_config();
@@ -43,7 +44,7 @@ case_template    = struct("case_id", "", "case_name", "", "truth_model", "", "so
 robustness_cases = repmat(case_template, 1, 4);
 
 robustness_cases(1).case_id                     = "observation_noise";
-robustness_cases(1).case_name                   = "Observation Noise";
+robustness_cases(1).case_name                   = "Noisy Rt input";
 robustness_cases(1).truth_model                 = "SIRS";
 robustness_cases(1).solver                      = "uds";
 robustness_cases(1).observation_noise_enabled   = true;
@@ -76,10 +77,8 @@ robustness_cases(4).structural_mismatch_enabled = true;
 
 cfg.partB.robustness_cases = robustness_cases;
 
-%% 5. Observation Noise
-cfg.partB.observation_noise.reporting_fraction    = 0.4;
-cfg.partB.observation_noise.dispersion            = 10;
-cfg.partB.observation_noise.smoothing_window_days = 7;
+%% 5. Model-Visible Rt Measurement Error
+cfg.partB.observation_noise.sigma_log      = 0.08;
 cfg.partB.observation_noise.num_replicates = 10;
 
 %% 6. Process Noise
@@ -94,13 +93,7 @@ cfg.partB.seir.I0       = cfg.sirs.I0;
 cfg.partB.seir.E0       = round(0.5 * cfg.sirs.I0);
 cfg.partB.seir.R0_init  = cfg.sirs.R0_init;
 
-%% 8. Renewal Estimation
-cfg.partB.rt_estimation.serial_interval_mean_days    = 5;
-cfg.partB.rt_estimation.serial_interval_sd_days      = 2.5;
-cfg.partB.rt_estimation.serial_interval_max_lag_days = 14;
-cfg.partB.rt_estimation.min_denominator              = 1;
-
-%% 9. Output Paths
+%% 8. Output Paths
 thisDir  = fileparts(mfilename('fullpath'));
 repoRoot = fileparts(thisDir);
 
@@ -111,7 +104,7 @@ cfg.partB.output.evaluation_dir = fullfile(cfg.partB.output.root_dir, "evaluatio
 cfg.partB.output.table_dir      = fullfile(cfg.partB.output.root_dir, "tables");
 cfg.partB.output.fig_dir        = fullfile(cfg.partB.output.root_dir, "figures");
 
-%% 10. Artifact Provenance Snapshot
+%% 9. Artifact Provenance Snapshot
 cfg.partB.snapshot = struct();
 cfg.partB.snapshot.experiment_id     = cfg.partB.experiment_id;
 cfg.partB.snapshot.experiment_name   = cfg.partB.experiment_name;
@@ -120,7 +113,7 @@ cfg.partB.snapshot.Rt_bounds         = cfg.Rt.bounds;
 cfg.partB.snapshot.sirs              = cfg.sirs;
 cfg.partB.snapshot.seir              = cfg.partB.seir;
 cfg.partB.snapshot.observation_noise = cfg.partB.observation_noise;
+cfg.partB.snapshot.observation_noise_definition = "Mean-one multiplicative lognormal measurement error on an externally estimated or otherwise model-visible Rt signal: Rt_model_input = Rt_true .* exp(sigma_log .* z - 0.5 .* sigma_log.^2), z ~ N(0,1).";
 cfg.partB.snapshot.process_noise     = cfg.partB.process_noise;
-cfg.partB.snapshot.rt_estimation     = cfg.partB.rt_estimation;
 
 end

@@ -8,8 +8,8 @@
 %       artifact and reuses its selected_configuration without any further
 %       model-order selection. Each dataset is forecast with the same
 %       expanding-window protocol as Part A: the model is trained on the
-%       model-visible Rt_model_input (respecting the renewal warm-up validity
-%       mask) while the saved truth windows are taken from the latent Rt_true.
+%       model-visible Rt_model_input (respecting its dataset validity mask)
+%       while the saved truth windows are taken from the latent Rt_true.
 %
 %   Workflow:
 %       1. Resolve the requested model/exogenous combinations.
@@ -23,6 +23,7 @@
 %            FORECAST_OPEN, FORECAST_CLOSED.
 %
 % A. M. Kaahin 2026-07-18
+% Modified: 2026-07-27
 
 %% 1. Initialization
 clear; close all; clc;
@@ -102,8 +103,12 @@ for di = 1:numel(saved)
         error('PARTB_02:MissingDataset', 'Generation status marks %s as "saved" but the dataset file is missing: %s.', entry.output_filename, dataset_path);
     end
 
-    dataset      = load(dataset_path);
-    [v0, v1]     = local_longest_valid_run(dataset.Rt_model_input_valid_mask);
+    dataset = load(dataset_path);
+    if ~isfield(dataset, 'snapshot') || ~isfield(dataset.snapshot, 'observation_noise') || ~isequal(dataset.snapshot.observation_noise, cfg.partB.snapshot.observation_noise)
+        local_save_status(status_path, forecast_status, availability_report, false);
+        error('PARTB_02:IncompatibleDatasetSnapshot', 'Dataset %s does not use the configured noisy-Rt-input definition. Regenerate Part B datasets with partB_01.', entry.output_filename);
+    end
+    [v0, v1] = local_longest_valid_run(dataset.Rt_model_input_valid_mask);
 
     for ci = 1:numel(available)
         k     = (di - 1) * numel(available) + ci;

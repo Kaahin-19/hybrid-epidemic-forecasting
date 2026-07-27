@@ -21,6 +21,7 @@
 %            PLOT_SERIES, PLOT_DISTRIBUTION, APPLY_PANEL_STYLE.
 %
 % A. M. Kaahin 2026-07-18
+% Modified: 2026-07-27
 
 %% 1. Initialization
 clear; close all; clc;
@@ -326,7 +327,7 @@ end
 function [ordered_ids, labels, colors, markers] = local_case_system(present_ids, style)
 %LOCAL_CASE_SYSTEM Stable stress-case display order, labels, colors, and markers.
 catalog  = ["observation_noise", "process_noise", "structural_mismatch", "combined_stress"];
-readable = ["Observation noise", "Process noise", "Structural mismatch", "Combined stress"];
+readable = ["Noisy Rt input", "Process noise", "Structural mismatch", "Combined stress"];
 markers_all = ["o", "s", "^", "d", "v", ">", "<", "p", "h"];
 
 present_ids = string(present_ids(:));

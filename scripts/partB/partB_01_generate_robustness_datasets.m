@@ -2,8 +2,9 @@
 %
 %   Description:
 %       Generates synthetic robustness dataset artifacts by combining the
-%       existing Part A analytic Rt scenarios with controlled observation noise,
-%       stochastic process noise, structural mismatch, and combined stress cases.
+%       existing Part A analytic Rt scenarios with controlled measurement error
+%       in the model-visible Rt input, stochastic process noise, structural
+%       mismatch, and combined stress cases.
 %
 %   Workflow:
 %       1. Load Part B configuration and resolve cases/scenarios.
@@ -12,9 +13,10 @@
 %       4. Build model-visible inputs.
 %       5. Save successful dataset artifacts and record generation status.
 %
-%   See also PARTB_CONFIG, ESTIMATE_RT_RENEWAL, SIRS_INIT, SIRS_STEP.
+%   See also PARTB_CONFIG, SIRS_INIT, SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-30
+% Modified: 2026-07-27
 
 %% 1. Initialization
 clear; close all; clc;
@@ -26,8 +28,8 @@ tspan    = cfg.time.tspan;
 rtBounds = cfg.Rt.bounds;
 dataDir  = cfg.partB.output.data_dir;
 
-if exist('binornd', 'file') ~= 2 || exist('nbinrnd', 'file') ~= 2
-    error('PARTB:MissingStatsToolbox', 'Part B stochastic transitions and negative-binomial observation noise require binornd and nbinrnd.');
+if exist('binornd', 'file') ~= 2
+    error('PARTB:MissingStatsToolbox', 'Part B stochastic SEIR transitions require binornd.');
 end
 
 if ~exist(dataDir, 'dir')
@@ -91,18 +93,17 @@ for ci = 1:numel(cfg.partB.robustness_cases)
                     case "SIRS"
                         pop_size = cfg.sirs.pop_size;
                         [S_true, I_true, R_true] = local_simulate_sirs_truth(cfg.sirs, Rt_true, case_def.solver, process_seed);
-                        E_true         = [];
-                        incidence_true = local_derive_incidence(Rt_true_col, I_true, cfg.sirs.gamma);
-                        local_validate_truth({S_true, I_true, R_true}, incidence_true, pop_size);
+                        E_true = [];
+                        local_validate_truth({S_true, I_true, R_true}, pop_size);
                     case "SEIR"
                         pop_size = cfg.partB.seir.pop_size;
-                        [S_true, E_true, I_true, R_true, incidence_true] = local_simulate_seir_truth(cfg.partB.seir, Rt_true, case_def.solver, process_seed);
-                        local_validate_truth({S_true, E_true, I_true, R_true}, incidence_true, pop_size);
+                        [S_true, E_true, I_true, R_true] = local_simulate_seir_truth(cfg.partB.seir, Rt_true, case_def.solver, process_seed);
+                        local_validate_truth({S_true, E_true, I_true, R_true}, pop_size);
                     otherwise
                         error('PARTB:UnsupportedTruthModel', 'Unsupported truth model: %s.', case_def.truth_model);
                 end
 
-                [Rt_model_input, Rt_model_input_valid_mask, incidence_observed, incidence_model_input] = local_apply_observation_model(case_def, cfg, incidence_true, Rt_true_col, noise_seed);
+                [Rt_model_input, Rt_model_input_valid_mask] = local_create_rt_model_input(case_def, cfg, Rt_true_col, noise_seed);
 
                 artifact = struct();
                 artifact.case_id                   = case_def.case_id;
@@ -125,9 +126,6 @@ for ci = 1:numel(cfg.partB.robustness_cases)
                 artifact.S_model_input             = S_true;
                 artifact.I_model_input             = I_true;
                 artifact.E_model_input             = E_true;
-                artifact.incidence_true            = incidence_true;
-                artifact.incidence_observed        = incidence_observed;
-                artifact.incidence_model_input     = incidence_model_input;
                 artifact.process_seed              = process_seed;
                 artifact.noise_seed                = noise_seed;
                 artifact.snapshot                  = local_cfg_snapshot(cfg, case_def, scenario);
@@ -266,7 +264,7 @@ I = U(2, :)';
 R = U(3, :)';
 end
 
-function [S, E, I, R, incidence] = local_simulate_seir_truth(seir, Rt_true, solver, seed)
+function [S, E, I, R] = local_simulate_seir_truth(seir, Rt_true, solver, seed)
 %LOCAL_SIMULATE_SEIR_TRUTH Simulate latent SEIR truth by daily discrete S->E->I->R transitions.
 is_stochastic = ~strcmp(char(solver), 'uds');
 if is_stochastic
@@ -282,7 +280,6 @@ S = zeros(num_time, 1);
 E = zeros(num_time, 1);
 I = zeros(num_time, 1);
 R = zeros(num_time, 1);
-incidence = zeros(num_time, 1);
 
 S(1) = N - seir.I0 - seir.E0 - seir.R0_init;
 E(1) = seir.E0;
@@ -296,7 +293,7 @@ end
 p_EI = 1 - exp(-sigma);
 p_IR = 1 - exp(-gamma);
 
-for t = 1:num_time
+for t = 1:(num_time - 1)
     if S(t) <= 0
         error('PARTB:SusceptibleDepleted', 'SEIR susceptible state reached zero at step %d.', t);
     end
@@ -304,16 +301,15 @@ for t = 1:num_time
     beta = Rt_true(t) * gamma * N / S(t);
     p_SE = 1 - exp(-beta * I(t) / N);
 
-    if t < num_time
-        [next_state, new_exposed] = local_seir_step([S(t); E(t); I(t); R(t)], p_SE, p_EI, p_IR, is_stochastic);
-        S(t + 1)     = next_state(1);
-        E(t + 1)     = next_state(2);
-        I(t + 1)     = next_state(3);
-        R(t + 1)     = next_state(4);
-        incidence(t) = new_exposed;
-    else
-        incidence(t) = S(t) * p_SE;
-    end
+    next_state = local_seir_step([S(t); E(t); I(t); R(t)], p_SE, p_EI, p_IR, is_stochastic);
+    S(t + 1)     = next_state(1);
+    E(t + 1)     = next_state(2);
+    I(t + 1)     = next_state(3);
+    R(t + 1)     = next_state(4);
+end
+
+if S(num_time) <= 0
+    error('PARTB:SusceptibleDepleted', 'SEIR susceptible state reached zero at step %d.', num_time);
 end
 end
 
@@ -337,13 +333,8 @@ end
 next_state = [S - new_exposed; E + new_exposed - new_infectious; I + new_infectious - new_recovered; R + new_recovered];
 end
 
-function incidence = local_derive_incidence(Rt_true, I_true, gamma)
-%LOCAL_DERIVE_INCIDENCE SIRS latent incidence as the expected S->I infection flow Rt*gamma*I.
-incidence = Rt_true .* gamma .* I_true;
-end
-
-function local_validate_truth(states, incidence, pop_size)
-%LOCAL_VALIDATE_TRUTH Check simulated states are finite, nonnegative, conserved, and incidence is valid.
+function local_validate_truth(states, pop_size)
+%LOCAL_VALIDATE_TRUTH Check simulated compartment states are finite, nonnegative, and conserved.
 total = zeros(size(states{1}));
 for k = 1:numel(states)
     state_k = states{k};
@@ -356,37 +347,24 @@ end
 if any(abs(total - pop_size) > 1e-6 * pop_size)
     error('PARTB:PopulationNotConserved', 'Simulated population is not conserved.');
 end
-
-if any(~isfinite(incidence)) || any(incidence < 0)
-    error('PARTB:InvalidIncidence', 'incidence_true is nonfinite or negative.');
-end
 end
 
-function [Rt_model_input, Rt_model_input_valid_mask, incidence_observed, incidence_model_input] = local_apply_observation_model(case_def, cfg, incidence_true, Rt_true_col, noise_seed)
-%LOCAL_APPLY_OBSERVATION_MODEL Build model-visible Rt input through the incidence-observation-renewal path.
+function [Rt_model_input, Rt_model_input_valid_mask] = local_create_rt_model_input(case_def, cfg, Rt_true_col, noise_seed)
+%LOCAL_CREATE_RT_MODEL_INPUT Create the model-visible Rt input with optional measurement error.
 if case_def.observation_noise_enabled
-    obs = cfg.partB.observation_noise;
-
     rng(noise_seed, 'twister');
-    mu   = obs.reporting_fraction .* incidence_true;
-    p_nb = obs.dispersion ./ (obs.dispersion + mu);
-    incidence_observed = nbinrnd(obs.dispersion, p_nb);
-
-    incidence_model_input = local_smooth_incidence(incidence_observed, obs.smoothing_window_days);
-
-    [Rt_model_input, renewal_info] = estimate_rt_renewal(incidence_model_input(:), cfg.partB.rt_estimation);
-    Rt_model_input_valid_mask = renewal_info.valid_mask;
+    sigma_log = cfg.partB.observation_noise.sigma_log;
+    z = randn(size(Rt_true_col));
+    Rt_model_input = Rt_true_col .* exp(sigma_log .* z - 0.5 .* sigma_log.^2);
 else
-    Rt_model_input            = Rt_true_col;
-    Rt_model_input_valid_mask = true(size(Rt_true_col));
-    incidence_observed        = incidence_true;
-    incidence_model_input     = incidence_true;
-end
+    Rt_model_input = Rt_true_col;
 end
 
-function smoothed = local_smooth_incidence(incidence, window_days)
-%LOCAL_SMOOTH_INCIDENCE Trailing moving average over past and current days only.
-smoothed = movmean(incidence, [window_days - 1, 0]);
+if any(~isfinite(Rt_model_input)) || any(Rt_model_input <= 0)
+    error('PARTB:InvalidRtModelInput', 'Rt_model_input must be finite and strictly positive.');
+end
+
+Rt_model_input_valid_mask = true(size(Rt_model_input));
 end
 
 function snapshot = local_cfg_snapshot(cfg, case_def, scenario)
