@@ -12,12 +12,14 @@ function cfg = partC_config()
 %           .country   : Selected country name and code.
 %           .study     : Inclusive study-period endpoints.
 %           .renewal   : Serial-interval and infectiousness assumptions.
+%           .preparation : Approved incidence preprocessing method.
 %           .snapshot  : Stable preparation compatibility snapshot.
 %           .output    : Prepared-artifact directory and path.
 %
 %   See also PARTC_01_PREPARE_DATA, SERIAL_INTERVAL_WEIGHTS.
 %
 % A. M. Kaahin 2026-07-27
+% Modified: 2026-07-28
 
 cfg = struct();
 
@@ -25,7 +27,7 @@ cfg = struct();
 thisDir = fileparts(mfilename('fullpath'));
 repoRoot = fileparts(thisDir);
 
-cfg.source.file = fullfile(repoRoot, "data", "partC", "processed", ...
+cfg.source.file = fullfile(repoRoot, "data", "partC", "raw", ...
     "WHO-COVID-19-global-daily-data.csv");
 cfg.source.columns = struct( ...
     "date", "Date_reported", ...
@@ -56,7 +58,10 @@ cfg.renewal.min_infectiousness = 0;
 cfg.renewal.serial_interval_source = ...
     "Nishiura H, Linton NM, Akhmetzhanov AR (2020), International Journal of Infectious Diseases 93:284-286, doi:10.1016/j.ijid.2020.02.060.";
 
-%% 4. Preparation Snapshot
+%% 4. Incidence Preparation
+cfg.preparation.incidence_preprocessing = "none";
+
+%% 5. Preparation Snapshot
 cfg.snapshot.preparation = struct( ...
     "country_name", cfg.country.name, ...
     "country_code", cfg.country.code, ...
@@ -66,9 +71,9 @@ cfg.snapshot.preparation = struct( ...
     "serial_interval_sd_days", cfg.renewal.serial_interval_sd_days, ...
     "serial_interval_max_lag_days", cfg.renewal.serial_interval_max_lag_days, ...
     "min_infectiousness", cfg.renewal.min_infectiousness, ...
-    "incidence_preprocessing", "none");
+    "incidence_preprocessing", cfg.preparation.incidence_preprocessing);
 
-%% 5. Prepared Artifact
+%% 6. Prepared Artifact
 cfg.output.prepared_artifact_dir = fullfile(repoRoot, "data", "partC", "prepared");
 cfg.output.prepared_artifact_path = fullfile( ...
     cfg.output.prepared_artifact_dir, "partC_01_prepared_data.mat");

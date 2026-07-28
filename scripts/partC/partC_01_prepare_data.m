@@ -17,6 +17,7 @@
 %   See also PARTC_CONFIG, SERIAL_INTERVAL_WEIGHTS, ESTIMATE_RT_RENEWAL.
 %
 % A. M. Kaahin 2026-07-27
+% Modified: 2026-07-28
 
 %% 1. Initialization
 clear; close all; clc;
@@ -65,6 +66,11 @@ sweden_date_text = source_table.(cfg.source.columns.date);
 sweden_date_text = sweden_date_text(sweden_mask);
 sweden_dates = datetime(sweden_date_text, 'InputFormat', 'yyyy-MM-dd');
 
+if any(isnat(sweden_dates))
+    error('PARTC_01:InvalidDates', ...
+        'The Swedish WHO date column contains invalid dates.');
+end
+
 study_mask = sweden_dates >= cfg.study.start_date & ...
     sweden_dates <= cfg.study.end_date;
 dates = sweden_dates(study_mask);
@@ -72,14 +78,8 @@ dates = sweden_dates(study_mask);
 sweden_incidence = source_table.(cfg.source.columns.incidence);
 sweden_incidence = sweden_incidence(sweden_mask);
 incidence_observed = sweden_incidence(study_mask);
-incidence_renewal_input = incidence_observed;
 
 expected_dates = (cfg.study.start_date:caldays(1):cfg.study.end_date)';
-
-if any(isnat(dates))
-    error('PARTC_01:InvalidDates', ...
-        'The selected WHO date column contains invalid dates.');
-end
 
 if numel(dates) ~= numel(expected_dates)
     error('PARTC_01:IncompleteStudyPeriod', ...
@@ -109,10 +109,20 @@ if ~isnumeric(incidence_observed) || ~isreal(incidence_observed) || ...
         'Selected incidence must be a real, finite, nonnegative column vector.');
 end
 
+switch cfg.preparation.incidence_preprocessing
+    case "none"
+        incidence_renewal_input = incidence_observed;
+    otherwise
+        error('PARTC_01:UnsupportedIncidencePreprocessing', ...
+            'Unsupported incidence preprocessing method: %s.', ...
+            cfg.preparation.incidence_preprocessing);
+end
+
 if numel(incidence_observed) ~= numel(dates) || ...
-        numel(incidence_renewal_input) ~= numel(dates)
+        numel(incidence_renewal_input) ~= numel(dates) || ...
+        ~iscolumn(incidence_renewal_input)
     error('PARTC_01:SignalLengthMismatch', ...
-        'Dates and prepared incidence series must have matching lengths.');
+        'Dates and column-oriented prepared incidence series must have matching lengths.');
 end
 
 %% 4. Renewal Rt Estimation
@@ -123,7 +133,13 @@ weights = serial_interval_weights( ...
 
 Rt_estimated = estimate_rt_renewal( ...
     incidence_renewal_input, weights, cfg.renewal.min_infectiousness);
-Rt_valid_mask = isfinite(Rt_estimated);
+
+if numel(Rt_estimated) ~= numel(dates)
+    error('PARTC_01:SignalLengthMismatch', ...
+        'Dates and estimated Rt must have matching lengths.');
+end
+
+Rt_valid_mask = isfinite(Rt_estimated) & Rt_estimated > 0;
 
 %% 5. Metadata and Persistence
 source_metadata = struct();
@@ -136,12 +152,17 @@ source_metadata.selected_end_date = dates(end);
 source_metadata.observation_count = numel(dates);
 source_metadata.incidence_processing = ...
     "Observed daily incidence was used directly; no smoothing or incidence repair was applied.";
+source_metadata.rt_interpretation = ...
+    "Rt_estimated is an operational incidence-derived estimate and is not known true Rt.";
 source_metadata.serial_interval_assumption_source = ...
     cfg.renewal.serial_interval_source;
-source_metadata.serial_interval_assumption = ...
-    "Part C gamma approximation using an early-COVID mean of 4.7 days and standard deviation of 2.9 days; not universally fixed biological truth.";
-source_metadata.serial_interval_truncation = ...
-    "The positive gamma approximation was numerically truncated at 21 daily lags and renormalized.";
+source_metadata.serial_interval_assumption = compose( ...
+    "Part C gamma approximation using an early-COVID mean of %.1f days and standard deviation of %.1f days; an explicit modelling assumption, not universally fixed biological truth.", ...
+    cfg.renewal.serial_interval_mean_days, ...
+    cfg.renewal.serial_interval_sd_days);
+source_metadata.serial_interval_truncation = compose( ...
+    "The positive gamma approximation was numerically truncated at %d daily lags and renormalized.", ...
+    cfg.renewal.serial_interval_max_lag_days);
 
 preparation_snapshot = cfg.snapshot.preparation;
 
