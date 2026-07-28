@@ -1,22 +1,26 @@
 function cfg = partC_config()
-%PARTC_CONFIG Configure Part C observed-incidence preparation.
+%PARTC_CONFIG Configure Part C observed-incidence adaptation.
 %
 %   Description:
 %       Defines the WHO source schema, Swedish study period, renewal-estimator
-%       assumptions, preparation snapshot, and canonical prepared-data path
-%       used by Part C Script 1.
+%       assumptions, chronological validation split, limited local AR-order
+%       selection protocol, compatibility snapshots, and canonical Part C
+%       artifact paths.
 %
 %   Outputs:
 %       cfg - Structure containing:
-%           .source    : WHO source file and exact input columns.
-%           .country   : Selected country name and code.
-%           .study     : Inclusive study-period endpoints.
-%           .renewal   : Serial-interval and infectiousness assumptions.
+%           .source      : WHO source file and exact input columns.
+%           .country     : Selected country name and code.
+%           .study       : Inclusive study-period endpoints.
+%           .renewal     : Serial-interval and infectiousness assumptions.
 %           .preparation : Approved incidence preprocessing method.
-%           .snapshot  : Stable preparation compatibility snapshot.
-%           .output    : Prepared-artifact directory and path.
+%           .validation  : Fixed calibration and test boundary dates.
+%           .local_selection : Limited AR-order selection settings.
+%           .snapshot    : Stable Part C compatibility snapshots.
+%           .output      : Canonical prepared-data and selection paths.
 %
-%   See also PARTC_01_PREPARE_DATA, SERIAL_INTERVAL_WEIGHTS.
+%   See also PARTC_01_PREPARE_DATA, PARTC_02_SELECT_LOCAL_ORDERS, ...
+%            PARTA_CONFIG, SERIAL_INTERVAL_WEIGHTS.
 %
 % A. M. Kaahin 2026-07-27
 % Modified: 2026-07-28
@@ -73,8 +77,60 @@ cfg.snapshot.preparation = struct( ...
     "min_infectiousness", cfg.renewal.min_infectiousness, ...
     "incidence_preprocessing", cfg.preparation.incidence_preprocessing);
 
-%% 6. Prepared Artifact
+%% 6. Chronological Validation
+cfg.validation.calibration_end_date = datetime(2020, 12, 31);
+cfg.validation.test_start_date = datetime(2021, 1, 1);
+
+if cfg.validation.test_start_date ~= ...
+        cfg.validation.calibration_end_date + caldays(1)
+    error('PARTC_CONFIG:InvalidValidationBoundary', ...
+        'The Part C test period must begin one day after calibration ends.');
+end
+
+%% 7. Limited Local AR-Order Selection
+partA_cfg = partA_config();
+
+cfg.local_selection.model_type = "AR";
+cfg.local_selection.exo_mode = "None";
+cfg.local_selection.order_radius = 1;
+cfg.local_selection.min_window = partA_cfg.forecast.min_window;
+cfg.local_selection.step_size = partA_cfg.forecast.step_size;
+cfg.local_selection.horizon = partA_cfg.forecast.horizon;
+cfg.local_selection.wis_alphas = partA_cfg.forecast.wis_alphas;
+cfg.local_selection.num_draws = partA_cfg.intervals.num_draws;
+cfg.local_selection.seed = partA_cfg.run.seed;
+cfg.local_selection.selection_rule = ...
+    "Simplest local AR order within one standard error of the numerically best mean calibration WIS.";
+cfg.local_selection.partA_selection_artifact_path = fullfile( ...
+    partA_cfg.output.model_selection_dir, ...
+    "partA_02_global_hyperparameters_AR_None.mat");
+
+partA_selection_snapshot = partA_cfg.snapshot.selection;
+partA_selection_snapshot.model_type = cfg.local_selection.model_type;
+partA_selection_snapshot.exo_mode = cfg.local_selection.exo_mode;
+cfg.local_selection.partA_selection_snapshot = partA_selection_snapshot;
+
+%% 8. Local-Selection Snapshot
+cfg.snapshot.local_selection = struct( ...
+    "preparation_snapshot", cfg.snapshot.preparation, ...
+    "model_type", cfg.local_selection.model_type, ...
+    "exo_mode", cfg.local_selection.exo_mode, ...
+    "calibration_end_date", cfg.validation.calibration_end_date, ...
+    "test_start_date", cfg.validation.test_start_date, ...
+    "order_radius", cfg.local_selection.order_radius, ...
+    "min_window", cfg.local_selection.min_window, ...
+    "step_size", cfg.local_selection.step_size, ...
+    "horizon", cfg.local_selection.horizon, ...
+    "wis_alphas", cfg.local_selection.wis_alphas, ...
+    "num_draws", cfg.local_selection.num_draws, ...
+    "seed", cfg.local_selection.seed, ...
+    "selection_rule", cfg.local_selection.selection_rule);
+
+%% 9. Artifact Paths
 cfg.output.prepared_artifact_dir = fullfile(repoRoot, "data", "partC", "prepared");
 cfg.output.prepared_artifact_path = fullfile( ...
     cfg.output.prepared_artifact_dir, "partC_01_prepared_data.mat");
+cfg.output.model_selection_dir = fullfile(repoRoot, "results", "partC", "model_selection");
+cfg.output.local_selection_artifact_path = fullfile( ...
+    cfg.output.model_selection_dir, "partC_02_local_orders_AR_None.mat");
 end
