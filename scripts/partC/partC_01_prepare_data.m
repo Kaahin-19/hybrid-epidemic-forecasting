@@ -2,25 +2,25 @@
 %
 %   Description:
 %       Reads and validates the configured WHO daily COVID-19 data, selects
-%       Sweden and an explicit historical lookback, preserves reported incidence
-%       unchanged, estimates an operational renewal Rt series, and reconstructs
-%       a causal reported-case-based SIRS state proxy for later ARX/I forecasting.
-%       Neither Rt_estimated nor the reconstructed compartments are biological
-%       truth.
+%       the Swedish study period, preserves reported incidence unchanged,
+%       estimates an operational renewal Rt series, and reconstructs a causal
+%       reported-case-based SIRS state proxy for later ARX/I forecasting.
+%       The renewal estimator retains its normal initial warm-up, and neither
+%       Rt_estimated nor the reconstructed compartments are biological truth.
 %
 %   Workflow:
 %       1. Load the Part C preparation configuration.
-%       2. Read and validate the WHO source and extended Swedish date range.
+%       2. Read and validate the Swedish study-period observations.
 %       3. Estimate Rt using the configured renewal assumptions.
 %       4. Reconstruct causal reported-case-based SIRS state proxies.
-%       5. Select the configured study period and validate all outputs.
+%       5. Validate all prepared signals and compatibility fields.
 %       6. Save one canonical prepared-data artifact.
 %
 %   See also PARTC_CONFIG, SERIAL_INTERVAL_WEIGHTS, ...
 %            ESTIMATE_RT_RENEWAL, RECONSTRUCT_SIRS_STATES_FROM_INCIDENCE.
 %
 % A. M. Kaahin 2026-07-27
-% Modified: 2026-07-28
+% Modified: 2026-08-05
 
 %% 1. Initialization
 clear; close all; clc;
@@ -35,13 +35,7 @@ if exist(source_file, 'file') ~= 2
         'Configured WHO source file does not exist: %s.', source_file);
 end
 
-required_lookback_days = max( ...
-    cfg.state_reconstruction.lookback_days, ...
-    cfg.renewal.serial_interval_max_lag_days);
-preparation_start_date = cfg.study.start_date ...
-    - caldays(required_lookback_days);
-
-%% 2. WHO Source Ingestion and Extended Swedish Selection
+%% 2. WHO Source Ingestion and Swedish Study Selection
 import_options = detectImportOptions(source_file, ...
     'FileType', 'text', 'VariableNamingRule', 'preserve');
 
@@ -76,74 +70,80 @@ sweden_date_text = source_table.(cfg.source.columns.date);
 sweden_date_text = sweden_date_text(sweden_mask);
 sweden_dates = datetime(sweden_date_text, 'InputFormat', 'yyyy-MM-dd');
 
-if any(isnat(sweden_dates))
-    error('PARTC_01:InvalidDates', ...
-        'The Swedish WHO date column contains invalid dates.');
-end
-
 sweden_incidence = source_table.(cfg.source.columns.incidence);
 sweden_incidence = sweden_incidence(sweden_mask);
 
-extended_mask = sweden_dates >= preparation_start_date ...
+study_mask = sweden_dates >= cfg.study.start_date ...
     & sweden_dates <= cfg.study.end_date;
-dates_extended = sweden_dates(extended_mask);
-incidence_observed_extended = sweden_incidence(extended_mask);
+dates = sweden_dates(study_mask);
+incidence_observed = sweden_incidence(study_mask);
 
-expected_extended_dates = ...
-    (preparation_start_date:caldays(1):cfg.study.end_date)';
+expected_dates = ...
+    (cfg.study.start_date:caldays(1):cfg.study.end_date)';
 
-if numel(unique(dates_extended)) ~= numel(dates_extended)
-    error('PARTC_01:DuplicateDates', ...
-        'The extended Swedish preparation interval contains duplicate dates.');
+if ~iscolumn(dates) || ~iscolumn(incidence_observed)
+    error('PARTC_01:InvalidStudyOrientation', ...
+        'Study-period dates and incidence must be column vectors.');
 end
 
-if numel(dates_extended) ~= numel(expected_extended_dates)
-    error('PARTC_01:IncompleteExtendedPeriod', ...
-        ['The required Swedish preparation interval %s through %s must ' ...
-        'contain exactly %d daily rows, but %d were found. The configured ' ...
-        'lookback cannot be shortened.'], ...
-        string(preparation_start_date), string(cfg.study.end_date), ...
-        numel(expected_extended_dates), numel(dates_extended));
+if any(isnat(dates))
+    error('PARTC_01:InvalidStudyDates', ...
+        'The configured Swedish study period contains invalid dates.');
 end
 
-if ~issorted(dates_extended) || ...
-        any(diff(dates_extended) ~= days(1))
-    error('PARTC_01:InvalidDateOrder', ...
-        'Extended Swedish dates must be strictly ordered with daily spacing.');
+if numel(unique(dates)) ~= numel(dates)
+    error('PARTC_01:DuplicateStudyDates', ...
+        'The configured Swedish study period contains duplicate dates.');
 end
 
-if ~isequal(dates_extended, expected_extended_dates)
-    error('PARTC_01:ExtendedDateCoverageMismatch', ...
-        'Swedish dates do not exactly cover the required extended preparation interval.');
+if numel(dates) ~= numel(expected_dates)
+    error('PARTC_01:IncompleteStudyPeriod', ...
+        ['The configured Swedish study period %s through %s must contain ' ...
+        'exactly %d daily rows, but %d were found.'], ...
+        string(cfg.study.start_date), string(cfg.study.end_date), ...
+        numel(expected_dates), numel(dates));
 end
 
-if ~isnumeric(incidence_observed_extended) || ...
-        ~isreal(incidence_observed_extended) || ...
-        ~iscolumn(incidence_observed_extended) || ...
-        any(~isfinite(incidence_observed_extended)) || ...
-        any(incidence_observed_extended < 0)
-    error('PARTC_01:InvalidExtendedIncidence', ...
-        'Extended Swedish incidence must be a real, finite, nonnegative column vector.');
+if any(diff(dates) <= days(0))
+    error('PARTC_01:InvalidStudyDateOrder', ...
+        'Swedish study-period dates must be strictly increasing.');
+end
+
+if any(diff(dates) ~= days(1))
+    error('PARTC_01:MissingStudyObservations', ...
+        'Swedish study-period dates must have exactly one observation per day.');
+end
+
+if ~isequal(dates, expected_dates)
+    error('PARTC_01:StudyDateCoverageMismatch', ...
+        'Swedish dates do not exactly match the configured study period.');
+end
+
+if ~isnumeric(incidence_observed) || ...
+        ~isreal(incidence_observed) || ...
+        any(~isfinite(incidence_observed)) || ...
+        any(incidence_observed < 0)
+    error('PARTC_01:InvalidStudyIncidence', ...
+        'Swedish study-period incidence must be real, finite, and nonnegative.');
 end
 
 switch cfg.preparation.incidence_preprocessing
     case "none"
-        incidence_renewal_input_extended = incidence_observed_extended;
+        incidence_renewal_input = incidence_observed;
     otherwise
         error('PARTC_01:UnsupportedIncidencePreprocessing', ...
             'Unsupported incidence preprocessing method: %s.', ...
             cfg.preparation.incidence_preprocessing);
 end
 
-if numel(incidence_renewal_input_extended) ~= ...
-        numel(dates_extended) || ...
-        ~iscolumn(incidence_renewal_input_extended)
+if numel(incidence_renewal_input) ~= numel(dates) || ...
+        ~iscolumn(incidence_renewal_input)
     error('PARTC_01:SignalLengthMismatch', ...
-        'Extended dates and renewal-input incidence must have matching column lengths.');
+        'Study-period dates and renewal-input incidence must have matching column lengths.');
 end
 
-fprintf('Extended Swedish source period: %s to %s\n', ...
-    string(preparation_start_date), string(cfg.study.end_date));
+fprintf('Swedish study period: %s to %s (%d days)\n', ...
+    string(dates(1)), string(dates(end)), numel(dates));
 
 %% 3. Renewal Rt Estimation
 weights = serial_interval_weights( ...
@@ -151,14 +151,30 @@ weights = serial_interval_weights( ...
     cfg.renewal.serial_interval_sd_days, ...
     cfg.renewal.serial_interval_max_lag_days);
 
-Rt_estimated_extended = estimate_rt_renewal( ...
-    incidence_renewal_input_extended, weights, ...
+Rt_estimated = estimate_rt_renewal( ...
+    incidence_renewal_input, weights, ...
     cfg.renewal.min_infectiousness);
 
-if numel(Rt_estimated_extended) ~= numel(dates_extended) || ...
-        ~iscolumn(Rt_estimated_extended)
+if ~isnumeric(Rt_estimated) || ~isreal(Rt_estimated) || ...
+        ~iscolumn(Rt_estimated) || numel(Rt_estimated) ~= numel(dates)
     error('PARTC_01:SignalLengthMismatch', ...
-        'Extended dates and estimated Rt must have matching column lengths.');
+        'Study-period dates and estimated Rt must have matching column lengths.');
+end
+
+Rt_valid_mask = isfinite(Rt_estimated) & Rt_estimated > 0;
+
+if ~all(isnan(Rt_estimated(1:numel(weights)))) || ...
+        any(Rt_valid_mask(1:numel(weights)))
+    error('PARTC_01:InvalidRenewalWarmup', ...
+        'The complete-lag renewal warm-up must remain undefined and invalid.');
+end
+
+if ~isequal(Rt_valid_mask, ...
+        isfinite(Rt_estimated) & Rt_estimated > 0) || ...
+        any(~isfinite(Rt_estimated(Rt_valid_mask))) || ...
+        any(Rt_estimated(Rt_valid_mask) <= 0)
+    error('PARTC_01:InvalidRtValidityMask', ...
+        'Rt_valid_mask must identify exactly the finite, strictly positive Rt estimates.');
 end
 
 %% 4. Reported-Case SIRS State Reconstruction
@@ -182,32 +198,12 @@ state_model_params = struct( ...
     "conservation_tolerance", ...
     cfg.state_reconstruction.conservation_tolerance);
 
-[S_proxy_extended, I_proxy_extended, R_proxy_extended, ...
-    incidence_scaled_proxy_extended, state_diagnostics] = ...
+[S_proxy, I_proxy, R_proxy, ...
+    incidence_scaled_proxy, state_diagnostics] = ...
     reconstruct_sirs_states_from_incidence( ...
-    incidence_observed_extended, state_model_params);
+    incidence_observed, state_model_params);
 
-%% 5. Study-Period Selection and Output Validation
-study_mask_extended = dates_extended >= cfg.study.start_date;
-
-dates = dates_extended(study_mask_extended);
-incidence_observed = incidence_observed_extended(study_mask_extended);
-incidence_renewal_input = ...
-    incidence_renewal_input_extended(study_mask_extended);
-incidence_scaled_proxy = ...
-    incidence_scaled_proxy_extended(study_mask_extended);
-Rt_estimated = Rt_estimated_extended(study_mask_extended);
-S_proxy = S_proxy_extended(study_mask_extended);
-I_proxy = I_proxy_extended(study_mask_extended);
-R_proxy = R_proxy_extended(study_mask_extended);
-
-expected_study_dates = ...
-    (cfg.study.start_date:caldays(1):cfg.study.end_date)';
-if ~isequal(dates, expected_study_dates)
-    error('PARTC_01:StudyDateCoverageMismatch', ...
-        'Prepared dates do not exactly cover the configured Part C study period.');
-end
-
+%% 5. Prepared-Signal Validation
 num_observations = numel(dates);
 if numel(incidence_observed) ~= num_observations || ...
         numel(incidence_renewal_input) ~= num_observations || ...
@@ -239,8 +235,6 @@ if any(~isfinite(incidence_observed)) || ...
         'Prepared incidence signals must be finite and nonnegative.');
 end
 
-Rt_valid_mask = isfinite(Rt_estimated) & Rt_estimated > 0;
-
 I_fraction_proxy = I_proxy ./ ...
     cfg.state_reconstruction.effective_population;
 
@@ -268,25 +262,19 @@ if any(~state_valid_mask)
         string(dates(invalid_state_index)));
 end
 
-fprintf('Prepared study period: %s to %s (%d days)\n', ...
-    string(dates(1)), string(dates(end)), num_observations);
-
 %% 6. Metadata and Persistence
 source_metadata = struct();
 source_metadata.source_file = source_file;
 source_metadata.source_columns = cfg.source.columns;
 source_metadata.country = cfg.country.name;
 source_metadata.country_code = cfg.country.code;
-source_metadata.preparation_start_date = preparation_start_date;
-source_metadata.required_lookback_days = required_lookback_days;
 source_metadata.selected_start_date = dates(1);
 source_metadata.selected_end_date = dates(end);
-source_metadata.extended_observation_count = numel(dates_extended);
 source_metadata.observation_count = num_observations;
 source_metadata.incidence_processing = ...
     "Observed daily incidence was used directly; no smoothing or incidence repair was applied.";
-source_metadata.pre_study_history_use = ...
-    "Pre-study observations were used only for causal renewal history and SIRS proxy initialisation; no future observations were used.";
+source_metadata.study_period_history = ...
+    cfg.state_reconstruction.history_assumption;
 source_metadata.rt_interpretation = ...
     "Rt_estimated is an operational incidence-derived estimate and is not known true Rt.";
 source_metadata.serial_interval_assumption_source = ...
@@ -320,12 +308,11 @@ state_reconstruction_metadata.gamma = cfg.state_reconstruction.gamma;
 state_reconstruction_metadata.xi = cfg.state_reconstruction.xi;
 state_reconstruction_metadata.sirs_parameter_source = ...
     cfg.state_reconstruction.sirs_parameter_source;
-state_reconstruction_metadata.lookback_days = required_lookback_days;
-state_reconstruction_metadata.preparation_start_date = ...
-    preparation_start_date;
+state_reconstruction_metadata.lookback_days = ...
+    cfg.state_reconstruction.lookback_days;
 state_reconstruction_metadata.study_start_date = cfg.study.start_date;
 state_reconstruction_metadata.study_end_date = cfg.study.end_date;
-state_reconstruction_metadata.initial_state_before_lookback = [
+state_reconstruction_metadata.initial_state_before_study = [
     cfg.state_reconstruction.initial_susceptible
     cfg.state_reconstruction.initial_infectious
     cfg.state_reconstruction.initial_recovered
@@ -335,7 +322,7 @@ state_reconstruction_metadata.state_timing_convention = ...
 state_reconstruction_metadata.incidence_scaling_definition = ...
     "incidence_scaled_proxy = incidence_observed / (reference_population * reporting_fraction) * effective_population.";
 state_reconstruction_metadata.causality_and_processing = ...
-    "Reported cases are processed chronologically with no future observations, smoothing, clipping, interpolation, or state renormalisation.";
+    "No pre-study observations were used. Reported cases are processed chronologically from the configured study start date with no future observations, smoothing, clipping, interpolation, or state renormalisation.";
 state_reconstruction_metadata.diagnostics = state_diagnostics;
 
 preparation_snapshot = cfg.snapshot.preparation;

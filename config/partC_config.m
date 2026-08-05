@@ -25,7 +25,7 @@ function cfg = partC_config()
 %            RECONSTRUCT_SIRS_STATES_FROM_INCIDENCE.
 %
 % A. M. Kaahin 2026-07-27
-% Modified: 2026-07-28
+% Modified: 2026-08-05
 
 cfg = struct();
 partA_cfg = partA_config();
@@ -83,7 +83,9 @@ cfg.state_reconstruction.sirs_parameter_source = ...
     "Part A SIRS transition assumptions.";
 cfg.state_reconstruction.min_susceptible = ...
     partA_cfg.sirs.min_susceptible;
-cfg.state_reconstruction.lookback_days = 60;
+cfg.state_reconstruction.lookback_days = 0;
+cfg.state_reconstruction.history_assumption = ...
+    "No pre-study incidence is used. The SIRS proxy recursion begins immediately before the configured study start date. Renewal estimation begins on the configured study start date, and undefined initial estimates are preserved through Rt_valid_mask.";
 cfg.state_reconstruction.initial_infectious = 0;
 cfg.state_reconstruction.initial_recovered = 0;
 cfg.state_reconstruction.initial_susceptible = ...
