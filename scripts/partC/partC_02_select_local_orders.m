@@ -4,11 +4,13 @@
 %       Starts from the AR/None and ARX/I configurations selected by Part A,
 %       constructs configuration-specific local neighbourhoods, and compares
 %       candidates on one shared chronological calibration block from the
-%       prepared Swedish data. Each candidate is refitted at every common
-%       expanding-window origin and selected by calibration WIS under a
-%       one-standard-error complexity rule. ARX/I uses the prepared infectious
-%       fraction and the aligned reported-case SIRS proxy state. Held-out test
-%       observations are not used.
+%       prepared Swedish data. Feasible candidates complete every common
+%       expanding-window origin; recognized forecast-domain failures mark the
+%       active candidate infeasible without altering its forecasts or the
+%       candidate grid. Selection uses calibration WIS under a one-standard-
+%       error complexity rule. ARX/I uses the prepared infectious fraction and
+%       the aligned reported-case SIRS proxy state. Held-out test observations
+%       are not used.
 %
 %   Workflow:
 %       1. Load the Part C local-selection configuration.
@@ -16,7 +18,7 @@
 %       3. Build one common set of calibration forecast origins.
 %       4. Load each configuration's Part A baseline.
 %       5. Construct and validate each local candidate grid.
-%       6. Refit and score every candidate at every common origin.
+%       6. Refit and score candidates, recording recognized infeasibility.
 %       7. Apply the one-standard-error complexity rule.
 %       8. Save one independent artifact for each configuration.
 %
@@ -91,6 +93,17 @@ for configuration_index = 1:numel(configurations)
     num_candidates = size(candidate_configurations, 1);
     num_origins = numel(forecast_origin_indices);
     candidate_origin_mean_wis = nan(num_candidates, num_origins);
+    candidate_feasible_mask = false(num_candidates, 1);
+    failure_record_template = struct( ...
+        "candidate_index", NaN, ...
+        "candidate_configuration", [], ...
+        "forecast_origin_index", NaN, ...
+        "forecast_origin_date", NaT, ...
+        "error_identifier", "", ...
+        "error_message", "");
+    candidate_failure_records = repmat( ...
+        failure_record_template, num_candidates, 1);
+    num_failure_records = 0;
 
     for candidate_index = 1:num_candidates
         candidate_configuration = ...
@@ -100,28 +113,62 @@ for configuration_index = 1:numel(configurations)
             candidate_index, num_candidates, ...
             mat2str(candidate_configuration));
 
-        candidate_origin_mean_wis(candidate_index, :) = ...
+        [origin_mean_wis, candidate_feasible, failure_record] = ...
             local_evaluate_candidate(active_configuration, ...
             candidate_configuration, candidate_index, calibration, ...
-            forecast_origin_indices, base_stepper, cfg).';
+            forecast_origin_indices, base_stepper, cfg);
+        candidate_origin_mean_wis(candidate_index, :) = origin_mean_wis.';
+        candidate_feasible_mask(candidate_index) = candidate_feasible;
+
+        if ~isempty(failure_record)
+            num_failure_records = num_failure_records + 1;
+            candidate_failure_records(num_failure_records) = failure_record;
+        end
     end
 
-    candidate_mean_wis = mean(candidate_origin_mean_wis, 2);
-    candidate_se_wis = std(candidate_origin_mean_wis, 0, 2) / ...
+    candidate_failure_records = ...
+        candidate_failure_records(1:num_failure_records);
+
+    completed_origin_mask = all(isfinite(candidate_origin_mean_wis), 2);
+    if ~isequal(candidate_feasible_mask, completed_origin_mask)
+        error('PARTC_02:CandidateFeasibilityMismatch', ...
+            'Candidate feasibility must match completion of every finite origin WIS.');
+    end
+
+    candidate_mean_wis = inf(num_candidates, 1);
+    candidate_se_wis = inf(num_candidates, 1);
+    candidate_mean_wis(candidate_feasible_mask) = mean( ...
+        candidate_origin_mean_wis(candidate_feasible_mask, :), 2);
+    candidate_se_wis(candidate_feasible_mask) = std( ...
+        candidate_origin_mean_wis(candidate_feasible_mask, :), 0, 2) / ...
         sqrt(num_origins);
 
-    if any(~isfinite(candidate_mean_wis)) || ...
-            any(~isfinite(candidate_se_wis))
+    if any(~isfinite(candidate_mean_wis(candidate_feasible_mask))) || ...
+            any(~isfinite(candidate_se_wis(candidate_feasible_mask)))
         error('PARTC_02:InvalidCandidateScores', ...
-            'Local candidate mean WIS and standard errors must be finite.');
+            'Feasible candidate mean WIS and standard errors must be finite.');
     end
 
-    [best_mean_wis, numerically_best_index] = min(candidate_mean_wis);
+    selection_pool_mask = candidate_feasible_mask & ...
+        isfinite(candidate_mean_wis);
+    selection_pool_indices = find(selection_pool_mask);
+
+    if isempty(selection_pool_indices)
+        error('PARTC_02:NoFeasibleCandidate', ...
+            'No feasible candidate completed all origins for %s/%s.', ...
+            model_type, exo_mode);
+    end
+
+    [best_mean_wis, best_pool_position] = min( ...
+        candidate_mean_wis(selection_pool_indices));
+    numerically_best_index = ...
+        selection_pool_indices(best_pool_position);
     numerically_best_configuration = ...
         candidate_configurations(numerically_best_index, :);
     selection_threshold = best_mean_wis + ...
         candidate_se_wis(numerically_best_index);
-    eligible_indices = find(candidate_mean_wis <= selection_threshold);
+    eligible_indices = find(selection_pool_mask & ...
+        candidate_mean_wis <= selection_threshold);
 
     eligible_ranking = [ ...
         candidate_complexity(eligible_indices), ...
@@ -144,6 +191,8 @@ for configuration_index = 1:numel(configurations)
         partA_selected_configuration;
     artifact.candidate_configurations = candidate_configurations;
     artifact.candidate_complexity = candidate_complexity;
+    artifact.candidate_feasible_mask = candidate_feasible_mask;
+    artifact.candidate_failure_records = candidate_failure_records;
     artifact.calibration_dates = calibration.dates;
     artifact.calibration_end_date = cfg.validation.calibration_end_date;
     artifact.test_start_date = cfg.validation.test_start_date;
@@ -176,6 +225,8 @@ for configuration_index = 1:numel(configurations)
         mat2str(partA_selected_configuration));
     fprintf('Local candidate grid: %s\n', ...
         mat2str(candidate_configurations));
+    fprintf('Feasible candidates: %d | Infeasible candidates: %d\n', ...
+        nnz(candidate_feasible_mask), nnz(~candidate_feasible_mask));
     fprintf('Selected local configuration: %s\n', ...
         mat2str(selected_configuration));
     fprintf('Saved artifact: %s\n', ...
@@ -546,12 +597,21 @@ if any(~sufficient_history)
 end
 end
 
-function origin_mean_wis = local_evaluate_candidate( ...
+function [origin_mean_wis, candidate_feasible, failure_record] = ...
+        local_evaluate_candidate( ...
         active_configuration, candidate_configuration, candidate_index, ...
         calibration, forecast_origin_indices, base_stepper, cfg)
 %LOCAL_EVALUATE_CANDIDATE Refit and score one configuration at every origin.
 num_origins = numel(forecast_origin_indices);
 origin_mean_wis = nan(num_origins, 1);
+candidate_feasible = false;
+failure_record = struct( ...
+    "candidate_index", {}, ...
+    "candidate_configuration", {}, ...
+    "forecast_origin_index", {}, ...
+    "forecast_origin_date", {}, ...
+    "error_identifier", {}, ...
+    "error_message", {});
 horizon = cfg.local_selection.horizon;
 wis_alphas = cfg.local_selection.wis_alphas;
 
@@ -617,6 +677,26 @@ for origin_position = 1:num_origins
 
         origin_mean_wis(origin_position) = mean(horizon_wis);
     catch underlying_error
+        [recognized_failure, matched_error] = ...
+            local_find_candidate_infeasibility(underlying_error);
+
+        if recognized_failure
+            failure_record = struct( ...
+                "candidate_index", candidate_index, ...
+                "candidate_configuration", candidate_configuration, ...
+                "forecast_origin_index", origin_index, ...
+                "forecast_origin_date", origin_date, ...
+                "error_identifier", string(matched_error.identifier), ...
+                "error_message", string(matched_error.message));
+            fprintf(['Infeasible %s/%s candidate %s at %s: ' ...
+                '%s\n'], ...
+                active_configuration.model_type, ...
+                active_configuration.exo_mode, ...
+                mat2str(candidate_configuration), string(origin_date), ...
+                matched_error.identifier);
+            return;
+        end
+
         contextual_error = MException( ...
             'PARTC_02:CandidateEvaluationFailed', ...
             ['Candidate configuration %s failed at forecast origin %d ' ...
@@ -625,6 +705,35 @@ for origin_position = 1:num_origins
             string(origin_date), underlying_error.message);
         contextual_error = addCause(contextual_error, underlying_error);
         throw(contextual_error);
+    end
+end
+
+candidate_feasible = all(isfinite(origin_mean_wis));
+end
+
+function [recognized_failure, matched_error] = ...
+        local_find_candidate_infeasibility(current_error)
+%LOCAL_FIND_CANDIDATE_INFEASIBILITY Find a recognized error in a cause chain.
+recognized_identifiers = [ ...
+    "FORECAST_CLOSED:InvalidForecastDraw"
+    "EPIDEMIC:SusceptibleBelowThreshold"
+    ];
+
+recognized_failure = any( ...
+    string(current_error.identifier) == recognized_identifiers);
+matched_error = current_error;
+
+if recognized_failure
+    return;
+end
+
+for cause_index = 1:numel(current_error.cause)
+    [recognized_failure, matched_error] = ...
+        local_find_candidate_infeasibility( ...
+        current_error.cause{cause_index});
+
+    if recognized_failure
+        return;
     end
 end
 end
