@@ -1,0 +1,3 @@
+Model,ExoMode,PartAConfiguration,LocalConfiguration,ConfigurationsEqual,ForecastsExactlyIdentical,MaxMedianAbsoluteDifference,MaxLowerAbsoluteDifference,MaxUpperAbsoluteDifference,TargetsExactlyIdentical,Interpretation
+"AR","None","2","2",1,1,0,0,0,1,"The local configuration matched the Part A configuration, so local selection did not alter this model's held-out online forecasts."
+"ARX","I","[2 1 1]","[2 1 1]",1,1,0,0,0,1,"The local configuration matched the Part A configuration, so local selection did not alter this model's held-out online forecasts."

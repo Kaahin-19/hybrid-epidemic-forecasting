@@ -4,8 +4,9 @@ function cfg = partC_config()
 %   Description:
 %       Defines the WHO source schema, Swedish study period, renewal-estimator
 %       assumptions, reported-case SIRS state-reconstruction assumptions,
-%       chronological validation split, limited local configuration selection
-%       protocol, compatibility snapshots, and canonical Part C artifact paths.
+%       chronological validation split, limited local configuration selection,
+%       held-out forecasting, and evaluation protocols, compatibility
+%       snapshots, and canonical Part C artifact paths.
 %
 %   Outputs:
 %       cfg - Structure containing:
@@ -18,8 +19,10 @@ function cfg = partC_config()
 %           .validation  : Fixed calibration and test boundary dates.
 %           .local_selection : Shared settings and supported configurations.
 %           .final_forecast : Held-out forecast protocol and strategies.
+%           .evaluation  : Held-out scoring and comparison protocol.
+%           .visualization : Thesis-figure selection and export settings.
 %           .snapshot    : Stable Part C compatibility snapshots.
-%           .output      : Canonical prepared-data, selection, and forecast paths.
+%           .output      : Canonical Part C artifact and table paths.
 %
 %   See also PARTC_01_PREPARE_DATA, PARTC_02_SELECT_LOCAL_ORDERS, ...
 %            PARTA_CONFIG, SERIAL_INTERVAL_WEIGHTS, ...
@@ -188,6 +191,9 @@ cfg.output.prepared_artifact_path = fullfile( ...
     cfg.output.prepared_artifact_dir, "partC_01_prepared_data.mat");
 cfg.output.model_selection_dir = fullfile(repoRoot, "results", "partC", "model_selection");
 cfg.output.forecast_dir = fullfile(repoRoot, "results", "partC", "forecasts");
+cfg.output.evaluation_dir = fullfile(repoRoot, "results", "partC", "evaluation");
+cfg.output.table_dir = fullfile(repoRoot, "results", "partC", "tables");
+cfg.output.figure_dir = fullfile(repoRoot, "results", "partC", "figures");
 
 %% 11. Supported Configurations
 configuration_template = struct( ...
@@ -297,4 +303,77 @@ cfg.snapshot.forecast = struct( ...
         cfg.state_reconstruction.min_susceptible, ...
         "state_timing_convention", ...
         cfg.state_reconstruction.state_timing_convention));
+
+%% 12. Held-Out Forecast Evaluation
+expected_forecast_artifact_names = [ ...
+    "partC_03_forecast_AR_None_partA_online_fit.mat"
+    "partC_03_forecast_AR_None_local_online_fit.mat"
+    "partC_03_forecast_AR_None_partA_fixed_fit.mat"
+    "partC_03_forecast_ARX_I_partA_online_fit.mat"
+    "partC_03_forecast_ARX_I_local_online_fit.mat"
+    "partC_03_forecast_ARX_I_partA_fixed_fit.mat"];
+
+cfg.evaluation.target_identifier = "target_Rt_estimated";
+cfg.evaluation.metric_identifiers = [ ...
+    "WIS"
+    "RMSE"
+    "MAE"
+    "MeanError"
+    "EmpiricalCoverage"
+    "IntervalWidth"];
+cfg.evaluation.grouping_dimensions = [ ...
+    "Model"
+    "ExoMode"
+    "Strategy"
+    "ForecastOrigin"
+    "LeadTime"
+    "NominalIntervalLevel"];
+cfg.evaluation.expected_forecast_artifact_names = ...
+    expected_forecast_artifact_names;
+cfg.evaluation.expected_forecast_artifact_paths = fullfile( ...
+    cfg.output.forecast_dir, expected_forecast_artifact_names);
+cfg.evaluation.required_strategy_identifiers = ...
+    [cfg.final_forecast.strategies.identifier].';
+cfg.evaluation.required_supported_pairs = supported_pairs;
+cfg.evaluation.metric_direction_policy = ...
+    "Lower WIS, MAE, RMSE, and interval width are better, subject to coverage interpretation.";
+cfg.evaluation.coverage_comparison_policy = ...
+    "Empirical coverage is compared with nominal coverage.";
+cfg.evaluation.retain_all_origins = true;
+cfg.evaluation.pairwise_comparison_policy = ...
+    "Pairwise comparisons are descriptive and matched by common forecast origin; no inferential statistics are calculated.";
+cfg.evaluation.wis_equality_tolerance = 1e-12;
+
+cfg.snapshot.evaluation = struct( ...
+    "forecast_snapshot", cfg.snapshot.forecast, ...
+    "target_identifier", cfg.evaluation.target_identifier, ...
+    "metric_identifiers", cfg.evaluation.metric_identifiers, ...
+    "grouping_dimensions", cfg.evaluation.grouping_dimensions, ...
+    "required_strategy_identifiers", ...
+    cfg.evaluation.required_strategy_identifiers, ...
+    "required_supported_pairs", ...
+    cfg.evaluation.required_supported_pairs, ...
+    "expected_forecast_artifact_names", ...
+    cfg.evaluation.expected_forecast_artifact_names, ...
+    "retain_all_origins", cfg.evaluation.retain_all_origins, ...
+    "pairwise_comparison_policy", ...
+    cfg.evaluation.pairwise_comparison_policy, ...
+    "wis_equality_tolerance", ...
+    cfg.evaluation.wis_equality_tolerance);
+
+%% 13. Thesis Figure Generation
+cfg.visualization.plot_lead_time = 7;
+cfg.visualization.plot_alphas = [0.10; 0.50];
+cfg.visualization.output_format = "pdf";
+cfg.visualization.vector_content = true;
+cfg.visualization.collapse_exact_online_duplicates = true;
+
+for alpha_index = 1:numel(cfg.visualization.plot_alphas)
+    plot_alpha = cfg.visualization.plot_alphas(alpha_index);
+    if nnz(cfg.final_forecast.wis_alphas == plot_alpha) ~= 1
+        error('PARTC_CONFIG:InvalidVisualizationAlpha', ...
+            'Visualization alpha %.17g must occur exactly once in final_forecast.wis_alphas.', ...
+            plot_alpha);
+    end
+end
 end
