@@ -4,19 +4,22 @@
 %       Generates synthetic robustness dataset artifacts by combining the
 %       existing Part A analytic Rt scenarios with controlled measurement error
 %       in the model-visible Rt input, stochastic process noise, structural
-%       mismatch, and combined stress cases.
+%       mismatch, and combined stress cases. Baseline truth follows the Part A
+%       SIR/SIRS immunity-waning configuration, while structural-mismatch truth
+%       adds an exposed compartment and therefore follows SEIR when xi = 0 or
+%       SEIRS when xi > 0.
 %
 %   Workflow:
 %       1. Load Part B configuration and resolve cases/scenarios.
 %       2. Generate analytic Rt signals inline for each scenario.
-%       3. Simulate latent SIRS or SEIR epidemic truth.
+%       3. Simulate latent SIR/SIRS or SEIR/SEIRS epidemic truth.
 %       4. Build model-visible inputs.
 %       5. Save successful dataset artifacts and record generation status.
 %
 %   See also PARTB_CONFIG, SIRS_INIT, SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-30
-% Modified: 2026-07-27
+% Modified: 2026-08-12
 
 %% 1. Initialization
 clear; close all; clc;
@@ -29,7 +32,7 @@ rtBounds = cfg.Rt.bounds;
 dataDir  = cfg.partB.output.data_dir;
 
 if exist('binornd', 'file') ~= 2
-    error('PARTB:MissingStatsToolbox', 'Part B stochastic SEIR transitions require binornd.');
+    error('PARTB:MissingStatsToolbox', 'Part B stochastic SEIR/SEIRS transitions require binornd.');
 end
 
 if ~exist(dataDir, 'dir')
@@ -90,12 +93,12 @@ for ci = 1:numel(cfg.partB.robustness_cases)
 
             try
                 switch case_def.truth_model
-                    case "SIRS"
+                    case {"SIR", "SIRS"}
                         pop_size = cfg.sirs.pop_size;
                         [S_true, I_true, R_true] = local_simulate_sirs_truth(cfg.sirs, Rt_true, case_def.solver, process_seed);
                         E_true = [];
                         local_validate_truth({S_true, I_true, R_true}, pop_size);
-                    case "SEIR"
+                    case {"SEIR", "SEIRS"}
                         pop_size = cfg.partB.seir.pop_size;
                         [S_true, E_true, I_true, R_true] = local_simulate_seir_truth(cfg.partB.seir, Rt_true, case_def.solver, process_seed);
                         local_validate_truth({S_true, E_true, I_true, R_true}, pop_size);
@@ -218,7 +221,7 @@ end
 
 function truth_solver = local_truth_solver(case_def)
 %LOCAL_TRUTH_SOLVER Honest label for the simulation method actually used.
-if case_def.truth_model == "SIRS"
+if case_def.truth_model == "SIR" || case_def.truth_model == "SIRS"
     truth_solver = case_def.solver;
 elseif strcmp(char(case_def.solver), 'uds')
     truth_solver = "local_discrete_deterministic";
@@ -240,12 +243,12 @@ noise_seed = cfg.partB.truth.seed + 5e8 + case_index * 1e7 + scenario_index * 1e
 end
 
 function [S, I, R] = local_simulate_sirs_truth(model_params, Rt_true, solver, seed)
-%LOCAL_SIMULATE_SIRS_TRUTH Simulate latent SIRS truth via the URDME stepper.
+%LOCAL_SIMULATE_SIRS_TRUTH Simulate latent SIR/SIRS truth via the URDME stepper.
 num_time = numel(Rt_true);
 
 initial_state = [model_params.pop_size - model_params.I0 - model_params.R0_init; model_params.I0; model_params.R0_init];
 if any(initial_state < 0)
-    error('PARTB:InvalidInitialState', 'SIRS initial state has a negative compartment.');
+    error('PARTB:InvalidInitialState', 'SIR/SIRS initial state has a negative compartment.');
 end
 
 step_options = struct('solver', char(solver), 'seed', seed);
@@ -265,7 +268,7 @@ R = U(3, :)';
 end
 
 function [S, E, I, R] = local_simulate_seir_truth(seir, Rt_true, solver, seed)
-%LOCAL_SIMULATE_SEIR_TRUTH Simulate latent SEIR truth by daily discrete S->E->I->R transitions.
+%LOCAL_SIMULATE_SEIR_TRUTH Simulate latent SEIR/SEIRS truth by daily transitions.
 is_stochastic = ~strcmp(char(solver), 'uds');
 if is_stochastic
     rng(seed, 'twister');
@@ -274,6 +277,7 @@ end
 num_time = numel(Rt_true);
 N        = seir.pop_size;
 gamma    = seir.gamma;
+xi       = seir.xi;
 sigma    = seir.sigma;
 
 S = zeros(num_time, 1);
@@ -287,50 +291,53 @@ I(1) = seir.I0;
 R(1) = seir.R0_init;
 
 if any([S(1), E(1), I(1), R(1)] < 0)
-    error('PARTB:InvalidInitialState', 'SEIR initial state has a negative compartment.');
+    error('PARTB:InvalidInitialState', 'SEIR/SEIRS initial state has a negative compartment.');
 end
 
 p_EI = 1 - exp(-sigma);
 p_IR = 1 - exp(-gamma);
+p_RS = 1 - exp(-xi);
 
 for t = 1:(num_time - 1)
     if S(t) <= 0
-        error('PARTB:SusceptibleDepleted', 'SEIR susceptible state reached zero at step %d.', t);
+        error('PARTB:SusceptibleDepleted', 'SEIR/SEIRS susceptible state reached zero at step %d.', t);
     end
 
     beta = Rt_true(t) * gamma * N / S(t);
     p_SE = 1 - exp(-beta * I(t) / N);
 
-    next_state = local_seir_step([S(t); E(t); I(t); R(t)], p_SE, p_EI, p_IR, is_stochastic);
-    S(t + 1)     = next_state(1);
-    E(t + 1)     = next_state(2);
-    I(t + 1)     = next_state(3);
-    R(t + 1)     = next_state(4);
+    next_state = local_seir_step([S(t); E(t); I(t); R(t)], p_SE, p_EI, p_IR, p_RS, is_stochastic);
+    S(t + 1) = next_state(1);
+    E(t + 1) = next_state(2);
+    I(t + 1) = next_state(3);
+    R(t + 1) = next_state(4);
 end
 
 if S(num_time) <= 0
-    error('PARTB:SusceptibleDepleted', 'SEIR susceptible state reached zero at step %d.', num_time);
+    error('PARTB:SusceptibleDepleted', 'SEIR/SEIRS susceptible state reached zero at step %d.', num_time);
 end
 end
 
-function [next_state, new_exposed] = local_seir_step(state, p_SE, p_EI, p_IR, is_stochastic)
-%LOCAL_SEIR_STEP Advance one SEIR day using expected or chain-binomial transition flows.
+function [next_state, new_exposed] = local_seir_step(state, p_SE, p_EI, p_IR, p_RS, is_stochastic)
+%LOCAL_SEIR_STEP Advance one SEIR/SEIRS day using expected or chain-binomial transition flows.
 S = state(1);
 E = state(2);
 I = state(3);
 R = state(4);
 
 if is_stochastic
-    new_exposed    = binornd(S, p_SE);
-    new_infectious = binornd(E, p_EI);
-    new_recovered  = binornd(I, p_IR);
+    new_exposed     = binornd(S, p_SE);
+    new_infectious  = binornd(E, p_EI);
+    new_recovered   = binornd(I, p_IR);
+    new_susceptible = binornd(R, p_RS);
 else
-    new_exposed    = S * p_SE;
-    new_infectious = E * p_EI;
-    new_recovered  = I * p_IR;
+    new_exposed     = S * p_SE;
+    new_infectious  = E * p_EI;
+    new_recovered   = I * p_IR;
+    new_susceptible = R * p_RS;
 end
 
-next_state = [S - new_exposed; E + new_exposed - new_infectious; I + new_infectious - new_recovered; R + new_recovered];
+next_state = [S - new_exposed + new_susceptible; E + new_exposed - new_infectious; I + new_infectious - new_recovered; R + new_recovered - new_susceptible];
 end
 
 function local_validate_truth(states, pop_size)
