@@ -21,7 +21,7 @@
 %            PLOT_SERIES, PLOT_DISTRIBUTION, APPLY_PANEL_STYLE.
 %
 % A. M. Kaahin 2026-07-18
-% Modified: 2026-07-27
+% Modified: 2026-08-12
 
 %% 1. Initialization
 clear; close all; clc;
@@ -136,15 +136,11 @@ combo_labels = local_combo_labels(stress);
 fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 8.5], 'Color', 'w');
 tl  = tiledlayout(fig, 1, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
 
-wis_matrix    = local_case_combo_matrix(stress, case_ids, combo_labels, 'MeanWIS');
-scenario_ct   = local_case_scenario_counts(stress, case_ids);
-scenario_word = repmat(" scenarios", numel(scenario_ct), 1);
-scenario_word(scenario_ct == 1) = " scenario";
-overview_tick = case_labels + "\newline{\itn} = " + string(scenario_ct) + scenario_word;
+wis_matrix = local_case_combo_matrix(stress, case_ids, combo_labels, 'MeanWIS');
 
 ax = nexttile(tl);
 h = local_grouped_bars(ax, wis_matrix, style);
-local_style_bar_axis(ax, (1:numel(case_ids))', overview_tick, "Mean WIS", style);
+local_style_bar_axis(ax, (1:numel(case_ids))', case_labels, "Mean WIS", style);
 local_apply_legend(ax, h, combo_labels, style, numel(combo_labels));
 local_panel_label(ax, "(a)", style);
 
@@ -372,21 +368,6 @@ for i = 1:numel(case_ids)
             error('PARTB_04:DuplicateSummaryRows', 'Found multiple rows for case %s and combination %s.', case_ids(i), combo_labels(j));
         end
     end
-end
-end
-
-function counts = local_case_scenario_counts(stress_summary, case_ids)
-%LOCAL_CASE_SCENARIO_COUNTS Scenario count per stress case from stress_summary.
-counts = zeros(numel(case_ids), 1);
-for i = 1:numel(case_ids)
-    rows = stress_summary(stress_summary.Case == case_ids(i), :);
-    case_counts = unique(rows.NumScenarios);
-
-    if numel(case_counts) ~= 1
-        error('PARTB_04:InconsistentScenarioCounts', 'Stress case %s has inconsistent scenario counts across model/exogenous combinations.', case_ids(i));
-    end
-
-    counts(i) = case_counts;
 end
 end
 
