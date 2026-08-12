@@ -9,7 +9,6 @@ RUN_ID=""
 RUN_LOG_DIR=""
 PIPELINE_LOG=""
 MANIFEST_FILE=""
-PARTB_CASES=(observation_noise process_noise structural_mismatch combined_stress)
 
 show_help() {
   cat <<'EOF'
@@ -19,11 +18,15 @@ Usage:
   ./run_partB_pipeline.sh --help
 
 Description:
-  Runs the staged Part B controlled synthetic robustness ladder:
-    1. scripts/partB/partB_01_generate_truth.m
-    2. scripts/partB/partB_02_run_fixed_forecasts.m
-    3. scripts/partB/partB_03_evaluate_models.m
+  Runs the configuration-driven Part B synthetic robustness pipeline:
+    1. scripts/partB/partB_01_generate_robustness_datasets.m
+    2. scripts/partB/partB_02_run_forecasts.m
+    3. scripts/partB/partB_03_evaluate_forecasts.m
     4. scripts/partB/partB_04_generate_figures.m
+
+  The stages generate robustness datasets, run the frozen Part A-selected
+  configurations, evaluate forecasts against latent Rt truth and matched
+  Part A baselines, and generate the Part B robustness figures.
 
   Each invocation creates a timestamped run folder under:
     results/partB/logs/<run_id>/
@@ -82,12 +85,11 @@ append_manifest() {
 create_partB_directories() {
   mkdir -p \
     "$REPO_ROOT/data/partB" \
-    "$REPO_ROOT/results/partB/evaluation" \
     "$REPO_ROOT/results/partB/forecasts" \
+    "$REPO_ROOT/results/partB/evaluation" \
     "$REPO_ROOT/results/partB/tables" \
     "$REPO_ROOT/results/partB/figures" \
-    "$REPO_ROOT/results/partB/logs" \
-    "$REPO_ROOT/results/partB/scores"
+    "$REPO_ROOT/results/partB/logs"
 }
 
 remove_partB_contents() {
@@ -102,13 +104,13 @@ remove_partB_contents() {
 run_matlab_script() {
   local step_name="$1"
   local description="$2"
-  local script_path="$3"
+  local script_name="$3"
   local log_path="$RUN_LOG_DIR/${step_name}.log"
   local matlab_code
   local start_epoch
   local elapsed_secs
 
-  matlab_code="warning('off', 'backtrace'); startup; addpath(genpath('${REPO_ROOT}/third_party')); run('${script_path}');"
+  matlab_code="warning('off', 'backtrace'); addpath(genpath('third_party')); startup; ${script_name};"
 
   log_status "Starting ${description}"
   append_manifest "$step_name" "started" "$log_path" "$description"
@@ -164,28 +166,28 @@ fi
 initialize_run_logging
 
 log_status "Run ID: ${RUN_ID}"
-log_status "Running Part B controlled synthetic robustness ladder"
+log_status "Running Part B synthetic robustness pipeline"
 
 run_matlab_script \
-  "partB_01_generate_truth" \
-  "Generating Part B robustness-ladder truth artifacts" \
-  "scripts/partB/partB_01_generate_truth.m"
+  "partB_01_generate_robustness_datasets" \
+  "Generating Part B robustness datasets" \
+  "partB_01_generate_robustness_datasets"
 
 run_matlab_script \
-  "partB_02_run_fixed_forecasts" \
-  "Running fixed Part A-selected AR/None and ARX/I forecasts" \
-  "scripts/partB/partB_02_run_fixed_forecasts.m"
+  "partB_02_run_forecasts" \
+  "Running frozen Part A-selected configurations on Part B datasets" \
+  "partB_02_run_forecasts"
 
 run_matlab_script \
-  "partB_03_evaluate_models" \
-  "Evaluating Part B robustness-ladder Rt forecasts" \
-  "scripts/partB/partB_03_evaluate_models.m"
+  "partB_03_evaluate_forecasts" \
+  "Evaluating Part B robustness forecasts against latent Rt truth and Part A baselines" \
+  "partB_03_evaluate_forecasts"
 
 run_matlab_script \
   "partB_04_generate_figures" \
-  "Generating Part B case-level and thesis-level figures" \
-  "scripts/partB/partB_04_generate_figures.m"
+  "Generating Part B robustness thesis figures" \
+  "partB_04_generate_figures"
 
-log_status "Part B robustness-ladder pipeline completed successfully."
+log_status "Part B robustness pipeline completed successfully."
 log_status "Thesis-level figures generated under: $REPO_ROOT/results/partB/figures"
 log_status "Run logs saved to: ${RUN_LOG_DIR}"
