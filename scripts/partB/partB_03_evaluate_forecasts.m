@@ -63,6 +63,7 @@ end
 
 status_counts = struct('attempts', numel(forecast_status), 'saved', sum(status_values == "saved"), 'no_windows', sum(status_values == "no_windows"), 'domain_failure', sum(status_values == "domain_failure"), 'pending', sum(status_values == "pending"));
 fprintf('Status: %d attempts (%d saved, %d no_windows, %d domain_failure, %d pending).\n', status_counts.attempts, status_counts.saved, status_counts.no_windows, status_counts.domain_failure, status_counts.pending);
+generation = load(fullfile(cfg.partB.output.data_dir, 'partB_01_generation_status.mat'));
 
 %% 3. Load Part A Baseline
 partA_eval_path = fullfile(cfg.output.score_dir, 'partA_04_evaluation_results.mat');
@@ -87,6 +88,7 @@ summaries.scenario_summary  = local_scenario_summary(summaries.replicate_summary
 summaries.stress_summary    = local_stress_summary(summaries.scenario_summary);
 summaries.horizon_summary   = local_horizon_summary(horizon_scores);
 summaries.interval_summary  = local_interval_summary(interval_scores);
+summaries.generation_summary = local_generation_summary(generation.generation_status);
 summaries.execution_summary = local_execution_summary(forecast_status);
 
 [summaries.degradation_summary, num_undefined_ratios] = local_degradation_summary(horizon_scores, partA.horizon_scores);
@@ -106,6 +108,7 @@ local_write_table(table_dir, 'partB_03_scenario_summary.csv', summaries.scenario
 local_write_table(table_dir, 'partB_03_stress_summary.csv', summaries.stress_summary);
 local_write_table(table_dir, 'partB_03_horizon_summary.csv', summaries.horizon_summary);
 local_write_table(table_dir, 'partB_03_interval_summary.csv', summaries.interval_summary);
+local_write_table(table_dir, 'partB_03_generation_summary.csv', summaries.generation_summary);
 local_write_table(table_dir, 'partB_03_execution_summary.csv', summaries.execution_summary);
 local_write_table(table_dir, 'partB_03_degradation_summary.csv', summaries.degradation_summary);
 
@@ -313,6 +316,16 @@ interval_summary = local_aggregate(scenario_level, {'Case', 'Model', 'ExoMode', 
     'MeanIntervalWidth', @mean, 'MeanIntervalWidth'});
 
 interval_summary.CoverageError = interval_summary.MeanCoverage - interval_summary.NominalCoverage;
+end
+
+function generation_summary = local_generation_summary(generation_status)
+%LOCAL_GENERATION_SUMMARY Per stress-case dataset-generation outcome counts.
+status_tbl = table(string({generation_status.case_id})', string({generation_status.status})', 'VariableNames', {'Case', 'Status'});
+
+generation_summary = local_aggregate(status_tbl, {'Case'}, { ...
+    'Attempts',       @numel,                          'Status'; ...
+    'Saved',          @(x) sum(x == "saved"),          'Status'; ...
+    'DomainFailures', @(x) sum(x == "domain_failure"), 'Status'});
 end
 
 function execution_summary = local_execution_summary(forecast_status)

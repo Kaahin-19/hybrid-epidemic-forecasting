@@ -23,7 +23,7 @@
 %            FORECAST_OPEN, FORECAST_CLOSED.
 %
 % A. M. Kaahin 2026-07-18
-% Modified: 2026-07-27
+% Modified: 2026-08-12
 
 %% 1. Initialization
 clear; close all; clc;
@@ -32,14 +32,14 @@ fprintf('=== Part B Forecast Generation ===\n');
 
 cfg = partB_config();
 
-model_types   = cfg.partB.run.model_types;
-data_dir      = cfg.partB.output.data_dir;
-forecast_dir  = cfg.partB.output.forecast_dir;
-base_seed     = cfg.run.seed;
-num_draws     = cfg.intervals.num_draws;
-horizon       = cfg.forecast.horizon;
-wis_alphas    = cfg.forecast.wis_alphas;
-vary          = cfg.intervals.include_epidemic_seed_variation;
+model_types  = cfg.partB.run.model_types;
+data_dir     = cfg.partB.output.data_dir;
+forecast_dir = cfg.partB.output.forecast_dir;
+base_seed    = cfg.run.seed;
+num_draws    = cfg.intervals.num_draws;
+horizon      = cfg.forecast.horizon;
+wis_alphas   = cfg.forecast.wis_alphas;
+vary         = cfg.intervals.include_epidemic_seed_variation;
 
 if ~exist(forecast_dir, 'dir')
     mkdir(forecast_dir);
@@ -104,10 +104,13 @@ for di = 1:numel(saved)
     end
 
     dataset = load(dataset_path);
-    if ~isfield(dataset, 'snapshot') || ~isfield(dataset.snapshot, 'observation_noise') || ~isequal(dataset.snapshot.observation_noise, cfg.partB.snapshot.observation_noise)
+    scenario_index = find(string({cfg.scenarios.id}) == string(dataset.scenario_id));
+
+    if ~isfield(dataset, 'snapshot') || ~isfield(dataset.snapshot, 'observation_noise') || ~isequal(dataset.snapshot.observation_noise, cfg.partB.snapshot.observation_noise) || ~isequal(dataset.snapshot.seir, cfg.partB.snapshot.seir)
         local_save_status(status_path, forecast_status, availability_report, false);
-        error('PARTB_02:IncompatibleDatasetSnapshot', 'Dataset %s does not use the configured noisy-Rt-input definition. Regenerate Part B datasets with partB_01.', entry.output_filename);
+        error('PARTB_02:IncompatibleDatasetSnapshot', 'Dataset %s does not match the current Part B dataset configuration. Regenerate Part B datasets with partB_01.', entry.output_filename);
     end
+
     [v0, v1] = local_longest_valid_run(dataset.Rt_model_input_valid_mask);
 
     for ci = 1:numel(available)
@@ -121,10 +124,10 @@ for di = 1:numel(saved)
                 forecast_status(k).status = "no_windows";
                 fprintf('  %s / %s ... no valid forecast windows\n', combo.model_type, combo.exo_mode);
             else
-                results  = local_run_forecasts(combo.model_type, combo.exo_mode, combo.selected_configuration, window_data, base_stepper, base_seed, num_draws, horizon, wis_alphas, vary, k);
+                results = local_run_forecasts(combo.model_type, combo.exo_mode, combo.selected_configuration, window_data, base_stepper, base_seed, num_draws, horizon, wis_alphas, vary, scenario_index);
                 artifact = local_build_artifact(dataset, entry, combo, [v0, v1], wis_alphas, results, cfg);
 
-                out_name  = sprintf('partB_02_forecast_%s_%s_%s_%s_%s.mat', entry.case_id, entry.scenario_id, entry.replicate_id, combo.model_type, combo.exo_mode);
+                out_name = sprintf('partB_02_forecast_%s_%s_%s_%s_%s.mat', entry.case_id, entry.scenario_id, entry.replicate_id, combo.model_type, combo.exo_mode);
                 save(fullfile(forecast_dir, out_name), '-struct', 'artifact');
 
                 forecast_status(k).status          = "saved";
@@ -238,7 +241,7 @@ for i = 1:numel(saved)
     names(i) = string(saved(i).output_filename);
 end
 [~, order] = sort(names);
-saved      = saved(order);
+saved = saved(order);
 end
 
 function forecast_status = local_init_forecast_status(saved, available)
@@ -283,8 +286,8 @@ if isempty(v0)
     return;
 end
 
-horizon    = cfg.forecast.horizon;
-tspan_full = dataset.tspan;
+horizon     = cfg.forecast.horizon;
+tspan_full  = dataset.tspan;
 tspan_valid = tspan_full(v0:v1);
 tspan_local = tspan_valid - tspan_valid(1);
 
@@ -301,7 +304,7 @@ for w = 1:numel(window_data)
 end
 end
 
-function results = local_run_forecasts(model_type, exo_mode, params, window_data, base_stepper, base_seed, num_draws, horizon, wis_alphas, vary, forecast_index)
+function results = local_run_forecasts(model_type, exo_mode, params, window_data, base_stepper, base_seed, num_draws, horizon, wis_alphas, vary, scenario_index)
 %LOCAL_RUN_FORECASTS Frozen-configuration forecasts for one dataset/combination.
 template = struct('window_day', [], 'window_day_idx', [], 'time_horizon', [], 'truth_Rt_window', [], 'forecast_median', [], 'forecast_lower', [], 'forecast_upper', []);
 results  = repmat(template, numel(window_data), 1);
@@ -309,14 +312,14 @@ results  = repmat(template, numel(window_data), 1);
 for w = 1:numel(window_data)
     win = window_data(w);
 
-    window_seed = base_seed + 100000 * forecast_index + w;
+    window_seed = base_seed + 10000 * scenario_index + w;
     r_seed      = window_seed;
 
     if isempty(win.U_past)
         ens = forecast_open(model_type, params, win.Rt_past, num_draws, horizon, r_seed);
     else
-        e_seed = window_seed + 500000000;
-        ens    = forecast_closed(model_type, params, win.Rt_past, win.U_past, win.sirs_state, size(win.U_past, 2), num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
+        e_seed = window_seed + 1000000;
+        ens = forecast_closed(model_type, params, win.Rt_past, win.U_past, win.sirs_state, size(win.U_past, 2), num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
     end
 
     Rt_pred = median(ens, 2);
