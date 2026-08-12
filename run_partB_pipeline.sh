@@ -9,6 +9,8 @@ RUN_ID=""
 RUN_LOG_DIR=""
 PIPELINE_LOG=""
 MANIFEST_FILE=""
+PIPELINE_STARTED_AT=""
+PIPELINE_STARTED_EPOCH=""
 
 show_help() {
   cat <<'EOF'
@@ -32,6 +34,9 @@ Description:
     results/partB/logs/<run_id>/
   containing a pipeline log, per-stage MATLAB logs, and a manifest file.
 
+  The terminal shows one compact row per stage. Long-running stages update
+  their progress in place while full MATLAB output remains in the stage logs.
+
 Options:
   --fresh     Clear generated Part B data/results before execution.
   --help, -h  Show this help message.
@@ -51,9 +56,23 @@ log_status() {
   local message="$1"
   local line="[$(timestamp_now)] $message"
 
-  printf '%s\n' "$line"
   if [[ -n "${PIPELINE_LOG:-}" ]]; then
     printf '%s\n' "$line" >> "$PIPELINE_LOG"
+  fi
+}
+
+format_duration() {
+  local total_secs="$1"
+  local hours=$(( total_secs / 3600 ))
+  local minutes=$(( (total_secs % 3600) / 60 ))
+  local seconds=$(( total_secs % 60 ))
+
+  if (( hours > 0 )); then
+    printf '%dh %02dm %02ds' "$hours" "$minutes" "$seconds"
+  elif (( minutes > 0 )); then
+    printf '%dm %02ds' "$minutes" "$seconds"
+  else
+    printf '%ds' "$seconds"
   fi
 }
 
@@ -101,32 +120,116 @@ remove_partB_contents() {
   create_partB_directories
 }
 
-run_matlab_script() {
+render_stage() {
+  local stage_index="$1"
+  local label="$2"
+  local progress="$3"
+  local state="$4"
+
+  printf '\r\033[2K[%d/4] %-30s %-22s %s' "$stage_index" "$label" "$progress" "$state"
+}
+
+current_stage_progress() {
   local step_name="$1"
-  local description="$2"
-  local script_name="$3"
+  local log_path="$2"
+  local completed
+  local line
+
+  case "$step_name" in
+    partB_01_generate_robustness_datasets)
+      completed="$(grep -Ec '^  - ' "$log_path" 2>/dev/null || true)"
+      if (( completed > 0 )); then
+        printf '%d attempts' "$completed"
+      fi
+      ;;
+    partB_02_run_forecasts)
+      line="$(grep -E '^Dataset [0-9]+/[0-9]+' "$log_path" 2>/dev/null | tail -n 1 || true)"
+      if [[ "$line" =~ ^Dataset[[:space:]]+([0-9]+)/([0-9]+) ]]; then
+        printf '%s/%s datasets' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+      fi
+      ;;
+  esac
+}
+
+final_stage_progress() {
+  local step_name="$1"
+  local log_path="$2"
+  local completed
+  local progress
+
+  case "$step_name" in
+    partB_01_generate_robustness_datasets)
+      completed="$(grep -Ec '^  - ' "$log_path" 2>/dev/null || true)"
+      if (( completed > 0 )); then
+        printf '%d/%d attempts' "$completed" "$completed"
+      fi
+      ;;
+    partB_02_run_forecasts)
+      progress="$(current_stage_progress "$step_name" "$log_path")"
+      printf '%s' "$progress"
+      ;;
+  esac
+}
+
+run_matlab_script() {
+  local stage_index="$1"
+  local step_name="$2"
+  local label="$3"
+  local description="$4"
+  local script_name="$5"
   local log_path="$RUN_LOG_DIR/${step_name}.log"
   local matlab_code
   local start_epoch
   local elapsed_secs
+  local matlab_pid
+  local exit_code
+  local progress
 
   matlab_code="warning('off', 'backtrace'); addpath(genpath('third_party')); startup; ${script_name};"
 
   log_status "Starting ${description}"
   append_manifest "$step_name" "started" "$log_path" "$description"
 
+  : > "$log_path"
   start_epoch="$(date +%s)"
-  if "$MATLAB_BIN" -batch "$matlab_code" > "$log_path" 2>&1; then
-    elapsed_secs=$(( $(date +%s) - start_epoch ))
+  render_stage "$stage_index" "$label" "" "running"
+
+  "$MATLAB_BIN" -batch "$matlab_code" > "$log_path" 2>&1 &
+  matlab_pid=$!
+
+  while kill -0 "$matlab_pid" 2>/dev/null; do
+    progress="$(current_stage_progress "$step_name" "$log_path")"
+    render_stage "$stage_index" "$label" "$progress" "running"
+    sleep 1
+  done
+
+  set +e
+  wait "$matlab_pid"
+  exit_code=$?
+  set -e
+
+  elapsed_secs=$(( $(date +%s) - start_epoch ))
+
+  if [[ "$exit_code" -eq 0 ]]; then
+    progress="$(final_stage_progress "$step_name" "$log_path")"
+    render_stage "$stage_index" "$label" "$progress" "✓ $(format_duration "$elapsed_secs")"
+    printf '\n'
+
     log_status "Completed ${description} in ${elapsed_secs}s"
     append_manifest "$step_name" "completed" "$log_path" "${elapsed_secs}s"
   else
-    local exit_code="$?"
-    elapsed_secs=$(( $(date +%s) - start_epoch ))
+    render_stage "$stage_index" "$label" "$progress" "✗ failed"
+    printf '\n'
+
     log_status "Failed ${description} after ${elapsed_secs}s (exit ${exit_code}). Log: ${log_path}"
     append_manifest "$step_name" "failed" "$log_path" "exit=${exit_code}; elapsed=${elapsed_secs}s"
-    printf '\nLast log lines from %s:\n' "$log_path" >&2
+
+    printf '\nPipeline failed.\n'
+    printf 'Finished: %s\n' "$(timestamp_now)"
+    printf 'Log: %s\n' "$log_path"
+    printf '\nLast log lines:\n' >&2
     tail -n 30 "$log_path" >&2 || true
+
     return "$exit_code"
   fi
 }
@@ -165,29 +268,53 @@ fi
 
 initialize_run_logging
 
+PIPELINE_STARTED_AT="$(timestamp_now)"
+PIPELINE_STARTED_EPOCH="$(date +%s)"
+
 log_status "Run ID: ${RUN_ID}"
 log_status "Running Part B synthetic robustness pipeline"
+log_status "Pipeline started"
+
+printf 'Part B robustness pipeline\n'
+printf 'Run: %s\n' "$RUN_ID"
+printf 'Started: %s\n\n' "$PIPELINE_STARTED_AT"
 
 run_matlab_script \
+  1 \
   "partB_01_generate_robustness_datasets" \
+  "Generate robustness datasets" \
   "Generating Part B robustness datasets" \
   "partB_01_generate_robustness_datasets"
 
 run_matlab_script \
+  2 \
   "partB_02_run_forecasts" \
+  "Run forecasts" \
   "Running frozen Part A-selected configurations on Part B datasets" \
   "partB_02_run_forecasts"
 
 run_matlab_script \
+  3 \
   "partB_03_evaluate_forecasts" \
+  "Evaluate forecasts" \
   "Evaluating Part B robustness forecasts against latent Rt truth and Part A baselines" \
   "partB_03_evaluate_forecasts"
 
 run_matlab_script \
+  4 \
   "partB_04_generate_figures" \
+  "Generate thesis figures" \
   "Generating Part B robustness thesis figures" \
   "partB_04_generate_figures"
 
-log_status "Part B robustness pipeline completed successfully."
+PIPELINE_FINISHED_AT="$(timestamp_now)"
+PIPELINE_ELAPSED_SECS=$(( $(date +%s) - PIPELINE_STARTED_EPOCH ))
+
+log_status "Part B robustness pipeline completed successfully in ${PIPELINE_ELAPSED_SECS}s"
 log_status "Thesis-level figures generated under: $REPO_ROOT/results/partB/figures"
 log_status "Run logs saved to: ${RUN_LOG_DIR}"
+
+printf '\nPipeline completed successfully.\n'
+printf 'Finished: %s\n\n' "$PIPELINE_FINISHED_AT"
+printf 'Figures: results/partB/figures\n'
+printf 'Logs:    results/partB/logs/%s\n' "$RUN_ID"
