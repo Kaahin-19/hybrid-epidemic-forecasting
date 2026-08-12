@@ -1,5 +1,9 @@
 Case,Model,ExoMode,Attempts,Saved,NoWindows,DomainFailures,Pending,SuccessRate
-combined_stress,ARX,I,10,10,0,0,0,1
-observation_noise,ARX,I,40,33,0,7,0,0.825
+combined_stress,AR,None,40,40,0,0,0,1
+combined_stress,ARX,I,40,12,0,28,0,0.3
+observation_noise,AR,None,40,40,0,0,0,1
+observation_noise,ARX,I,40,39,0,1,0,0.975
+process_noise,AR,None,39,39,0,0,0,1
 process_noise,ARX,I,39,39,0,0,0,1
-structural_mismatch,ARX,I,1,1,0,0,0,1
+structural_mismatch,AR,None,4,4,0,0,0,1
+structural_mismatch,ARX,I,4,2,0,2,0,0.5
