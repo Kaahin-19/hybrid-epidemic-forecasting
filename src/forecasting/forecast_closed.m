@@ -10,8 +10,9 @@ function [ensemble_paths, fit_info] = forecast_closed(model_type, params, Rt_pas
 %       Fits an ARX or state-space model with exogenous inputs to log(Rt_past),
 %       computes one-step prediction residuals, resamples centred residuals as
 %       innovations under resample_seed, and propagates closed-loop bootstrap
-%       paths on the Rt scale. At each horizon step the forecast Rt drives a SIRS
-%       epidemic step whose output state determines the next exogenous covariate.
+%       paths on the Rt scale. The last observed Rt drives the first SIRS step;
+%       each forecast Rt drives the following step, whose output state determines
+%       the next exogenous covariate.
 %       The susceptible-domain threshold is enforced both on entry to sirs_step
 %       (before beta is computed) and after each advance to guard the returned
 %       state. Fails fast if the series is constant, the history is too short,
@@ -44,15 +45,16 @@ function [ensemble_paths, fit_info] = forecast_closed(model_type, params, Rt_pas
 %   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS, FORECAST_OPEN, SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-15
-% Modified: 2026-06-28
+% Modified: 2026-08-13
 
 y = log(Rt_past);
+Rt_origin_driver = Rt_past(end);
 
 switch model_type
     case "ARX"
-        [ensemble_paths, aicc] = local_arx(y, U_past, params, num_exo, num_draws, horizon, exo_mode, base_stepper, sirs_state, resample_seed, epidemic_base_seed, vary_epidemic_seed);
+        [ensemble_paths, aicc] = local_arx(y, U_past, params, num_exo, num_draws, horizon, exo_mode, base_stepper, sirs_state, Rt_origin_driver, resample_seed, epidemic_base_seed, vary_epidemic_seed);
     case {"N4SID", "SSEST"}
-        [ensemble_paths, aicc] = local_ss_closed(model_type, y, U_past, params(1), num_exo, num_draws, horizon, exo_mode, base_stepper, sirs_state, resample_seed, epidemic_base_seed, vary_epidemic_seed);
+        [ensemble_paths, aicc] = local_ss_closed(model_type, y, U_past, params(1), num_exo, num_draws, horizon, exo_mode, base_stepper, sirs_state, Rt_origin_driver, resample_seed, epidemic_base_seed, vary_epidemic_seed);
     otherwise
         error('FORECAST_CLOSED:UnknownModel', 'Unsupported model type: %s', model_type);
 end
@@ -63,7 +65,7 @@ end
 %% Local functions
 
 function [ensemble, aicc] = local_arx(y, U_past, params, num_exo, num_draws, ...
-    horizon, exo_mode, base_stepper, sirs_state, ...
+    horizon, exo_mode, base_stepper, sirs_state, Rt_origin_driver, ...
     resample_seed, epidemic_base_seed, vary_epidemic_seed)
 %LOCAL_ARX Closed-loop ARX bootstrap ensemble on the log scale.
 na = params(1);
@@ -113,6 +115,7 @@ for d = 1:num_draws
     stepper.seed       = draw_seed;
     stepper.call_count = 0;
     state              = sirs_state;
+    Rt_driver          = Rt_origin_driver;
     roll_y             = rolling_y;
     roll_U             = rolling_U;
     for h = 1:horizon
@@ -123,19 +126,20 @@ for d = 1:num_draws
         if ~isfinite(Rt_next) || Rt_next <= 0
             error('FORECAST_CLOSED:InvalidForecastDraw', 'Bootstrap draw produced a non-finite or non-positive Rt.');
         end
-        [state, stepper] = sirs_step(stepper, state, Rt_next);
+        [state, stepper] = sirs_step(stepper, state, Rt_driver);
         if state(1) <= min_susceptible
             error('EPIDEMIC:SusceptibleBelowThreshold', 'Forecasted SIRS state crossed the susceptible-domain threshold.');
         end
         ensemble(h, d)   = Rt_next;
         roll_y(T + h)    = y_next;
         roll_U(T + h, :) = local_exo_row(state, exo_mode, pop_size);
+        Rt_driver        = Rt_next;
     end
 end
 end
 
 function [ensemble, aicc] = local_ss_closed(model_type, y, U_past, n, ~, ...
-    num_draws, horizon, exo_mode, base_stepper, sirs_state, ...
+    num_draws, horizon, exo_mode, base_stepper, sirs_state, Rt_origin_driver, ...
     resample_seed, epidemic_base_seed, vary_epidemic_seed)
 %LOCAL_SS_CLOSED Closed-loop state-space bootstrap ensemble on the log scale.
 if std(y) < 1e-8
@@ -182,6 +186,7 @@ for d = 1:num_draws
     stepper.call_count = 0;
     x                  = x_origin;
     state              = sirs_state;
+    Rt_driver          = Rt_origin_driver;
     u_current          = U_past(end, :).';
     for h = 1:horizon
         y_hat   = C * x + D * u_current;
@@ -190,7 +195,7 @@ for d = 1:num_draws
         if ~isfinite(Rt_next) || Rt_next <= 0
             error('FORECAST_CLOSED:InvalidForecastDraw', 'Bootstrap draw produced a non-finite or non-positive Rt.');
         end
-        [state, stepper] = sirs_step(stepper, state, Rt_next);
+        [state, stepper] = sirs_step(stepper, state, Rt_driver);
         if state(1) <= min_susceptible
             error('EPIDEMIC:SusceptibleBelowThreshold', 'Forecasted SIRS state crossed the susceptible-domain threshold.');
         end
@@ -198,6 +203,7 @@ for d = 1:num_draws
         x              = A * x + B * u_current + K_gain * innovations(h, d);
         ensemble(h, d) = Rt_next;
         u_current      = u_next;
+        Rt_driver      = Rt_next;
     end
 end
 end

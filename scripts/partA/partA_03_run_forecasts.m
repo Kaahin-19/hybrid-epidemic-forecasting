@@ -2,21 +2,23 @@
 %
 %   Description:
 %       Generates final expanding-window Rt forecasts for each synthetic
-%       scenario using the selected model configuration. Exports one forecast
-%       artifact per scenario containing the forecast median, prediction
-%       intervals, forecast horizon times, and matching truth windows.
+%       scenario using the selected model configuration. Propagates each median
+%       Rt forecast and an origin-only Rt persistence baseline through the Part A
+%       SIRS model, then exports the Rt forecasts and matching state trajectories.
 %
 %   Workflow:
 %       1. Load the selected model configuration.
 %       2. Build forecast windows for each synthetic scenario.
 %       3. Run final forecasts with the selected configuration.
-%       4. Save one forecast artifact per scenario.
+%       4. Project forecast-driven and persistence SIRS trajectories.
+%       5. Save one forecast artifact per scenario.
 %
 %   See also PARTA_CONFIG, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, ...
-%            BUILD_FORECAST_WINDOWS, FORECAST_OPEN, FORECAST_CLOSED.
+%            BUILD_FORECAST_WINDOWS, FORECAST_OPEN, FORECAST_CLOSED, ...
+%            PROJECT_SIRS_TRAJECTORY.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-06-28
+% Modified: 2026-08-13
 
 %% 1. Initialization
 clear; close all; clc;
@@ -65,6 +67,8 @@ else
     base_stepper = sirs_init(cfg.sirs, struct('solver', 'uds', 'seed', base_seed));
 end
 
+projection_stepper = sirs_init(cfg.sirs, struct('solver', 'uds', 'seed', base_seed));
+
 %% 4. Scenario Forecast Loop
 for i = 1:numel(file_list)
     loaded = load(fullfile(data_dir, file_list(i).name));
@@ -79,7 +83,7 @@ for i = 1:numel(file_list)
         error('PARTA_03:NoForecastWindows', ['Scenario %s has no forecast windows; check min_window, ' 'step_size, horizon, and truth length.'], scenario_id);
     end
 
-    results = local_run_scenario_forecasts(model_type, exo_mode, selected_configuration, window_data, base_stepper, base_seed, num_draws, horizon, wis_alphas, vary, i);
+    results = local_run_scenario_forecasts(model_type, exo_mode, selected_configuration, window_data, loaded.S_true, loaded.I_true, pop_size, base_stepper, projection_stepper, base_seed, num_draws, horizon, wis_alphas, vary, i);
 
     artifact = struct('scenario_id', scenario_id, 'model_type', model_type, 'exo_mode', exo_mode, 'selected_configuration', selected_configuration, 'snapshot', forecast_snapshot, 'wis_alphas', wis_alphas, 'tspan', loaded.tspan, 'Rt_true', loaded.Rt_true, 'results', results);
 
@@ -110,9 +114,9 @@ if ~isequaln(selection.snapshot, cfg.snapshot.selection)
 end
 end
 
-function results = local_run_scenario_forecasts( model_type, exo_mode, params, window_data, base_stepper, base_seed, num_draws, horizon, wis_alphas, vary, scenario_index)
+function results = local_run_scenario_forecasts(model_type, exo_mode, params, window_data, S_true, I_true, pop_size, base_stepper, projection_stepper, base_seed, num_draws, horizon, wis_alphas, vary, scenario_index)
 %LOCAL_RUN_SCENARIO_FORECASTS Run selected-model forecasts for one scenario.
-template = struct('window_day', [], 'window_day_idx', [], 'time_horizon', [], 'truth_Rt_window', [], 'forecast_median', [], 'forecast_lower', [], 'forecast_upper', []);
+template = struct('window_day', [], 'window_day_idx', [], 'time_horizon', [], 'truth_Rt_window', [], 'forecast_median', [], 'forecast_lower', [], 'forecast_upper', [], 'truth_S_window', [], 'truth_I_window', [], 'truth_R_window', [], 'projected_S', [], 'projected_I', [], 'projected_R', [], 'persistence_S', [], 'persistence_I', [], 'persistence_R', []);
 results = repmat(template, numel(window_data), 1);
 
 for w = 1:numel(window_data)
@@ -138,6 +142,19 @@ for w = 1:numel(window_data)
         error('PARTA_03:UnscoreableWindow', 'Forecast window produced invalid intervals.');
     end
 
+    idx_T = win.window_day_idx;
+    truth_indices = idx_T + 1 : idx_T + horizon;
+    truth_S = S_true(truth_indices);
+    truth_I = I_true(truth_indices);
+    truth_R = pop_size - truth_S - truth_I;
+
+    initial_state = [S_true(idx_T); I_true(idx_T); pop_size - S_true(idx_T) - I_true(idx_T)];
+    forecast_Rt_drivers = [win.Rt_past(end); Rt_pred(1:horizon - 1)];
+    persistence_Rt_drivers = repmat(win.Rt_past(end), horizon, 1);
+
+    projected_states = project_sirs_trajectory(projection_stepper, initial_state, forecast_Rt_drivers);
+    persistence_states = project_sirs_trajectory(projection_stepper, initial_state, persistence_Rt_drivers);
+
     results(w).window_day = win.window_day;
     results(w).window_day_idx = win.window_day_idx;
     results(w).time_horizon = win.time_horizon;
@@ -145,5 +162,14 @@ for w = 1:numel(window_data)
     results(w).forecast_median = Rt_pred;
     results(w).forecast_lower = lower;
     results(w).forecast_upper = upper;
+    results(w).truth_S_window = truth_S;
+    results(w).truth_I_window = truth_I;
+    results(w).truth_R_window = truth_R;
+    results(w).projected_S = projected_states(:, 1);
+    results(w).projected_I = projected_states(:, 2);
+    results(w).projected_R = projected_states(:, 3);
+    results(w).persistence_S = persistence_states(:, 1);
+    results(w).persistence_I = persistence_states(:, 2);
+    results(w).persistence_R = persistence_states(:, 3);
 end
 end
