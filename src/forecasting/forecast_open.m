@@ -7,7 +7,8 @@ function [ensemble_paths, fit_info] = forecast_open(model_type, params, Rt_past,
 %
 %   Description:
 %       Fits an AR or output-only state-space model to log(Rt_past), computes
-%       one-step prediction residuals via the fitted recursion, resamples
+%       one-step prediction residuals using estimated initial conditions,
+%       maps the observed history to the forecast-origin state, resamples
 %       centred residuals as innovations under resample_seed, and propagates
 %       horizon-step bootstrap paths on the Rt scale. Fails fast if the series
 %       is constant, the history is too short, or any bootstrap draw produces a
@@ -29,7 +30,7 @@ function [ensemble_paths, fit_info] = forecast_open(model_type, params, Rt_past,
 %   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS, FORECAST_CLOSED.
 %
 % A. M. Kaahin 2026-06-15
-% Modified: 2026-06-28
+% Modified: 2026-08-15
 
 y = log(Rt_past);
 
@@ -105,19 +106,13 @@ switch model_type
 end
 aicc = sys.Report.Fit.AICc;
 
-[A, ~, C, ~, K_gain, X0] = idssdata(sys);
+[A, ~, C, ~, K_gain] = idssdata(sys);
 
-x         = X0;
-T         = numel(y);
-residuals = zeros(T, 1);
-for t = 1:T
-    y_hat        = C * x;
-    e_t          = y(t) - y_hat;
-    residuals(t) = e_t;
-    x            = A * x + K_gain * e_t;
-end
-x_origin  = x;
-residuals = residuals(isfinite(residuals));
+prediction_options = peOptions('InitialCondition', 'e');
+prediction_errors  = pe(sys, data, 1, prediction_options);
+residuals           = prediction_errors.OutputData;
+x_origin            = data2state(sys, data);
+residuals           = residuals(isfinite(residuals));
 
 if numel(residuals) < 2
     error('FORECAST_OPEN:InsufficientResiduals', 'Fewer than two finite state-space residuals available.');

@@ -8,11 +8,12 @@ function [ensemble_paths, fit_info] = forecast_closed(model_type, params, Rt_pas
 %
 %   Description:
 %       Fits an ARX or state-space model with exogenous inputs to log(Rt_past),
-%       computes one-step prediction residuals, resamples centred residuals as
-%       innovations under resample_seed, and propagates closed-loop bootstrap
-%       paths on the Rt scale. The last observed Rt drives the first SIRS step;
-%       each forecast Rt drives the following step, whose output state determines
-%       the next exogenous covariate.
+%       computes one-step prediction residuals using estimated initial
+%       conditions, maps the observed history to the forecast-origin state,
+%       resamples centred residuals as innovations under resample_seed, and
+%       propagates closed-loop bootstrap paths on the Rt scale. The last observed
+%       Rt drives the first SIRS step; each forecast Rt drives the following step,
+%       whose output state determines the next exogenous covariate.
 %       The susceptible-domain threshold is enforced both on entry to sirs_step
 %       (before beta is computed) and after each advance to guard the returned
 %       state. Fails fast if the series is constant, the history is too short,
@@ -45,7 +46,7 @@ function [ensemble_paths, fit_info] = forecast_closed(model_type, params, Rt_pas
 %   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS, FORECAST_OPEN, SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-15
-% Modified: 2026-08-13
+% Modified: 2026-08-15
 
 y = log(Rt_past);
 Rt_origin_driver = Rt_past(end);
@@ -155,20 +156,13 @@ switch model_type
 end
 aicc = sys.Report.Fit.AICc;
 
-[A, B, C, D, K_gain, X0] = idssdata(sys);
+[A, B, C, D, K_gain] = idssdata(sys);
 
-x         = X0;
-T         = numel(y);
-residuals = zeros(T, 1);
-for t = 1:T
-    u_col        = U_past(t, :).';
-    y_hat        = C * x + D * u_col;
-    e_t          = y(t) - y_hat;
-    residuals(t) = e_t;
-    x            = A * x + B * u_col + K_gain * e_t;
-end
-x_origin  = x;
-residuals = residuals(isfinite(residuals));
+prediction_options = peOptions('InitialCondition', 'e');
+prediction_errors  = pe(sys, data, 1, prediction_options);
+residuals           = prediction_errors.OutputData;
+x_origin            = data2state(sys, data);
+residuals           = residuals(isfinite(residuals));
 
 if numel(residuals) < 2
     error('FORECAST_CLOSED:InsufficientResiduals', 'Fewer than two finite state-space residuals available.');
