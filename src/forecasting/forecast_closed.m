@@ -152,7 +152,7 @@ switch model_type
     case "N4SID"
         sys = n4sid(data, n, n4sidOptions('Display', 'off'));
     case "SSEST"
-        sys = ssest(data, n, ssestOptions('Display', 'off'));
+        sys = ssest(data, n, 'Ts', data.Ts, ssestOptions('Display', 'off'));
 end
 aicc = sys.Report.Fit.AICc;
 
