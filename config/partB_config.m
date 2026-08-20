@@ -29,7 +29,7 @@ function cfg = partB_config()
 %   See also PARTA_CONFIG, PARTB_01_GENERATE_ROBUSTNESS_DATASETS.
 %
 % A. M. Kaahin 2026-06-30
-% Modified: 2026-08-12
+% Modified: 2026-08-20
 
 %% 1. Inherit Part A Configuration
 cfg = partA_config();
@@ -106,6 +106,8 @@ cfg.partB.seir.pop_size = cfg.sirs.pop_size;
 cfg.partB.seir.I0       = cfg.sirs.I0;
 cfg.partB.seir.E0       = round(0.5 * cfg.sirs.I0);
 cfg.partB.seir.R0_init  = cfg.sirs.R0_init;
+cfg.partB.seir.min_susceptible_fraction = cfg.sirs.min_susceptible_fraction;
+cfg.partB.seir.min_susceptible          = cfg.sirs.min_susceptible;
 
 %% 8. Output Paths
 thisDir  = fileparts(mfilename('fullpath'));

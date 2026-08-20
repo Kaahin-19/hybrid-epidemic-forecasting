@@ -1,0 +1,69 @@
+function [next_state, stepper] = seirs_step(stepper, current_state, Rt_next)
+%SEIRS_STEP Advance one reusable SEIRS stepper by one day.
+%
+%   Syntax:
+%       [next_state, stepper] = seirs_step(stepper, current_state, Rt_next)
+%
+%   Description:
+%       Advances the prepared URDME SEIRS model by one effective-Rt-driven
+%       one-day interval. The function preserves the project Rt convention
+%       by deriving beta from the current susceptible state and recovery
+%       rate before executing the four-compartment URDME model.
+%
+%   Inputs:
+%       stepper       - Reusable SEIRS stepper returned by seirs_init.
+%       current_state - Current [S; E; I; R] state, 4-by-1.
+%       Rt_next       - Effective reproduction number driving this step.
+%
+%   Outputs:
+%       next_state - Advanced [S; E; I; R] state, 4-by-1.
+%       stepper    - Updated stepper with incremented call count.
+%
+%   See also SEIRS_INIT, SIRS_STEP.
+%
+% A. M. Kaahin 2026-08-20
+
+%% 1. Prepare Inputs
+params = stepper.model_params;
+
+S_current = current_state(1);
+
+%% 2. Rt-to-Beta Domain Guard
+if S_current <= params.min_susceptible
+    error('EPIDEMIC:SusceptibleBelowThreshold', 'Susceptible state %.6g is at or below the configured minimum susceptible threshold %.6g.', S_current, params.min_susceptible);
+end
+
+beta_value = Rt_next * params.gamma * params.pop_size / S_current;
+
+if ~isfinite(beta_value) || beta_value <= 0
+    error('EPIDEMIC:InvalidBeta', 'Computed internal transmission rate must be finite and positive.');
+end
+
+%% 3. Configure URDME Step
+umod        = stepper.umod_template;
+num_species = size(umod.N, 1);
+
+umod.u0      = zeros(num_species, 1);
+umod.u0(1:4) = current_state;
+beta_driver  = repmat(beta_value, 1, numel(umod.tspan));
+umod.ldata_time = reshape(beta_driver, [1, numel(umod.vol), numel(umod.tspan)]);
+
+umod.solve   = 1;
+umod.parse   = 0;
+umod.compile = 0;
+step_seed    = stepper.seed + stepper.call_count;
+umod.seed    = step_seed;
+umod.U       = [];
+
+%% 4. Advance State
+umod = urdme(umod);
+
+next_state = umod.U(1:4, end);
+
+if any(~isfinite(next_state))
+    error('EPIDEMIC:InvalidState', 'URDME produced a non-finite SEIRS state.');
+end
+
+%% 5. Update Stepper
+stepper.call_count = stepper.call_count + 1;
+end
