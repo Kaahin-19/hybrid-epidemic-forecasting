@@ -12,8 +12,9 @@ function [ensemble_paths, fit_info] = forecast_closed(model_type, params, Rt_pas
 %       conditions, maps the observed history to the forecast-origin state,
 %       resamples centred residuals as innovations under resample_seed, and
 %       propagates closed-loop bootstrap paths on the Rt scale. The last observed
-%       Rt drives the first SIRS step; each forecast Rt drives the following step,
-%       whose output state determines the next exogenous covariate.
+%       Rt drives the first SIRS step; each forecast Rt drives the following step.
+%       For state-space models, each advanced SIRS state supplies the exogenous
+%       covariate for the matching future output and state transition.
 %       The susceptible-domain threshold is enforced both on entry to sirs_step
 %       (before beta is computed) and after each advance to guard the returned
 %       state. Fails fast if the series is constant, the history is too short,
@@ -46,7 +47,7 @@ function [ensemble_paths, fit_info] = forecast_closed(model_type, params, Rt_pas
 %   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS, FORECAST_OPEN, SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-15
-% Modified: 2026-08-15
+% Modified: 2026-08-20
 
 y = log(Rt_past);
 Rt_origin_driver = Rt_past(end);
@@ -181,22 +182,20 @@ for d = 1:num_draws
     x                  = x_origin;
     state              = sirs_state;
     Rt_driver          = Rt_origin_driver;
-    u_current          = U_past(end, :).';
     for h = 1:horizon
+        [state, stepper] = sirs_step(stepper, state, Rt_driver);
+        if state(1) <= min_susceptible
+            error('EPIDEMIC:SusceptibleBelowThreshold', 'Forecasted SIRS state crossed the susceptible-domain threshold.');
+        end
+        u_current = local_exo_col(state, exo_mode, pop_size);
         y_hat   = C * x + D * u_current;
         y_next  = y_hat + innovations(h, d);
         Rt_next = exp(y_next);
         if ~isfinite(Rt_next) || Rt_next <= 0
             error('FORECAST_CLOSED:InvalidForecastDraw', 'Bootstrap draw produced a non-finite or non-positive Rt.');
         end
-        [state, stepper] = sirs_step(stepper, state, Rt_driver);
-        if state(1) <= min_susceptible
-            error('EPIDEMIC:SusceptibleBelowThreshold', 'Forecasted SIRS state crossed the susceptible-domain threshold.');
-        end
-        u_next         = local_exo_col(state, exo_mode, pop_size);
         x              = A * x + B * u_current + K_gain * innovations(h, d);
         ensemble(h, d) = Rt_next;
-        u_current      = u_next;
         Rt_driver      = Rt_next;
     end
 end
