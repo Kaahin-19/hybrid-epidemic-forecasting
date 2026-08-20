@@ -3,18 +3,19 @@
 %   Description:
 %       Exports the Part A figures used to inspect synthetic Rt trajectories,
 %       fixed-lead forecast behaviour, window-level forecast accuracy,
-%       horizon-wise forecast degradation, and empirical interval coverage.
+%       horizon-wise forecast degradation, empirical interval coverage, and
+%       infected-state projection error relative to Rt persistence.
 %
 %   Workflow:
 %       1. Generate Rt scenario trajectory panels.
 %       2. Generate fixed-lead forecast comparison figures.
-%       3. Generate WIS distribution, horizon-wise WIS, and coverage figures.
+%       3. Generate Rt evaluation and infected-state projection figures.
 %
 %   See also PARTA_01_GENERATE_TRUTH, PARTA_03_RUN_FORECASTS, ...
 %            PARTA_04_EVALUATE_FORECASTS, PLOT_SERIES, PLOT_DISTRIBUTION.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-28
+% Modified: 2026-08-20
 
 %% 1. Initialization
 clear; close all; clc;
@@ -122,6 +123,7 @@ else
     window_scores    = evaluation.window_scores;
     horizon_summary  = evaluation.summaries.horizon_summary;
     interval_summary = evaluation.summaries.interval_summary;
+    i_projection_horizon_summary = evaluation.summaries.i_projection_horizon_summary;
 
     fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 9.5], 'Color', 'w');
 
@@ -172,6 +174,52 @@ else
     local_apply_legend(ax, h, labels, style, 4);
 
     exportgraphics(fig, fullfile(figure_dir, 'partA_05_coverage_summary.pdf'), 'ContentType', 'vector');
+    close(fig);
+
+    projection_groups = unique(i_projection_horizon_summary.Model + " / " + i_projection_horizon_summary.ExoMode, 'stable');
+    n_panels = numel(projection_groups);
+    n_cols   = ceil(sqrt(n_panels));
+    n_rows   = ceil(n_panels / n_cols);
+
+    projection_y_max = 1.05 * max([i_projection_horizon_summary.MeanForecastDrivenAbsoluteError; i_projection_horizon_summary.MeanPersistenceRtAbsoluteError]);
+
+    fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 11.5], 'Color', 'w');
+
+    tl = tiledlayout(fig, n_rows, n_cols, 'Padding', 'compact', 'TileSpacing', 'compact');
+
+    legend_handles = gobjects(0, 1);
+    legend_labels  = strings(0, 1);
+
+    for i = 1:n_panels
+        ax = nexttile(tl);
+        group_idx = i_projection_horizon_summary.Model + " / " + i_projection_horizon_summary.ExoMode == projection_groups(i);
+        group_summary = i_projection_horizon_summary(group_idx, :);
+
+        projection_series = local_i_projection_series(group_summary, style);
+        spec = struct('series', projection_series, 'style', struct('x_limits', [1, cfg.forecast.horizon], 'y_limits', [0, projection_y_max], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+
+        [h, labels] = plot_series(ax, spec);
+        title(ax, projection_groups(i), 'Interpreter', 'none', 'FontName', style.font_name, 'FontSize', style.axis_font_size, 'FontWeight', 'normal');
+
+        if i == 1
+            legend_handles = h;
+            legend_labels  = labels;
+        end
+    end
+
+    xlabel(tl, "Forecast horizon, {\it h} (days)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+    ylabel(tl, "Mean absolute error in infected population, {\it I}(t)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+
+    lg = legend(legend_handles, legend_labels);
+    lg.Interpreter = 'tex';
+    lg.FontName    = style.font_name;
+    lg.FontSize    = style.legend_font_size;
+    lg.Box         = 'off';
+    lg.Orientation = 'horizontal';
+    lg.NumColumns  = numel(legend_labels);
+    lg.Layout.Tile = 'north';
+
+    exportgraphics(fig, fullfile(figure_dir, 'partA_05_infected_projection_mae_by_horizon.pdf'), 'ContentType', 'vector');
     close(fig);
 end
 
@@ -279,6 +327,32 @@ for i = 1:numel(groups)
     series(i).marker_size = style.marker_size;
     series(i).label       = groups(i);
 end
+end
+
+function series = local_i_projection_series(summary, style)
+%LOCAL_I_PROJECTION_SERIES Build forecast-driven and persistence-Rt error series.
+[horizon_idx, order] = sort(summary.HorizonIdx);
+
+series = repmat(local_series_template(), 2, 1);
+
+series(1).type        = "line";
+series(1).x           = horizon_idx;
+series(1).y           = summary.MeanForecastDrivenAbsoluteError(order);
+series(1).color       = style.palette(4, :);
+series(1).line_width  = style.line_width;
+series(1).marker      = "o";
+series(1).marker_size = style.marker_size;
+series(1).label       = "Forecast-driven projection";
+
+series(2).type        = "line";
+series(2).x           = horizon_idx;
+series(2).y           = summary.MeanPersistenceRtAbsoluteError(order);
+series(2).color       = style.palette(1, :);
+series(2).line_style  = "--";
+series(2).line_width  = style.line_width;
+series(2).marker      = "s";
+series(2).marker_size = style.marker_size;
+series(2).label       = "Persistence-{\it R}_t projection";
 end
 
 function series = local_series_template()
