@@ -92,10 +92,10 @@ cfg.partB.robustness_cases = robustness_cases;
 
 %% 5. Model-Visible Rt Measurement Error
 cfg.partB.observation_noise.sigma_log      = 0.08;
-cfg.partB.observation_noise.num_replicates = 2;
+cfg.partB.observation_noise.num_replicates = 10;
 
 %% 6. Process Noise
-cfg.partB.process_noise.num_replicates        = 2;
+cfg.partB.process_noise.num_replicates        = 10;
 cfg.partB.process_noise.replicate_seed_stride = 1000;
 
 %% 7. SEIR/SEIRS Truth Parameters
