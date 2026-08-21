@@ -17,10 +17,10 @@ Usage:
 
 Description:
   Runs the final Part C Swedish COVID real-data transfer/adaptation study:
-    1. scripts/partC/partC_01_prepare_real_data.m
-    2. scripts/partC/partC_04_select_local_orders.m
-    3. scripts/partC/partC_02_run_forecasts.m
-    4. scripts/partC/partC_03_evaluate_models.m
+    1. scripts/partC/partC_01_prepare_data.m
+    2. scripts/partC/partC_02_select_local_orders.m
+    3. scripts/partC/partC_03_run_forecasts.m
+    4. scripts/partC/partC_04_evaluate_forecasts.m
     5. scripts/partC/partC_05_generate_figures.m
 
   The pipeline expects the downloaded WHO COVID-19 file:
@@ -259,23 +259,23 @@ log_status "Running final Part C real-data transfer/adaptation pipeline"
 
 run_matlab_script \
   "Preparing Part C real-data input" \
-  "partC_01_prepare_real_data" \
-  "scripts/partC/partC_01_prepare_real_data.m"
+  "partC_01_prepare_data" \
+  "scripts/partC/partC_01_prepare_data.m"
 
 run_matlab_script \
   "Selecting local Part C orders" \
-  "partC_04_select_local_orders" \
-  "scripts/partC/partC_04_select_local_orders.m"
+  "partC_02_select_local_orders" \
+  "scripts/partC/partC_02_select_local_orders.m"
 
 run_matlab_script \
   "Running Part C strategy forecasts" \
-  "partC_02_run_forecasts" \
-  "scripts/partC/partC_02_run_forecasts.m"
+  "partC_03_run_forecasts" \
+  "scripts/partC/partC_03_run_forecasts.m"
 
 run_matlab_script \
   "Evaluating Part C strategy performance" \
-  "partC_03_evaluate_models" \
-  "scripts/partC/partC_03_evaluate_models.m"
+  "partC_04_evaluate_forecasts" \
+  "scripts/partC/partC_04_evaluate_forecasts.m"
 
 run_matlab_script \
   "Generating Part C thesis figures" \

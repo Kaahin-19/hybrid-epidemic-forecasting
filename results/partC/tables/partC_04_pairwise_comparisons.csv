@@ -1,8 +1,8 @@
 ComparisonType,ModelOrStrategy,LeftLabel,RightLabel,DifferenceDefinition,NumMatchedOrigins,MeanWISDifference,MedianWISDifference,MinWISDifference,MaxWISDifference,ProportionLeftBetter,ProportionEqual,ProportionRightBetter
-"model_within_strategy","partA_online_fit","ARX/I","AR/None","ARX/I minus AR/None",22,-0.0108886798370315,-0.00641502712627741,-0.0400828077196289,0.00664047247471286,0.818181818181818,0,0.181818181818182
-"model_within_strategy","local_online_fit","ARX/I","AR/None","ARX/I minus AR/None",22,-0.0108886798370315,-0.00641502712627741,-0.0400828077196289,0.00664047247471286,0.818181818181818,0,0.181818181818182
+"model_within_strategy","partA_online_fit","ARX/I","AR/None","ARX/I minus AR/None",22,-0.0112253373354512,-0.00649924883064777,-0.0408168107596609,0.00608972092993221,0.818181818181818,0,0.181818181818182
+"model_within_strategy","local_online_fit","ARX/I","AR/None","ARX/I minus AR/None",22,-0.0112253373354512,-0.00649924883064777,-0.0408168107596609,0.00608972092993221,0.818181818181818,0,0.181818181818182
 "model_within_strategy","partA_fixed_fit","ARX/I","AR/None","ARX/I minus AR/None",22,-0.00079549631424943,-0.00295981786226139,-0.0247617134254031,0.0415719536992494,0.590909090909091,0,0.409090909090909
 "fixed_vs_online_within_model","AR/None","partA_fixed_fit","partA_online_fit","partA_fixed_fit minus partA_online_fit",22,-0.00863289207515187,-0.00668210199977821,-0.041964517758065,0.00993868756239508,0.818181818181818,0.0454545454545455,0.136363636363636
 "local_vs_partA_online_within_model","AR/None","local_online_fit","partA_online_fit","local_online_fit minus partA_online_fit",22,0,0,0,0,0,1,0
-"fixed_vs_online_within_model","ARX/I","partA_fixed_fit","partA_online_fit","partA_fixed_fit minus partA_online_fit",22,0.00146029144763017,0.00160954650063022,-0.0314058080000987,0.0279435469915202,0.454545454545455,0.0454545454545455,0.5
+"fixed_vs_online_within_model","ARX/I","partA_fixed_fit","partA_online_fit","partA_fixed_fit minus partA_online_fit",22,0.00179694894604994,0.00218330932929797,-0.0305512699049814,0.0278622709982361,0.454545454545455,0,0.545454545454545
 "local_vs_partA_online_within_model","ARX/I","local_online_fit","partA_online_fit","local_online_fit minus partA_online_fit",22,0,0,0,0,0,1,0
