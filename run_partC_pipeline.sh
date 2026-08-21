@@ -30,7 +30,7 @@ Description:
   every Part C stage, after startup has initialized config/, scripts/, and src/.
 
 Options:
-  --fresh     Clear data/partC/processed and results/partC before execution.
+  --fresh     Clear data/partC/prepared and results/partC before execution.
               Raw WHO CSV files under data/partC/raw/ are preserved.
   --help, -h  Show this help message.
 EOF
@@ -208,12 +208,12 @@ run_matlab_script() {
 }
 
 remove_partC_contents() {
-  printf 'Clearing existing Part C processed data and result artifacts...\n'
-  rm -rf "$REPO_ROOT/data/partC/processed" "$REPO_ROOT/results/partC"
+  printf 'Clearing existing Part C prepared data and result artifacts...\n'
+  rm -rf "$REPO_ROOT/data/partC/prepared" "$REPO_ROOT/results/partC"
 
   mkdir -p \
     "$REPO_ROOT/data/partC/raw" \
-    "$REPO_ROOT/data/partC/processed" \
+    "$REPO_ROOT/data/partC/prepared" \
     "$REPO_ROOT/results/partC/forecasts" \
     "$REPO_ROOT/results/partC/evaluation" \
     "$REPO_ROOT/results/partC/tables" \
