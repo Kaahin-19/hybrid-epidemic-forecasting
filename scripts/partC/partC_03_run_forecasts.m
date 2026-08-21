@@ -22,6 +22,7 @@
 %            SIRS_INIT, SIRS_STEP.
 %
 % A. M. Kaahin 2026-08-06
+% Modified: 2026-08-21
 
 %% 1. Initialization
 clear; close all; clc;
@@ -856,6 +857,7 @@ for draw_index = 1:num_draws
     stepper.seed = draw_seed;
     stepper.call_count = 0;
     state = sirs_state;
+    Rt_driver = Rt_past(end);
     draw_y = rolling_y;
     draw_U = rolling_U;
 
@@ -872,7 +874,7 @@ for draw_index = 1:num_draws
                 'Fixed ARX bootstrap draw produced a non-finite or non-positive Rt.');
         end
 
-        [state, stepper] = sirs_step(stepper, state, Rt_next);
+        [state, stepper] = sirs_step(stepper, state, Rt_driver);
         if state(1) <= min_susceptible
             error('EPIDEMIC:SusceptibleBelowThreshold', ...
                 'Forecasted SIRS state crossed the susceptible-domain threshold.');
@@ -881,6 +883,7 @@ for draw_index = 1:num_draws
         ensemble(horizon_index, draw_index) = Rt_next;
         draw_y(num_observations + horizon_index) = y_next;
         draw_U(num_observations + horizon_index) = state(2) / pop_size;
+        Rt_driver = Rt_next;
     end
 end
 end
