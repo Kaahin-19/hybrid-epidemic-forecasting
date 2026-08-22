@@ -20,22 +20,22 @@ function weights = serial_interval_weights(mean_days, sd_days, max_lag_days)
 % Modified: 2026-08-22
 
 %% 1. Parameter Domains
-if ~isscalar(mean_days) || ~isreal(mean_days) || ~isfinite(mean_days) || mean_days <= 0
-    error('EPIDEMIC:InvalidSerialIntervalMean', 'mean_days must be a finite positive real scalar.');
+if ~isfinite(mean_days) || mean_days <= 0
+    error('EPIDEMIC:InvalidSerialIntervalMean', 'mean_days must be finite and positive.');
 end
 
-if ~isscalar(sd_days) || ~isreal(sd_days) || ~isfinite(sd_days) || sd_days <= 0
-    error('EPIDEMIC:InvalidSerialIntervalSD', 'sd_days must be a finite positive real scalar.');
+if ~isfinite(sd_days) || sd_days <= 0
+    error('EPIDEMIC:InvalidSerialIntervalSD', 'sd_days must be finite and positive.');
 end
 
-if ~isscalar(max_lag_days) || ~isreal(max_lag_days) || ~isfinite(max_lag_days) || max_lag_days < 1 || max_lag_days ~= floor(max_lag_days)
+if ~isfinite(max_lag_days) || max_lag_days < 1 || max_lag_days ~= floor(max_lag_days)
     error('EPIDEMIC:InvalidSerialIntervalLag', 'max_lag_days must be a finite positive integer.');
 end
 
 %% 2. Gamma Discretization
 gamma_shape = (mean_days / sd_days)^2;
 gamma_scale = sd_days^2 / mean_days;
-lag_days = (1:max_lag_days)';
+lag_days = (1:max_lag_days).';
 
 upper_probability = gammainc(lag_days / gamma_scale, gamma_shape);
 lower_probability = gammainc((lag_days - 1) / gamma_scale, gamma_shape);

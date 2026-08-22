@@ -2,22 +2,22 @@
 %
 %   Description:
 %       Evaluates the six Part C held-out forecast artifacts against the
-%       operational Rt estimate derived from reported incidence. Computes WIS,
-%       point-error diagnostics, empirical interval coverage, and interval
+%       operational Rt estimates stored with their held-out targets. Computes
+%       WIS, point-error diagnostics, empirical interval coverage, and interval
 %       width by origin, lead time, interval level, model, and strategy.
 %       Matched strategy comparisons are descriptive because the forecast
 %       horizons overlap across successive origins.
 %
 %   Workflow:
-%       1. Load the prepared data and six held-out forecast artifacts.
-%       2. Score every forecast origin, lead time, and interval level.
-%       3. Build strategy, lead-time, and interval summaries.
-%       4. Compute matched descriptive WIS comparisons.
-%       5. Report equivalence of the two online strategies where applicable.
-%       6. Save one evaluation artifact and eight CSV tables.
+%       1. Load the six held-out forecast artifacts.
+%       2. Verify their common held-out forecast grid.
+%       3. Score every forecast origin, lead time, and interval level.
+%       4. Build strategy, lead-time, and interval summaries.
+%       5. Compute matched descriptive WIS comparisons.
+%       6. Report exact equivalence of the two online strategies.
+%       7. Save one evaluation artifact and eight CSV tables.
 %
-%   See also PARTC_CONFIG, PARTC_01_PREPARE_DATA,
-%            PARTC_03_RUN_FORECASTS, COMPUTE_WIS,
+%   See also PARTC_CONFIG, PARTC_03_RUN_FORECASTS, COMPUTE_WIS,
 %            COMPUTE_POINT_ERROR, COMPUTE_INTERVAL_DIAGNOSTICS.
 %
 % A. M. Kaahin 2026-08-06
@@ -30,13 +30,8 @@ fprintf('=== Part C Held-Out Forecast Evaluation ===\n');
 
 cfg = partC_config();
 
-prepared_artifact_path = cfg.output.prepared_artifact_path;
-forecast_artifact_paths = cfg.evaluation.expected_forecast_artifact_paths;
-target_description = "Operational Rt estimate derived from held-out reported-incidence data; not known epidemiological truth.";
-
-%% 2. Source Artifacts
-prepared = local_load_prepared_data(cfg);
-artifacts = local_load_forecast_artifacts(prepared, cfg);
+%% 2. Forecast Artifacts
+artifacts = local_load_forecast_artifacts(cfg);
 
 fprintf('Loaded six held-out forecast artifacts.\n');
 fprintf('Held-out origins per artifact: %d\n', numel(artifacts{1}.results));
@@ -57,10 +52,6 @@ pairwise_comparisons = local_pairwise_comparisons(origin_scores, cfg);
 online_equivalence = local_online_equivalence(artifacts);
 
 %% 5. Evaluation Artifact
-evaluation_snapshot = cfg.snapshot.evaluation;
-preparation_snapshot = prepared.preparation_snapshot;
-forecast_snapshot = cfg.snapshot.forecast;
-
 evaluation_payload = struct();
 evaluation_payload.origin_scores = origin_scores;
 evaluation_payload.horizon_scores = horizon_scores;
@@ -68,12 +59,6 @@ evaluation_payload.interval_scores = interval_scores;
 evaluation_payload.summaries = summaries;
 evaluation_payload.pairwise_comparisons = pairwise_comparisons;
 evaluation_payload.online_equivalence = online_equivalence;
-evaluation_payload.forecast_artifact_paths = forecast_artifact_paths;
-evaluation_payload.prepared_artifact_path = prepared_artifact_path;
-evaluation_payload.preparation_snapshot = preparation_snapshot;
-evaluation_payload.forecast_snapshot = forecast_snapshot;
-evaluation_payload.evaluation_snapshot = evaluation_snapshot;
-evaluation_payload.target_description = target_description;
 
 %% 6. Persistence
 if ~exist(cfg.output.evaluation_dir, 'dir')
@@ -129,41 +114,12 @@ end
 fprintf('=== Part C Held-Out Forecast Evaluation Complete ===\n\n');
 
 %% 8. Local Functions
-function prepared = local_load_prepared_data(cfg)
-%LOCAL_LOAD_PREPARED_DATA Load the compatible Script 1 artifact.
-
-artifact_path = cfg.output.prepared_artifact_path;
-
-if ~isfile(artifact_path)
-    error('PARTC_04:MissingPreparedArtifact', 'Missing prepared Part C artifact: %s. Run Part C Script 1 first.', artifact_path);
-end
-
-loaded = load(artifact_path);
-
-if ~isequaln(loaded.preparation_snapshot, cfg.snapshot.preparation)
-    error('PARTC_04:PreparationSnapshotMismatch', 'Prepared data do not match the current preparation configuration.');
-end
-
-if loaded.dates(1) ~= cfg.study.start_date || loaded.dates(end) ~= cfg.study.end_date
-    error('PARTC_04:PreparedStudyPeriodMismatch', 'Prepared data do not match the configured Part C study period.');
-end
-
-prepared = struct();
-prepared.dates = loaded.dates;
-prepared.Rt_estimated = loaded.Rt_estimated;
-prepared.Rt_valid_mask = loaded.Rt_valid_mask;
-prepared.preparation_snapshot = loaded.preparation_snapshot;
-prepared.artifact_path = artifact_path;
-
-end
-
-function artifacts = local_load_forecast_artifacts(prepared, cfg)
-%LOCAL_LOAD_FORECAST_ARTIFACTS Load the six compatible Script 3 artifacts.
+function artifacts = local_load_forecast_artifacts(cfg)
+%LOCAL_LOAD_FORECAST_ARTIFACTS Load the six Script 3 artifacts.
 
 artifact_paths = cfg.evaluation.expected_forecast_artifact_paths;
-strategies = cfg.final_forecast.strategies;
 configurations = cfg.final_forecast.configurations;
-local_configurations = cfg.local_selection.configurations;
+strategies = cfg.final_forecast.strategies;
 
 num_strategies = numel(strategies);
 artifacts = cell(numel(artifact_paths), 1);
@@ -179,7 +135,6 @@ for artifact_index = 1:numel(artifact_paths)
     strategy_index = mod(artifact_index - 1, num_strategies) + 1;
 
     expected_configuration = configurations(pair_index);
-    expected_local_configuration = local_configurations(pair_index);
     expected_strategy = strategies(strategy_index);
 
     artifact = load(artifact_path);
@@ -188,71 +143,59 @@ for artifact_index = 1:numel(artifact_paths)
         error('PARTC_04:ForecastIdentityMismatch', 'Forecast artifact identity does not match its configured model and strategy.');
     end
 
-    if ~isequaln(artifact.preparation_snapshot, cfg.snapshot.preparation) || ~isequaln(artifact.local_selection_snapshot, expected_local_configuration.local_selection_snapshot) || ~isequaln(artifact.forecast_snapshot, cfg.snapshot.forecast)
-        error('PARTC_04:ForecastSnapshotMismatch', 'Forecast artifact %s is incompatible with the current Part C configuration.', artifact_path);
-    end
-
-    if string(artifact.prepared_artifact_path) ~= string(prepared.artifact_path) || string(artifact.selection_artifact_path) ~= string(expected_configuration.selection_artifact_path)
-        error('PARTC_04:ForecastProvenanceMismatch', 'Forecast artifact %s references incompatible source artifacts.', artifact_path);
-    end
-
-    if expected_strategy.configuration_source == "partC_local_selection"
-        expected_forecast_configuration = artifact.local_selected_configuration;
-    else
-        expected_forecast_configuration = artifact.partA_selected_configuration;
-    end
-
-    if ~isequal(artifact.forecast_configuration, expected_forecast_configuration)
-        error('PARTC_04:StrategyConfigurationMismatch', 'Strategy %s does not use its required selected configuration.', expected_strategy.identifier);
-    end
-
-    if ~isequal(artifact.wis_alphas, cfg.final_forecast.wis_alphas)
-        error('PARTC_04:AlphaMismatch', 'Forecast artifact %s uses incompatible WIS alpha levels.', artifact_path);
-    end
-
     artifacts{artifact_index} = artifact;
 end
 
-local_validate_common_forecast_grid(artifacts, prepared, cfg);
+local_validate_common_forecast_grid(artifacts, cfg);
 
 end
 
-function local_validate_common_forecast_grid(artifacts, prepared, cfg)
-%LOCAL_VALIDATE_COMMON_FORECAST_GRID Require common origins and held-out targets.
+function local_validate_common_forecast_grid(artifacts, cfg)
+%LOCAL_VALIDATE_COMMON_FORECAST_GRID Require common held-out origins and targets.
 
 reference = artifacts{1};
+num_origins = numel(reference.results);
 
-reference_origin_indices = [reference.results.origin_index].';
-reference_origin_dates = [reference.results.origin_date].';
+if num_origins == 0
+    error('PARTC_04:MissingForecastOrigins', 'Forecast artifacts contain no held-out forecast origins.');
+end
+
+if reference.results(1).origin_date ~= cfg.validation.calibration_end_date
+    error('PARTC_04:HeldOutOriginMismatch', 'The first held-out forecast origin must equal the configured calibration end date.');
+end
+
+if reference.results(1).target_dates(1) ~= cfg.validation.test_start_date
+    error('PARTC_04:HeldOutTargetMismatch', 'The first held-out target must equal the configured test start date.');
+end
+
+if reference.results(end).target_dates(end) > cfg.study.end_date
+    error('PARTC_04:HeldOutTargetMismatch', 'Held-out forecast targets extend beyond the configured study period.');
+end
+
+for origin_position = 1:num_origins
+    if numel(reference.results(origin_position).target_dates) ~= cfg.final_forecast.horizon
+        error('PARTC_04:HorizonMismatch', 'Forecast origin %d does not contain the configured forecast horizon.', origin_position);
+    end
+end
 
 for artifact_index = 1:numel(artifacts)
     artifact = artifacts{artifact_index};
 
-    if ~isequal([artifact.results.origin_index].', reference_origin_indices) || ~isequal([artifact.results.origin_date].', reference_origin_dates)
-        error('PARTC_04:CommonOriginMismatch', 'All six forecast artifacts must use the same held-out forecast origins.');
+    if numel(artifact.results) ~= num_origins
+        error('PARTC_04:CommonOriginMismatch', 'All six forecast artifacts must contain the same number of forecast origins.');
     end
 
-    for origin_position = 1:numel(reference.results)
+    for origin_position = 1:num_origins
         reference_result = reference.results(origin_position);
         result = artifact.results(origin_position);
 
-        if ~isequal(result.target_indices, reference_result.target_indices) || ~isequal(result.target_dates, reference_result.target_dates) || ~isequal(result.target_Rt_estimated, reference_result.target_Rt_estimated)
+        if result.origin_date ~= reference_result.origin_date
+            error('PARTC_04:CommonOriginMismatch', 'All six forecast artifacts must use identical forecast origins.');
+        end
+
+        if ~isequal(result.target_dates, reference_result.target_dates) || ~isequal(result.target_Rt_estimated, reference_result.target_Rt_estimated)
             error('PARTC_04:CommonTargetMismatch', 'All six forecast artifacts must use identical held-out targets.');
         end
-    end
-end
-
-all_target_dates = vertcat(reference.results.target_dates);
-
-if reference_origin_dates(1) ~= cfg.validation.calibration_end_date || reference.results(1).target_dates(1) ~= cfg.validation.test_start_date || any(all_target_dates < cfg.validation.test_start_date) || any(all_target_dates > cfg.study.end_date)
-    error('PARTC_04:HeldOutGridMismatch', 'Forecast origins or targets fall outside the configured held-out period.');
-end
-
-for origin_position = 1:numel(reference.results)
-    result = reference.results(origin_position);
-
-    if ~isequal(result.target_Rt_estimated, prepared.Rt_estimated(result.target_indices))
-        error('PARTC_04:PreparedTargetMismatch', 'Forecast target does not match the prepared operational Rt estimate.');
     end
 end
 
@@ -282,15 +225,12 @@ end
 function [origin_table, horizon_table, interval_table, pointwise_table] = local_score_artifact(artifact)
 %LOCAL_SCORE_ARTIFACT Score one model-strategy artifact.
 
-model = string(artifact.model_type);
-exo_mode = string(artifact.exo_mode);
-strategy = string(artifact.strategy);
-strategy_description = string(artifact.strategy_description);
-configuration_source = string(artifact.configuration_source);
-parameter_update_mode = string(artifact.parameter_update_mode);
+model = artifact.model_type;
+exo_mode = artifact.exo_mode;
+strategy = artifact.strategy;
 forecast_configuration = string(mat2str(artifact.forecast_configuration));
 
-alphas = artifact.wis_alphas(:);
+alphas = artifact.wis_alphas;
 num_origins = numel(artifact.results);
 
 origin_rows = cell(num_origins, 1);
@@ -301,8 +241,8 @@ pointwise_rows = cell(num_origins, 1);
 for origin_position = 1:num_origins
     result = artifact.results(origin_position);
 
-    target_Rt = result.target_Rt_estimated(:);
-    median_Rt = result.forecast_median(:);
+    target_Rt = result.target_Rt_estimated;
+    median_Rt = result.forecast_median;
     lower_Rt = result.forecast_lower;
     upper_Rt = result.forecast_upper;
 
@@ -317,9 +257,9 @@ for origin_position = 1:num_origins
     horizon = numel(target_Rt);
     num_alphas = numel(alphas);
 
-    origin_rows{origin_position} = table(model, exo_mode, strategy, strategy_description, configuration_source, parameter_update_mode, forecast_configuration, origin_position, result.origin_index, result.origin_date, result.target_dates(1), result.target_dates(end), mean(pointwise_wis), point_error.rmse, point_error.mae, mean(point_error.error), mean(interval_diagnostics.coverage, 'all'), mean(interval_diagnostics.interval_width, 'all'), result.fit_AICc, 'VariableNames', {'Model', 'ExoMode', 'Strategy', 'StrategyDescription', 'ConfigurationSource', 'ParameterUpdateMode', 'ForecastConfiguration', 'OriginPosition', 'OriginIndex', 'OriginDate', 'TargetStartDate', 'TargetEndDate', 'MeanWIS', 'RMSE', 'MAE', 'MeanError', 'MeanCoverage', 'MeanIntervalWidth', 'FitAICc'});
+    origin_rows{origin_position} = table(model, exo_mode, strategy, forecast_configuration, origin_position, result.origin_date, result.target_dates(1), result.target_dates(end), mean(pointwise_wis), point_error.rmse, point_error.mae, mean(point_error.error), mean(interval_diagnostics.coverage, 'all'), mean(interval_diagnostics.interval_width, 'all'), 'VariableNames', {'Model', 'ExoMode', 'Strategy', 'ForecastConfiguration', 'OriginPosition', 'OriginDate', 'TargetStartDate', 'TargetEndDate', 'MeanWIS', 'RMSE', 'MAE', 'MeanError', 'MeanCoverage', 'MeanIntervalWidth'});
 
-    horizon_rows{origin_position} = table(repmat(model, horizon, 1), repmat(exo_mode, horizon, 1), repmat(strategy, horizon, 1), repmat(forecast_configuration, horizon, 1), repmat(origin_position, horizon, 1), repmat(result.origin_index, horizon, 1), repmat(result.origin_date, horizon, 1), (1:horizon).', result.target_indices, result.target_dates, target_Rt, median_Rt, point_error.error, point_error.absolute_error, point_error.squared_error, pointwise_wis, interval_diagnostics.coverage_mean, interval_diagnostics.width_mean, 'VariableNames', {'Model', 'ExoMode', 'Strategy', 'ForecastConfiguration', 'OriginPosition', 'OriginIndex', 'OriginDate', 'LeadTime', 'TargetIndex', 'TargetDate', 'TargetRtEstimated', 'MedianForecast', 'Error', 'AbsoluteError', 'SquaredError', 'WIS', 'MeanCoverage', 'MeanIntervalWidth'});
+    horizon_rows{origin_position} = table(repmat(model, horizon, 1), repmat(exo_mode, horizon, 1), repmat(strategy, horizon, 1), repmat(forecast_configuration, horizon, 1), repmat(origin_position, horizon, 1), repmat(result.origin_date, horizon, 1), (1:horizon).', result.target_dates, target_Rt, median_Rt, point_error.error, point_error.absolute_error, point_error.squared_error, pointwise_wis, interval_diagnostics.coverage_mean, interval_diagnostics.width_mean, 'VariableNames', {'Model', 'ExoMode', 'Strategy', 'ForecastConfiguration', 'OriginPosition', 'OriginDate', 'LeadTime', 'TargetDate', 'TargetRtEstimated', 'MedianForecast', 'Error', 'AbsoluteError', 'SquaredError', 'WIS', 'MeanCoverage', 'MeanIntervalWidth'});
 
     empirical_coverage = mean(interval_diagnostics.coverage, 1).';
     mean_interval_width = mean(interval_diagnostics.interval_width, 1).';
@@ -339,7 +279,7 @@ end
 function summary = local_strategy_summary(origin_scores)
 %LOCAL_STRATEGY_SUMMARY Summarize origin-level performance by strategy.
 
-keys = {'Model', 'ExoMode', 'Strategy', 'ForecastConfiguration', 'ConfigurationSource', 'ParameterUpdateMode'};
+keys = {'Model', 'ExoMode', 'Strategy', 'ForecastConfiguration'};
 identities = unique(origin_scores(:, keys), 'rows', 'stable');
 
 rows = cell(height(identities), 1);
@@ -349,7 +289,7 @@ for group_index = 1:height(identities)
     mask = local_identity_mask(origin_scores, identity, keys);
     group = origin_scores(mask, :);
 
-    rows{group_index} = table(identity.Model, identity.ExoMode, identity.Strategy, identity.ForecastConfiguration, identity.ConfigurationSource, identity.ParameterUpdateMode, height(group), mean(group.MeanWIS), median(group.MeanWIS), std(group.MeanWIS), min(group.MeanWIS), max(group.MeanWIS), mean(group.RMSE), mean(group.MAE), mean(group.MeanError), mean(group.MeanCoverage), mean(group.MeanIntervalWidth), 'VariableNames', {'Model', 'ExoMode', 'Strategy', 'ForecastConfiguration', 'ConfigurationSource', 'ParameterUpdateMode', 'NumOrigins', 'MeanOriginWIS', 'MedianOriginWIS', 'StdOriginWIS', 'MinOriginWIS', 'MaxOriginWIS', 'MeanRMSE', 'MeanMAE', 'MeanError', 'MeanCoverage', 'MeanIntervalWidth'});
+    rows{group_index} = table(identity.Model, identity.ExoMode, identity.Strategy, identity.ForecastConfiguration, height(group), mean(group.MeanWIS), median(group.MeanWIS), std(group.MeanWIS), min(group.MeanWIS), max(group.MeanWIS), mean(group.RMSE), mean(group.MAE), mean(group.MeanError), mean(group.MeanCoverage), mean(group.MeanIntervalWidth), 'VariableNames', {'Model', 'ExoMode', 'Strategy', 'ForecastConfiguration', 'NumOrigins', 'MeanOriginWIS', 'MedianOriginWIS', 'StdOriginWIS', 'MinOriginWIS', 'MaxOriginWIS', 'MeanRMSE', 'MeanMAE', 'MeanError', 'MeanCoverage', 'MeanIntervalWidth'});
 end
 
 summary = vertcat(rows{:});
@@ -415,16 +355,15 @@ function comparisons = local_pairwise_comparisons(origin_scores, cfg)
 
 rows = cell(7, 1);
 row_index = 0;
-strategies = cfg.evaluation.required_strategy_identifiers;
 
-for strategy_index = 1:numel(strategies)
-    strategy = strategies(strategy_index);
+for strategy_index = 1:numel(cfg.final_forecast.strategies)
+    strategy = cfg.final_forecast.strategies(strategy_index).identifier;
 
     left = origin_scores(origin_scores.Model == "ARX" & origin_scores.ExoMode == "I" & origin_scores.Strategy == strategy, :);
     right = origin_scores(origin_scores.Model == "AR" & origin_scores.ExoMode == "None" & origin_scores.Strategy == strategy, :);
 
     row_index = row_index + 1;
-    rows{row_index} = local_matched_comparison(left, right, "model_within_strategy", strategy, "ARX/I", "AR/None", "ARX/I minus AR/None", cfg.evaluation.wis_equality_tolerance);
+    rows{row_index} = local_matched_comparison(left, right, "model_within_strategy", strategy, "ARX/I", "AR/None", cfg.evaluation.wis_equality_tolerance);
 end
 
 models = [
@@ -440,24 +379,21 @@ for model_index = 1:size(models, 1)
     model_rows = origin_scores(origin_scores.Model == model & origin_scores.ExoMode == exo_mode, :);
 
     row_index = row_index + 1;
-    rows{row_index} = local_matched_comparison(model_rows(model_rows.Strategy == "partA_fixed_fit", :), model_rows(model_rows.Strategy == "partA_online_fit", :), "fixed_vs_online_within_model", model_label, "partA_fixed_fit", "partA_online_fit", "partA_fixed_fit minus partA_online_fit", cfg.evaluation.wis_equality_tolerance);
+    rows{row_index} = local_matched_comparison(model_rows(model_rows.Strategy == "partA_fixed_fit", :), model_rows(model_rows.Strategy == "partA_online_fit", :), "fixed_vs_online_within_model", model_label, "partA_fixed_fit", "partA_online_fit", cfg.evaluation.wis_equality_tolerance);
 
     row_index = row_index + 1;
-    rows{row_index} = local_matched_comparison(model_rows(model_rows.Strategy == "local_online_fit", :), model_rows(model_rows.Strategy == "partA_online_fit", :), "local_vs_partA_online_within_model", model_label, "local_online_fit", "partA_online_fit", "local_online_fit minus partA_online_fit", cfg.evaluation.wis_equality_tolerance);
+    rows{row_index} = local_matched_comparison(model_rows(model_rows.Strategy == "local_online_fit", :), model_rows(model_rows.Strategy == "partA_online_fit", :), "local_vs_partA_online_within_model", model_label, "local_online_fit", "partA_online_fit", cfg.evaluation.wis_equality_tolerance);
 end
 
 comparisons = vertcat(rows{:});
 
 end
 
-function row = local_matched_comparison(left, right, comparison_type, context, left_label, right_label, definition, tolerance)
-%LOCAL_MATCHED_COMPARISON Compare WIS across exactly matched forecast origins.
+function row = local_matched_comparison(left, right, comparison_type, context, left_label, right_label, tolerance)
+%LOCAL_MATCHED_COMPARISON Compare WIS across common forecast origins.
 
-left = sortrows(left, {'OriginIndex', 'OriginDate'});
-right = sortrows(right, {'OriginIndex', 'OriginDate'});
-
-if height(left) ~= height(right) || isempty(left) || ~isequal(left.OriginIndex, right.OriginIndex) || ~isequal(left.OriginDate, right.OriginDate)
-    error('PARTC_04:UnmatchedPairwiseOrigins', 'Comparison %s does not contain identical forecast origins.', definition);
+if isempty(left) || isempty(right) || height(left) ~= height(right)
+    error('PARTC_04:MissingPairwiseComparison', 'A planned matched WIS comparison is missing forecast origins.');
 end
 
 differences = left.MeanWIS - right.MeanWIS;
@@ -466,7 +402,7 @@ left_better = differences < -tolerance;
 equal = abs(differences) <= tolerance;
 right_better = differences > tolerance;
 
-row = table(comparison_type, context, left_label, right_label, definition, numel(differences), mean(differences), median(differences), min(differences), max(differences), mean(left_better), mean(equal), mean(right_better), 'VariableNames', {'ComparisonType', 'ModelOrStrategy', 'LeftLabel', 'RightLabel', 'DifferenceDefinition', 'NumMatchedOrigins', 'MeanWISDifference', 'MedianWISDifference', 'MinWISDifference', 'MaxWISDifference', 'ProportionLeftBetter', 'ProportionEqual', 'ProportionRightBetter'});
+row = table(comparison_type, context, left_label, right_label, numel(differences), mean(differences), median(differences), min(differences), max(differences), mean(left_better), mean(equal), mean(right_better), 'VariableNames', {'ComparisonType', 'ModelOrStrategy', 'LeftLabel', 'RightLabel', 'NumMatchedOrigins', 'MeanWISDifference', 'MedianWISDifference', 'MinWISDifference', 'MaxWISDifference', 'ProportionLeftBetter', 'ProportionEqual', 'ProportionRightBetter'});
 
 end
 
@@ -482,37 +418,19 @@ for pair_index = 1:2
     local_online = artifacts{base_index + 2};
 
     configurations_equal = isequal(partA_online.forecast_configuration, local_online.forecast_configuration);
+    forecasts_identical = true;
 
-    partA_median = vertcat(partA_online.results.forecast_median);
-    local_median = vertcat(local_online.results.forecast_median);
+    for origin_position = 1:numel(partA_online.results)
+        partA_result = partA_online.results(origin_position);
+        local_result = local_online.results(origin_position);
 
-    partA_lower = vertcat(partA_online.results.forecast_lower);
-    local_lower = vertcat(local_online.results.forecast_lower);
-
-    partA_upper = vertcat(partA_online.results.forecast_upper);
-    local_upper = vertcat(local_online.results.forecast_upper);
-
-    partA_targets = vertcat(partA_online.results.target_Rt_estimated);
-    local_targets = vertcat(local_online.results.target_Rt_estimated);
-
-    forecasts_identical = isequal(partA_median, local_median) && isequal(partA_lower, local_lower) && isequal(partA_upper, local_upper);
-    targets_identical = isequal(partA_targets, local_targets);
-
-    if configurations_equal && ~forecasts_identical
-        error('PARTC_04:OnlineEquivalenceFailure', 'Equal online configurations produced different forecasts for %s/%s.', partA_online.model_type, partA_online.exo_mode);
+        if ~isequal(partA_result.forecast_median, local_result.forecast_median) || ~isequal(partA_result.forecast_lower, local_result.forecast_lower) || ~isequal(partA_result.forecast_upper, local_result.forecast_upper)
+            forecasts_identical = false;
+            break;
+        end
     end
 
-    if ~targets_identical
-        error('PARTC_04:OnlineTargetMismatch', 'Online strategies do not use identical targets for %s/%s.', partA_online.model_type, partA_online.exo_mode);
-    end
-
-    if configurations_equal
-        interpretation = "The local configuration matched the Part A configuration, so local selection did not alter this model's held-out online forecasts.";
-    else
-        interpretation = "The local configuration differed from the Part A configuration, so exact online forecast equivalence was not required.";
-    end
-
-    rows{pair_index} = table(string(partA_online.model_type), string(partA_online.exo_mode), string(mat2str(partA_online.forecast_configuration)), string(mat2str(local_online.forecast_configuration)), configurations_equal, forecasts_identical, max(abs(partA_median - local_median), [], 'all'), max(abs(partA_lower - local_lower), [], 'all'), max(abs(partA_upper - local_upper), [], 'all'), targets_identical, interpretation, 'VariableNames', {'Model', 'ExoMode', 'PartAConfiguration', 'LocalConfiguration', 'ConfigurationsEqual', 'ForecastsExactlyIdentical', 'MaxMedianAbsoluteDifference', 'MaxLowerAbsoluteDifference', 'MaxUpperAbsoluteDifference', 'TargetsExactlyIdentical', 'Interpretation'});
+    rows{pair_index} = table(partA_online.model_type, partA_online.exo_mode, string(mat2str(partA_online.forecast_configuration)), string(mat2str(local_online.forecast_configuration)), configurations_equal, forecasts_identical, 'VariableNames', {'Model', 'ExoMode', 'PartAConfiguration', 'LocalConfiguration', 'ConfigurationsEqual', 'ForecastsExactlyIdentical'});
 end
 
 equivalence = vertcat(rows{:});

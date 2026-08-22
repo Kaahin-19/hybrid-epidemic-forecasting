@@ -83,7 +83,7 @@ fprintf('=== Part C Thesis Figure Generation Complete ===\n\n');
 
 %% 5. Local Functions
 function prepared = local_load_prepared_artifact(cfg)
-%LOCAL_LOAD_PREPARED_ARTIFACT Load the compatible Script 1 artifact.
+%LOCAL_LOAD_PREPARED_ARTIFACT Load the Script 1 prepared data.
 
 artifact_path = cfg.output.prepared_artifact_path;
 
@@ -91,25 +91,14 @@ if ~isfile(artifact_path)
     error('PARTC_05:MissingPreparedArtifact', 'Missing prepared Part C artifact: %s. Run Part C Script 1 first.', artifact_path);
 end
 
-prepared = load(artifact_path);
-
-if ~isequaln(prepared.preparation_snapshot, cfg.snapshot.preparation)
-    error('PARTC_05:PreparationSnapshotMismatch', 'Prepared data do not match the current preparation configuration.');
-end
-
-prepared.artifact_path = artifact_path;
-prepared.num_observations = numel(prepared.dates);
+prepared = load(artifact_path, 'dates', 'incidence_observed', 'Rt_estimated', 'S_proxy', 'I_fraction_proxy', 'R_proxy');
 
 end
 
 function artifacts = local_load_forecast_artifacts(cfg)
-%LOCAL_LOAD_FORECAST_ARTIFACTS Load the six compatible Script 3 artifacts.
+%LOCAL_LOAD_FORECAST_ARTIFACTS Load the six Script 3 forecast artifacts.
 
 artifact_paths = cfg.evaluation.expected_forecast_artifact_paths;
-configurations = cfg.final_forecast.configurations;
-strategies = cfg.final_forecast.strategies;
-
-num_strategies = numel(strategies);
 artifacts = cell(numel(artifact_paths), 1);
 
 for artifact_index = 1:numel(artifact_paths)
@@ -119,29 +108,13 @@ for artifact_index = 1:numel(artifact_paths)
         error('PARTC_05:MissingForecastArtifact', 'Missing required forecast artifact: %s. Run Part C Script 3 first.', artifact_path);
     end
 
-    pair_index = ceil(artifact_index / num_strategies);
-    strategy_index = mod(artifact_index - 1, num_strategies) + 1;
-
-    artifact = load(artifact_path);
-
-    expected_configuration = configurations(pair_index);
-    expected_strategy = strategies(strategy_index);
-
-    if artifact.model_type ~= expected_configuration.model_type || artifact.exo_mode ~= expected_configuration.exo_mode || artifact.strategy ~= expected_strategy.identifier
-        error('PARTC_05:ForecastIdentityMismatch', 'Forecast artifact identity does not match its configured model and strategy: %s.', artifact_path);
-    end
-
-    if ~isequaln(artifact.preparation_snapshot, cfg.snapshot.preparation) || ~isequaln(artifact.forecast_snapshot, cfg.snapshot.forecast)
-        error('PARTC_05:ForecastSnapshotMismatch', 'Forecast artifact does not match the current Part C configuration: %s.', artifact_path);
-    end
-
-    artifacts{artifact_index} = artifact;
+    artifacts{artifact_index} = load(artifact_path, 'model_type', 'exo_mode', 'strategy', 'forecast_configuration', 'wis_alphas', 'results');
 end
 
 end
 
 function evaluation = local_load_evaluation_artifact(cfg)
-%LOCAL_LOAD_EVALUATION_ARTIFACT Load the compatible Script 4 artifact.
+%LOCAL_LOAD_EVALUATION_ARTIFACT Load the Script 4 evaluation artifact.
 
 artifact_path = fullfile(cfg.output.evaluation_dir, "partC_04_evaluation_results.mat");
 
@@ -149,25 +122,16 @@ if ~isfile(artifact_path)
     error('PARTC_05:MissingEvaluationArtifact', 'Missing evaluation artifact: %s. Run Part C Script 4 first.', artifact_path);
 end
 
-evaluation = load(artifact_path);
-
-if ~isequaln(evaluation.preparation_snapshot, cfg.snapshot.preparation) || ~isequaln(evaluation.forecast_snapshot, cfg.snapshot.forecast) || ~isequaln(evaluation.evaluation_snapshot, cfg.snapshot.evaluation)
-    error('PARTC_05:EvaluationSnapshotMismatch', 'Evaluation results do not match the current Part C configuration.');
-end
-
-evaluation.artifact_path = artifact_path;
+evaluation = load(artifact_path, 'origin_scores', 'summaries', 'pairwise_comparisons', 'online_equivalence');
 
 end
 
 function local_generate_data_overview(prepared, cfg, style, output_path)
 %LOCAL_GENERATE_DATA_OVERVIEW Generate incidence and operational-Rt panels.
 
-num_observations = prepared.num_observations;
-dates = prepared.dates(1:num_observations);
-incidence = prepared.incidence_observed(1:num_observations);
-
-Rt_plot = prepared.Rt_estimated(1:num_observations);
-Rt_plot(~prepared.Rt_valid_mask(1:num_observations)) = NaN;
+dates = prepared.dates;
+incidence = prepared.incidence_observed;
+Rt_plot = prepared.Rt_estimated;
 
 fig = local_new_figure([2, 2, 17.0, 12.0]);
 layout = tiledlayout(fig, 2, 1, 'Padding', 'compact', 'TileSpacing', 'compact');
@@ -215,13 +179,10 @@ function local_generate_sirs_proxy_states(prepared, cfg, style, output_path)
 
 dates = prepared.dates;
 population = cfg.state_reconstruction.effective_population;
-state_valid = prepared.state_valid_mask;
 
 fractions = [
     prepared.S_proxy / population, prepared.I_fraction_proxy, prepared.R_proxy / population
     ];
-
-fractions(~state_valid, :) = NaN;
 
 y_labels = [
     "Susceptible proxy fraction, S/N"
@@ -235,6 +196,8 @@ colors = [
     style.proxy_recovered
     ];
 
+panel_labels = ["(a)", "(b)", "(c)"];
+
 fig = local_new_figure([2, 2, 17.0, 15.0]);
 layout = tiledlayout(fig, 3, 1, 'Padding', 'compact', 'TileSpacing', 'compact');
 
@@ -244,11 +207,10 @@ for panel_index = 1:3
     ax = nexttile(layout);
 
     values = fractions(:, panel_index);
-    valid_values = values(isfinite(values));
 
     series = [
         local_line_series(dates, values, colors(panel_index, :), "-", "", style.line_width)
-        local_vertical_reference(cfg.validation.test_start_date, valid_values, style)
+        local_vertical_reference(cfg.validation.test_start_date, values, style)
         ];
 
     spec = struct('series', series, 'style', local_axis_style("", y_labels(panel_index), style));
@@ -258,7 +220,7 @@ for panel_index = 1:3
     xlim(ax, [dates(1), dates(end)]);
     xtickformat(ax, 'MMM yyyy');
 
-    local_panel_label(ax, "(" + char('a' + panel_index - 1) + ")", style);
+    local_panel_label(ax, panel_labels(panel_index), style);
 end
 
 local_export_and_close(fig, output_path);
@@ -281,24 +243,31 @@ figure_height = 6.2 * num_rows + 1.8;
 held_out_mask = prepared.dates >= cfg.validation.test_start_date;
 held_out_dates = prepared.dates(held_out_mask);
 held_out_Rt = prepared.Rt_estimated(held_out_mask);
-held_out_valid = prepared.Rt_valid_mask(held_out_mask);
-
-held_out_Rt(~held_out_valid) = NaN;
 
 panel_data = cell(num_panels, 1);
-displayed_value_blocks = cell(num_panels + 1, 1);
-displayed_value_blocks{1} = held_out_Rt(isfinite(held_out_Rt));
+
+data_minimum = min(held_out_Rt);
+data_maximum = max(held_out_Rt);
 
 for panel_index = 1:num_panels
     panel_data{panel_index} = local_extract_fixed_lead(panels(panel_index).artifact, lead_time, plot_alphas);
 
     data = panel_data{panel_index};
-    displayed_value_blocks{panel_index + 1} = [data.target_Rt; data.median; data.lower(:); data.upper(:)];
+
+    data_minimum = min(data_minimum, min(data.target_Rt));
+    data_minimum = min(data_minimum, min(data.median));
+    data_minimum = min(data_minimum, min(data.lower, [], 'all'));
+    data_minimum = min(data_minimum, min(data.upper, [], 'all'));
+
+    data_maximum = max(data_maximum, max(data.target_Rt));
+    data_maximum = max(data_maximum, max(data.median));
+    data_maximum = max(data_maximum, max(data.lower, [], 'all'));
+    data_maximum = max(data_maximum, max(data.upper, [], 'all'));
 end
 
-all_displayed_values = vertcat(displayed_value_blocks{:});
+[common_lower, common_upper] = local_forecast_axis_limits(data_minimum, data_maximum);
 
-[common_lower, common_upper] = local_forecast_axis_limits(all_displayed_values);
+panel_labels = ["(a)", "(b)", "(c)", "(d)", "(e)", "(f)"];
 
 fig = local_new_figure([2, 2, 17.5, figure_height]);
 layout = tiledlayout(fig, num_rows, num_columns, 'Padding', 'compact', 'TileSpacing', 'compact');
@@ -326,7 +295,7 @@ for panel_index = 1:num_panels
 
     title(ax, panels(panel_index).title, 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal', 'Interpreter', 'tex');
 
-    local_panel_label(ax, "(" + char('a' + panel_index - 1) + ")", style);
+    local_panel_label(ax, panel_labels(panel_index), style);
 
     if panel_index == 1
         legend_handles = handles;
@@ -393,10 +362,6 @@ alpha_columns = zeros(num_alphas, 1);
 
 for alpha_index = 1:num_alphas
     alpha_columns(alpha_index) = find(artifact.wis_alphas == plot_alphas(alpha_index), 1);
-
-    if isempty(alpha_columns(alpha_index))
-        error('PARTC_05:MissingPlotAlpha', 'Configured plotting alpha %.3g is not present in the forecast artifact.', plot_alphas(alpha_index));
-    end
 end
 
 for origin_position = 1:num_origins
@@ -442,13 +407,10 @@ series(4).marker_size = style.marker_size;
 
 end
 
-function [lower_limit, upper_limit] = local_forecast_axis_limits(values)
+function [lower_limit, upper_limit] = local_forecast_axis_limits(data_minimum, data_maximum)
 %LOCAL_FORECAST_AXIS_LIMITS Compute common forecast-axis limits.
 
-data_minimum = min(values);
-data_maximum = max(values);
 data_range = data_maximum - data_minimum;
-
 padding = 0.05 * max([data_range, abs(data_maximum), eps]);
 
 lower_limit = max(0, data_minimum - padding);
@@ -602,10 +564,6 @@ for model_index = 1:size(models, 1)
     fixed_rows = sortrows(model_rows(model_rows.Strategy == "partA_fixed_fit", :), x_variable);
 
     if collapse
-        if ~isequal(partA_rows.(x_variable), local_rows.(x_variable)) || ~isequal(partA_rows.(y_variable), local_rows.(y_variable))
-            error('PARTC_05:CollapsedSummaryMismatch', 'Exactly equivalent online forecasts have inconsistent stored summaries.');
-        end
-
         next_series = local_line_series(partA_rows.(x_variable), partA_rows.(y_variable), model_color, "-", model_label + " online — Part A/local identical", style.line_width);
         next_series.marker = "o";
         next_series.marker_size = style.marker_size;
@@ -644,7 +602,7 @@ function local_generate_pairwise_wis_differences(comparisons, style, output_path
 differences = comparisons.MeanWISDifference;
 num_comparisons = numel(differences);
 
-positions = (1:num_comparisons)';
+positions = (1:num_comparisons).';
 labels = strings(num_comparisons, 1);
 
 for comparison_index = 1:num_comparisons
@@ -699,7 +657,7 @@ local_export_and_close(fig, output_path);
 end
 
 function label = local_comparison_label(row)
-%LOCAL_COMPARISON_LABEL Build a concise stored-orientation label.
+%LOCAL_COMPARISON_LABEL Build a concise comparison label.
 
 context = local_pretty_identity(row.ModelOrStrategy);
 left = local_pretty_identity(row.LeftLabel);
@@ -711,8 +669,6 @@ end
 
 function label = local_pretty_identity(identifier)
 %LOCAL_PRETTY_IDENTITY Convert stored identifiers to display labels.
-
-identifier = string(identifier);
 
 switch identifier
     case "partA_online_fit"
@@ -743,7 +699,7 @@ end
 function local_export_and_close(fig, output_path)
 %LOCAL_EXPORT_AND_CLOSE Export one vector PDF and close its figure.
 
-exportgraphics(fig, char(output_path), 'ContentType', 'vector');
+exportgraphics(fig, output_path, 'ContentType', 'vector');
 close(fig);
 
 end
@@ -811,7 +767,7 @@ end
 function local_shared_legend(ax, handles, labels, style, num_columns)
 %LOCAL_SHARED_LEGEND Place a boxless legend in the outer south tile.
 
-legend_handle = legend(ax, handles, cellstr(labels), 'Box', 'off', 'FontName', style.font_name, 'FontSize', style.legend_font_size, 'NumColumns', num_columns, 'Interpreter', 'tex');
+legend_handle = legend(ax, handles, labels, 'Box', 'off', 'FontName', style.font_name, 'FontSize', style.legend_font_size, 'NumColumns', num_columns, 'Interpreter', 'tex');
 legend_handle.Layout.Tile = 'south';
 
 end
@@ -819,14 +775,14 @@ end
 function local_axes_legend(ax, handles, labels, style, num_columns)
 %LOCAL_AXES_LEGEND Place a boxless legend outside a single axes.
 
-legend(ax, handles, cellstr(labels), 'Location', 'southoutside', 'Box', 'off', 'FontName', style.font_name, 'FontSize', style.legend_font_size, 'NumColumns', num_columns, 'Interpreter', 'tex');
+legend(ax, handles, labels, 'Location', 'southoutside', 'Box', 'off', 'FontName', style.font_name, 'FontSize', style.legend_font_size, 'NumColumns', num_columns, 'Interpreter', 'tex');
 
 end
 
 function color = local_model_color(model, style)
 %LOCAL_MODEL_COLOR Return the fixed colour for one model.
 
-if string(model) == "AR"
+if model == "AR"
     color = style.model.AR;
 else
     color = style.model.ARX;
@@ -840,7 +796,7 @@ function labels = local_model_labels(models, exo_modes)
 labels = strings(numel(models), 1);
 
 for row_index = 1:numel(models)
-    if string(models(row_index)) == "AR"
+    if models(row_index) == "AR"
         labels(row_index) = "AR / None";
     else
         labels(row_index) = local_model_label(models(row_index), exo_modes(row_index));
@@ -852,10 +808,10 @@ end
 function label = local_model_label(model, exo_mode)
 %LOCAL_MODEL_LABEL Return one readable model/exogenous label.
 
-if string(model) == "AR"
+if model == "AR"
     label = "AR";
 else
-    label = string(model) + "/" + string(exo_mode);
+    label = model + "/" + exo_mode;
 end
 
 end

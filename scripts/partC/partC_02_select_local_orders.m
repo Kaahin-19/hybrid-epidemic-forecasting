@@ -38,7 +38,7 @@ if ~exist(cfg.output.model_selection_dir, 'dir')
 end
 
 %% 2. Calibration Data
-[calibration, preparation_snapshot] = local_load_calibration_data(cfg);
+calibration = local_load_calibration_data(cfg);
 
 fprintf('Calibration period: %s to %s\n', string(calibration.dates(1)), string(calibration.dates(end)));
 
@@ -74,28 +74,16 @@ for configuration_index = 1:numel(configurations)
     candidate_origin_mean_wis = nan(num_candidates, num_origins);
     candidate_feasible_mask = false(num_candidates, 1);
 
-    failure_record_template = struct("candidate_index", NaN, "candidate_configuration", [], "forecast_origin_index", NaN, "forecast_origin_date", NaT, "error_identifier", "", "error_message", "");
-    candidate_failure_records = repmat(failure_record_template, num_candidates, 1);
-    num_failure_records = 0;
-
     for candidate_index = 1:num_candidates
         candidate_configuration = candidate_configurations(candidate_index, :);
 
         fprintf('Evaluating candidate %d/%d: %s\n', candidate_index, num_candidates, mat2str(candidate_configuration));
 
-        [origin_mean_wis, failure_record] = local_evaluate_candidate(active_configuration, candidate_configuration, candidate_index, calibration, forecast_origin_indices, base_stepper, cfg);
+        [origin_mean_wis, candidate_feasible] = local_evaluate_candidate(active_configuration, candidate_configuration, candidate_index, calibration, forecast_origin_indices, base_stepper, cfg);
 
-        candidate_origin_mean_wis(candidate_index, :) = origin_mean_wis.';
-
-        if isempty(failure_record)
-            candidate_feasible_mask(candidate_index) = true;
-        else
-            num_failure_records = num_failure_records + 1;
-            candidate_failure_records(num_failure_records) = failure_record;
-        end
+        candidate_origin_mean_wis(candidate_index, :) = origin_mean_wis;
+        candidate_feasible_mask(candidate_index) = candidate_feasible;
     end
-
-    candidate_failure_records = candidate_failure_records(1:num_failure_records);
 
     %% 4. One-Standard-Error Selection
     feasible_indices = find(candidate_feasible_mask);
@@ -113,14 +101,10 @@ for configuration_index = 1:numel(configurations)
     [best_mean_wis, best_position] = min(candidate_mean_wis(feasible_indices));
 
     numerically_best_index = feasible_indices(best_position);
-    numerically_best_configuration = candidate_configurations(numerically_best_index, :);
     selection_threshold = best_mean_wis + candidate_se_wis(numerically_best_index);
     eligible_indices = find(candidate_feasible_mask & candidate_mean_wis <= selection_threshold);
 
-    eligible_ranking = [
-        candidate_complexity(eligible_indices), candidate_mean_wis(eligible_indices), eligible_indices
-        ];
-
+    eligible_ranking = [candidate_complexity(eligible_indices), candidate_mean_wis(eligible_indices), eligible_indices];
     eligible_ranking = sortrows(eligible_ranking, [1, 2, 3]);
 
     selected_index = eligible_ranking(1, 3);
@@ -131,31 +115,17 @@ for configuration_index = 1:numel(configurations)
 
     artifact.model_type = model_type;
     artifact.exo_mode = exo_mode;
-    artifact.strategy = "local_order_online_fit";
-    artifact.partA_selection_artifact_path = active_configuration.partA_selection_artifact_path;
     artifact.partA_selected_configuration = partA_selected_configuration;
     artifact.candidate_configurations = candidate_configurations;
-    artifact.candidate_complexity = candidate_complexity;
     artifact.candidate_feasible_mask = candidate_feasible_mask;
-    artifact.candidate_failure_records = candidate_failure_records;
-    artifact.calibration_dates = calibration.dates;
-    artifact.calibration_end_date = cfg.validation.calibration_end_date;
-    artifact.test_start_date = cfg.validation.test_start_date;
-    artifact.forecast_origin_indices = forecast_origin_indices;
     artifact.forecast_origin_dates = forecast_origin_dates;
     artifact.candidate_origin_mean_wis = candidate_origin_mean_wis;
     artifact.candidate_mean_wis = candidate_mean_wis;
     artifact.candidate_se_wis = candidate_se_wis;
     artifact.numerically_best_index = numerically_best_index;
-    artifact.numerically_best_configuration = numerically_best_configuration;
     artifact.selection_threshold = selection_threshold;
-    artifact.eligible_indices = eligible_indices;
     artifact.selected_index = selected_index;
     artifact.selected_configuration = selected_configuration;
-    artifact.selection_rule = cfg.local_selection.selection_rule;
-    artifact.prepared_artifact_path = cfg.output.prepared_artifact_path;
-    artifact.preparation_snapshot = preparation_snapshot;
-    artifact.local_selection_snapshot = active_configuration.local_selection_snapshot;
 
     save(active_configuration.local_selection_artifact_path, '-struct', 'artifact');
 
@@ -169,33 +139,24 @@ end
 fprintf('\n=== Part C Local Configuration Selection Complete ===\n\n');
 
 %% 6. Local Functions
-function [calibration, preparation_snapshot] = local_load_calibration_data(cfg)
+function calibration = local_load_calibration_data(cfg)
 %LOCAL_LOAD_CALIBRATION_DATA Load the prepared chronological calibration block.
 
-prepared_artifact_path = cfg.output.prepared_artifact_path;
+artifact_path = cfg.output.prepared_artifact_path;
 
-if ~isfile(prepared_artifact_path)
-    error('PARTC_02:MissingPreparedArtifact', 'Missing prepared Part C artifact: %s. Run Part C Script 1 first.', prepared_artifact_path);
+if ~isfile(artifact_path)
+    error('PARTC_02:MissingPreparedArtifact', 'Missing prepared Part C artifact: %s. Run Part C Script 1 first.', artifact_path);
 end
 
-prepared = load(prepared_artifact_path);
+prepared = load(artifact_path, 'dates', 'Rt_estimated', 'Rt_valid_mask', 'I_fraction_proxy', 'S_proxy', 'I_proxy', 'R_proxy');
 
-if ~isequaln(prepared.preparation_snapshot, cfg.snapshot.preparation)
-    error('PARTC_02:PreparationSnapshotMismatch', 'Prepared Part C artifact does not match the current preparation configuration.');
+calibration_end_index = find(prepared.dates == cfg.validation.calibration_end_date, 1);
+
+if isempty(calibration_end_index)
+    error('PARTC_02:MissingCalibrationBoundary', 'Prepared data do not contain the configured calibration end date.');
 end
 
-dates = prepared.dates;
-Rt_estimated = prepared.Rt_estimated;
-Rt_valid_mask = prepared.Rt_valid_mask;
-
-calibration_end_index = find(dates == cfg.validation.calibration_end_date, 1);
-test_start_index = find(dates == cfg.validation.test_start_date, 1);
-
-if isempty(calibration_end_index) || isempty(test_start_index)
-    error('PARTC_02:MissingValidationBoundary', 'Prepared data do not contain the configured calibration/test boundary.');
-end
-
-first_valid_index = find(Rt_valid_mask & dates <= cfg.validation.calibration_end_date, 1);
+first_valid_index = find(prepared.Rt_valid_mask & prepared.dates <= cfg.validation.calibration_end_date, 1);
 
 if isempty(first_valid_index)
     error('PARTC_02:NoValidCalibrationRt', 'No valid Rt estimate exists in the calibration period.');
@@ -203,24 +164,18 @@ end
 
 calibration_indices = first_valid_index:calibration_end_index;
 
-if any(~Rt_valid_mask(calibration_indices))
-    invalid_index = calibration_indices(find(~Rt_valid_mask(calibration_indices), 1));
-    error('PARTC_02:InvalidCalibrationRt', 'Rt_estimated is invalid inside the calibration block on %s.', string(dates(invalid_index)));
-end
-
-if any(~prepared.state_valid_mask(calibration_indices))
-    error('PARTC_02:InvalidCalibrationState', 'The calibration block contains an invalid SIRS proxy state.');
+if any(~prepared.Rt_valid_mask(calibration_indices))
+    invalid_index = calibration_indices(find(~prepared.Rt_valid_mask(calibration_indices), 1));
+    error('PARTC_02:InvalidCalibrationRt', 'Rt_estimated is invalid inside the calibration block on %s.', string(prepared.dates(invalid_index)));
 end
 
 calibration = struct();
-calibration.dates = dates(calibration_indices);
-calibration.Rt = Rt_estimated(calibration_indices);
+calibration.dates = prepared.dates(calibration_indices);
+calibration.Rt = prepared.Rt_estimated(calibration_indices);
 calibration.I_fraction_proxy = prepared.I_fraction_proxy(calibration_indices);
 calibration.S_proxy = prepared.S_proxy(calibration_indices);
 calibration.I_proxy = prepared.I_proxy(calibration_indices);
 calibration.R_proxy = prepared.R_proxy(calibration_indices);
-
-preparation_snapshot = prepared.preparation_snapshot;
 
 end
 
@@ -232,7 +187,7 @@ min_window = cfg.local_selection.min_window;
 step_size = cfg.local_selection.step_size;
 last_origin_index = numel(calibration_dates) - horizon;
 
-forecast_origin_indices = (min_window:step_size:last_origin_index)';
+forecast_origin_indices = (min_window:step_size:last_origin_index).';
 
 if isempty(forecast_origin_indices)
     error('PARTC_02:NoCalibrationOrigins', 'The calibration series is too short for the configured forecast protocol.');
@@ -243,7 +198,7 @@ forecast_origin_dates = calibration_dates(forecast_origin_indices);
 end
 
 function selected_configuration = local_load_partA_baseline(active_configuration)
-%LOCAL_LOAD_PARTA_BASELINE Load the compatible Part A selected configuration.
+%LOCAL_LOAD_PARTA_BASELINE Load the Part A selected configuration.
 
 artifact_path = active_configuration.partA_selection_artifact_path;
 
@@ -251,12 +206,7 @@ if ~isfile(artifact_path)
     error('PARTC_02:MissingPartABaseline', 'Missing Part A %s/%s selection artifact: %s.', active_configuration.model_type, active_configuration.exo_mode, artifact_path);
 end
 
-selection = load(artifact_path);
-
-if ~isequaln(selection.snapshot, active_configuration.partA_selection_snapshot)
-    error('PARTC_02:PartABaselineSnapshotMismatch', 'Part A %s/%s artifact does not match the current selection configuration.', active_configuration.model_type, active_configuration.exo_mode);
-end
-
+selection = load(artifact_path, 'selected_configuration');
 selected_configuration = selection.selected_configuration;
 
 end
@@ -266,7 +216,7 @@ function candidate_configurations = local_construct_candidate_grid(partA_configu
 
 switch model_type
     case "AR"
-        candidate_configurations = ((partA_configuration - order_radius):(partA_configuration + order_radius))';
+        candidate_configurations = ((partA_configuration - order_radius):(partA_configuration + order_radius)).';
         candidate_configurations = candidate_configurations(candidate_configurations >= 1);
 
     case "ARX"
@@ -308,21 +258,17 @@ end
 
 end
 
-function [origin_mean_wis, failure_record] = local_evaluate_candidate(active_configuration, candidate_configuration, candidate_index, calibration, forecast_origin_indices, base_stepper, cfg)
+function [origin_mean_wis, candidate_feasible] = local_evaluate_candidate(active_configuration, candidate_configuration, candidate_index, calibration, forecast_origin_indices, base_stepper, cfg)
 %LOCAL_EVALUATE_CANDIDATE Refit and score one candidate at every origin.
 
 num_origins = numel(forecast_origin_indices);
 horizon = cfg.local_selection.horizon;
 wis_alphas = cfg.local_selection.wis_alphas;
 
-origin_mean_wis = nan(num_origins, 1);
+origin_mean_wis = nan(1, num_origins);
+candidate_feasible = true;
 
-failure_record = struct("candidate_index", {}, "candidate_configuration", {}, "forecast_origin_index", {}, "forecast_origin_date", {}, "error_identifier", {}, "error_message", {});
-
-recognized_failures = [
-    "FORECAST_CLOSED:InvalidForecastDraw"
-    "EPIDEMIC:SusceptibleBelowThreshold"
-    ];
+recognized_failures = {'FORECAST_CLOSED:InvalidForecastDraw', 'EPIDEMIC:SusceptibleBelowThreshold'};
 
 for origin_position = 1:num_origins
     origin_index = forecast_origin_indices(origin_position);
@@ -362,8 +308,8 @@ for origin_position = 1:num_origins
         origin_mean_wis(origin_position) = mean(horizon_wis);
 
     catch ME
-        if any(string(ME.identifier) == recognized_failures)
-            failure_record = struct("candidate_index", candidate_index, "candidate_configuration", candidate_configuration, "forecast_origin_index", origin_index, "forecast_origin_date", origin_date, "error_identifier", string(ME.identifier), "error_message", string(ME.message));
+        if any(strcmp(ME.identifier, recognized_failures))
+            candidate_feasible = false;
 
             fprintf('Infeasible %s/%s candidate %s at %s: %s\n', active_configuration.model_type, active_configuration.exo_mode, mat2str(candidate_configuration), string(origin_date), ME.identifier);
 

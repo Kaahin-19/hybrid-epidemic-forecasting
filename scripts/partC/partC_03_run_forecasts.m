@@ -15,7 +15,7 @@
 %       3. Fit the fixed Part A models on the calibration block.
 %       4. Generate all six model-strategy forecast combinations.
 %       5. Check online-strategy equality when both use the same configuration.
-%       6. Save one canonical artifact per model-strategy combination.
+%       6. Save one forecast artifact per model-strategy combination.
 %
 %   See also PARTC_CONFIG, PARTC_01_PREPARE_DATA,
 %            PARTC_02_SELECT_LOCAL_ORDERS, FORECAST_OPEN,
@@ -39,7 +39,7 @@ prepared = local_load_prepared_data(cfg);
 fprintf('Prepared-data period: %s to %s\n', string(prepared.dates(1)), string(prepared.dates(end)));
 fprintf('Calibration boundary: %s\n', string(cfg.validation.calibration_end_date));
 
-[forecast_origin_indices, forecast_origin_dates] = local_build_forecast_origins(prepared, cfg);
+forecast_origin_indices = local_build_forecast_origins(prepared, cfg);
 
 fprintf('Held-out forecast origins: %d\n', numel(forecast_origin_indices));
 
@@ -48,7 +48,7 @@ num_configurations = numel(forecast_configurations);
 selections = cell(num_configurations, 1);
 
 for configuration_index = 1:num_configurations
-    selections{configuration_index} = local_load_selection_artifact(forecast_configurations(configuration_index), cfg.local_selection.configurations(configuration_index), cfg);
+    selections{configuration_index} = local_load_selection_artifact(forecast_configurations(configuration_index));
 end
 
 %% 4. Closed-Loop SIRS Stepper
@@ -59,7 +59,6 @@ base_stepper = sirs_init(sirs_parameters, step_options);
 %% 5. Forecast Generation
 num_strategies = numel(strategies);
 artifacts = cell(num_configurations, num_strategies);
-fixed_fits = cell(num_configurations, 1);
 
 for configuration_index = 1:num_configurations
     active_configuration = forecast_configurations(configuration_index);
@@ -67,19 +66,19 @@ for configuration_index = 1:num_configurations
 
     fprintf('\nModel: %s | Exogenous mode: %s\n', active_configuration.model_type, active_configuration.exo_mode);
 
-    fixed_fits{configuration_index} = local_fit_fixed_model(active_configuration, selection.partA_selected_configuration, prepared);
+    fixed_fit = local_fit_fixed_model(active_configuration, selection.partA_selected_configuration, prepared);
 
     for strategy_index = 1:num_strategies
         active_strategy = strategies(strategy_index);
 
-        [forecast_configuration, fixed_fit_info] = local_resolve_strategy(active_strategy, selection, fixed_fits{configuration_index});
+        [forecast_configuration, fixed_fit_info] = local_resolve_strategy(active_strategy, selection, fixed_fit);
 
         fprintf('Strategy: %s\n', active_strategy.identifier);
         fprintf('Forecast configuration: %s\n', mat2str(forecast_configuration));
 
         results = local_run_forecasts(active_configuration, active_strategy, forecast_configuration, fixed_fit_info, prepared, forecast_origin_indices, base_stepper, configuration_index, cfg);
 
-        artifacts{configuration_index, strategy_index} = local_build_artifact(active_configuration, active_strategy, forecast_configuration, fixed_fit_info, selection, results, cfg);
+        artifacts{configuration_index, strategy_index} = local_build_artifact(active_configuration, active_strategy, forecast_configuration, results, cfg.final_forecast.wis_alphas);
     end
 end
 
@@ -91,7 +90,7 @@ for configuration_index = 1:num_configurations
         partA_online_results = artifacts{configuration_index, 1}.results;
         local_online_results = artifacts{configuration_index, 2}.results;
 
-        if ~isequaln(partA_online_results, local_online_results)
+        if ~isequal(partA_online_results, local_online_results)
             error('PARTC_03:CommonRandomNumbersMismatch', 'Equal Part A and local configurations must produce identical online forecasts.');
         end
     end
@@ -120,7 +119,7 @@ fprintf('\n=== Part C Held-Out Forecast Generation Complete ===\n\n');
 
 %% 8. Local Functions
 function prepared = local_load_prepared_data(cfg)
-%LOCAL_LOAD_PREPARED_DATA Load the compatible Script 1 artifact.
+%LOCAL_LOAD_PREPARED_DATA Load the Script 1 prepared data.
 
 artifact_path = cfg.output.prepared_artifact_path;
 
@@ -128,71 +127,42 @@ if ~isfile(artifact_path)
     error('PARTC_03:MissingPreparedArtifact', 'Missing prepared Part C artifact: %s. Run Part C Script 1 first.', artifact_path);
 end
 
-loaded = load(artifact_path);
+prepared = load(artifact_path, 'dates', 'Rt_estimated', 'Rt_valid_mask', 'I_fraction_proxy', 'S_proxy', 'I_proxy', 'R_proxy');
 
-if ~isequaln(loaded.preparation_snapshot, cfg.snapshot.preparation)
-    error('PARTC_03:PreparationSnapshotMismatch', 'Prepared Part C artifact does not match the current preparation configuration.');
+first_valid_index = find(prepared.Rt_valid_mask, 1);
+
+if isempty(first_valid_index) || any(~prepared.Rt_valid_mask(first_valid_index:end))
+    error('PARTC_03:InvalidEstimatedRtBlock', 'Rt_estimated must remain valid after the renewal warm-up.');
 end
 
-dates = loaded.dates;
-Rt_valid_mask = loaded.Rt_valid_mask;
+calibration_end_index = find(prepared.dates == cfg.validation.calibration_end_date, 1);
 
-if dates(1) ~= cfg.study.start_date || dates(end) ~= cfg.study.end_date
-    error('PARTC_03:PreparedStudyPeriodMismatch', 'Prepared data do not match the configured study period.');
+if isempty(calibration_end_index)
+    error('PARTC_03:MissingCalibrationBoundary', 'Prepared data do not contain the configured calibration end date.');
 end
 
-first_valid_index = find(Rt_valid_mask, 1);
-expected_first_valid_index = cfg.renewal.serial_interval_max_lag_days + 1;
-
-if isempty(first_valid_index) || first_valid_index ~= expected_first_valid_index || any(~Rt_valid_mask(first_valid_index:end))
-    error('PARTC_03:InvalidEstimatedRtBlock', 'Rt_estimated must remain valid after the configured renewal warm-up.');
-end
-
-if ~all(loaded.state_valid_mask)
-    error('PARTC_03:InvalidStateProxy', 'The prepared data contain an invalid SIRS proxy state.');
-end
-
-calibration_end_index = find(dates == cfg.validation.calibration_end_date, 1);
-
-if isempty(calibration_end_index) || calibration_end_index == numel(dates) || dates(calibration_end_index + 1) ~= cfg.validation.test_start_date
-    error('PARTC_03:MissingValidationBoundary', 'Prepared data do not contain the configured calibration/test boundary.');
-end
-
-prepared = struct();
-prepared.dates = dates;
-prepared.Rt_estimated = loaded.Rt_estimated;
-prepared.Rt_valid_mask = Rt_valid_mask;
-prepared.I_fraction_proxy = loaded.I_fraction_proxy;
-prepared.S_proxy = loaded.S_proxy;
-prepared.I_proxy = loaded.I_proxy;
-prepared.R_proxy = loaded.R_proxy;
-prepared.state_valid_mask = loaded.state_valid_mask;
 prepared.first_valid_index = first_valid_index;
 prepared.calibration_end_index = calibration_end_index;
-prepared.preparation_snapshot = loaded.preparation_snapshot;
-prepared.artifact_path = artifact_path;
 
 end
 
-function [origin_indices, origin_dates] = local_build_forecast_origins(prepared, cfg)
+function origin_indices = local_build_forecast_origins(prepared, cfg)
 %LOCAL_BUILD_FORECAST_ORIGINS Build the common held-out forecast-origin grid.
 
 horizon = cfg.final_forecast.horizon;
 step_size = cfg.final_forecast.step_size;
 last_origin_index = numel(prepared.dates) - horizon;
 
-origin_indices = (prepared.calibration_end_index:step_size:last_origin_index)';
+origin_indices = (prepared.calibration_end_index:step_size:last_origin_index).';
 
 if isempty(origin_indices)
     error('PARTC_03:NoHeldOutOrigins', 'The prepared study period is too short for the configured held-out forecast protocol.');
 end
 
-origin_dates = prepared.dates(origin_indices);
-
 end
 
-function selection = local_load_selection_artifact(configuration, local_configuration, cfg)
-%LOCAL_LOAD_SELECTION_ARTIFACT Load one compatible Script 2 artifact.
+function selection = local_load_selection_artifact(configuration)
+%LOCAL_LOAD_SELECTION_ARTIFACT Load one Script 2 selection artifact.
 
 artifact_path = configuration.selection_artifact_path;
 
@@ -200,30 +170,23 @@ if ~isfile(artifact_path)
     error('PARTC_03:MissingSelectionArtifact', 'Missing Script 2 artifact for %s/%s: %s. Run Part C Script 2 first.', configuration.model_type, configuration.exo_mode, artifact_path);
 end
 
-selection = load(artifact_path);
-
-if ~isequaln(selection.preparation_snapshot, cfg.snapshot.preparation) || ~isequaln(selection.local_selection_snapshot, local_configuration.local_selection_snapshot)
-    error('PARTC_03:SelectionSnapshotMismatch', 'Script 2 artifact for %s/%s does not match the current Part C configuration.', configuration.model_type, configuration.exo_mode);
-end
-
-selection.artifact_path = artifact_path;
+selection = load(artifact_path, 'partA_selected_configuration', 'selected_configuration');
 
 end
 
-function fixed_fit_info = local_fit_fixed_model(active_configuration, configuration, prepared)
+function fixed_fit = local_fit_fixed_model(active_configuration, configuration, prepared)
 %LOCAL_FIT_FIXED_MODEL Fit one Part A configuration on calibration data only.
 
 calibration_indices = prepared.first_valid_index:prepared.calibration_end_index;
 calibration_Rt = prepared.Rt_estimated(calibration_indices);
-calibration_dates = prepared.dates(calibration_indices);
 
 switch active_configuration.model_type
     case "AR"
-        fixed_fit_info = local_fit_fixed_ar(configuration, calibration_Rt, calibration_dates);
+        fixed_fit = local_fit_fixed_ar(configuration, calibration_Rt);
 
     case "ARX"
         calibration_U = prepared.I_fraction_proxy(calibration_indices);
-        fixed_fit_info = local_fit_fixed_arx(configuration, calibration_Rt, calibration_U, calibration_dates);
+        fixed_fit = local_fit_fixed_arx(configuration, calibration_Rt, calibration_U);
 
     otherwise
         error('PARTC_03:UnsupportedConfiguration', 'Unsupported forecast model type: %s.', active_configuration.model_type);
@@ -231,7 +194,7 @@ end
 
 end
 
-function fit_info = local_fit_fixed_ar(configuration, calibration_Rt, dates)
+function fit_info = local_fit_fixed_ar(configuration, calibration_Rt)
 %LOCAL_FIT_FIXED_AR Fit a calibration-only AR model on log Rt.
 
 p = configuration(1);
@@ -246,7 +209,6 @@ if numel(y) <= p + 1
 end
 
 sys = ar(iddata(y, [], 1), p, 'burg');
-aicc = sys.Report.Fit.AICc;
 a_coefficients = sys.A(2:end);
 
 num_observations = numel(y);
@@ -257,28 +219,18 @@ for observation_index = (p + 1):num_observations
     residuals(observation_index - p) = y(observation_index) - prediction;
 end
 
-residuals = residuals(isfinite(residuals));
-
-if numel(residuals) < 2
-    error('FORECAST_OPEN:InsufficientResiduals', 'Fewer than two finite AR calibration residuals are available.');
+if any(~isfinite(residuals))
+    error('FORECAST_OPEN:InvalidResiduals', 'AR calibration produced non-finite residuals.');
 end
-
-centred_residuals = residuals - mean(residuals);
 
 fit_info = struct();
 fit_info.configuration = configuration;
 fit_info.A_coefficients = a_coefficients;
-fit_info.B_coefficients = [];
-fit_info.max_lag = p;
-fit_info.centred_calibration_residuals = centred_residuals;
-fit_info.residual_count = numel(centred_residuals);
-fit_info.calibration_AICc = aicc;
-fit_info.calibration_start_date = dates(1);
-fit_info.calibration_end_date = dates(end);
+fit_info.centred_residuals = residuals - mean(residuals);
 
 end
 
-function fit_info = local_fit_fixed_arx(configuration, calibration_Rt, calibration_U, dates)
+function fit_info = local_fit_fixed_arx(configuration, calibration_Rt, calibration_U)
 %LOCAL_FIT_FIXED_ARX Fit a calibration-only ARX/I model on log Rt.
 
 na = configuration(1);
@@ -298,9 +250,8 @@ if num_observations - max_lag < 2
 end
 
 sys = arx(iddata(y, calibration_U, 1), [na, nb, nk]);
-aicc = sys.Report.Fit.AICc;
 a_coefficients = sys.A(2:end);
-b_coefficients = local_extract_active_b(sys.B, nb, nk);
+b_coefficients = sys.B(nk + 1:nk + nb);
 
 residuals = zeros(num_observations - max_lag, 1);
 
@@ -309,35 +260,15 @@ for observation_index = (max_lag + 1):num_observations
     residuals(observation_index - max_lag) = y(observation_index) - prediction;
 end
 
-residuals = residuals(isfinite(residuals));
-
-if numel(residuals) < 2
-    error('FORECAST_CLOSED:InsufficientResiduals', 'Fewer than two finite ARX calibration residuals are available.');
+if any(~isfinite(residuals))
+    error('FORECAST_CLOSED:InvalidResiduals', 'ARX calibration produced non-finite residuals.');
 end
-
-centred_residuals = residuals - mean(residuals);
 
 fit_info = struct();
 fit_info.configuration = configuration;
 fit_info.A_coefficients = a_coefficients;
 fit_info.B_coefficients = b_coefficients;
-fit_info.max_lag = max_lag;
-fit_info.centred_calibration_residuals = centred_residuals;
-fit_info.residual_count = numel(centred_residuals);
-fit_info.calibration_AICc = aicc;
-fit_info.calibration_start_date = dates(1);
-fit_info.calibration_end_date = dates(end);
-
-end
-
-function b_coefficients = local_extract_active_b(B_property, nb, nk)
-%LOCAL_EXTRACT_ACTIVE_B Extract the active single-input ARX coefficients.
-
-if iscell(B_property)
-    b_coefficients = B_property{1}(nk + 1:nk + nb);
-else
-    b_coefficients = B_property(nk + 1:nk + nb);
-end
+fit_info.centred_residuals = residuals - mean(residuals);
 
 end
 
@@ -371,7 +302,7 @@ end
 function results = local_run_forecasts(active_configuration, strategy, forecast_configuration, fixed_fit_info, prepared, origin_indices, base_stepper, configuration_index, cfg)
 %LOCAL_RUN_FORECASTS Generate one model-strategy forecast result array.
 
-result_template = struct("origin_index", [], "origin_date", NaT, "target_indices", [], "target_dates", NaT(0, 1), "target_Rt_estimated", [], "forecast_median", [], "forecast_lower", [], "forecast_upper", [], "fit_AICc", [], "resample_seed", [], "epidemic_seed", []);
+result_template = struct("origin_date", NaT, "target_dates", NaT(0, 1), "target_Rt_estimated", [], "forecast_median", [], "forecast_lower", [], "forecast_upper", []);
 results = repmat(result_template, numel(origin_indices), 1);
 
 for origin_position = 1:numel(origin_indices)
@@ -396,21 +327,18 @@ wis_alphas = cfg.final_forecast.wis_alphas;
 history_indices = prepared.first_valid_index:origin_index;
 Rt_past = prepared.Rt_estimated(history_indices);
 
-target_indices = (origin_index + (1:horizon))';
+target_indices = origin_index + (1:horizon);
 target_dates = prepared.dates(target_indices);
 target_Rt_estimated = prepared.Rt_estimated(target_indices);
 
 resample_seed = cfg.final_forecast.base_seed + 100000 * configuration_index + origin_position;
-epidemic_seed = [];
 
 switch active_configuration.model_type
     case "AR"
         if strategy.parameter_update_mode == "online"
-            [ensemble_paths, fit_info] = forecast_open("AR", forecast_configuration, Rt_past, num_draws, horizon, resample_seed);
-            fit_AICc = fit_info.AICc;
+            ensemble_paths = forecast_open("AR", forecast_configuration, Rt_past, num_draws, horizon, resample_seed);
         else
             ensemble_paths = local_forecast_fixed_ar(fixed_fit_info, Rt_past, num_draws, horizon, resample_seed);
-            fit_AICc = fixed_fit_info.calibration_AICc;
         end
 
     case "ARX"
@@ -419,11 +347,9 @@ switch active_configuration.model_type
         epidemic_seed = resample_seed + 1000000;
 
         if strategy.parameter_update_mode == "online"
-            [ensemble_paths, fit_info] = forecast_closed("ARX", forecast_configuration, Rt_past, U_past, sirs_state, 1, num_draws, horizon, "I", base_stepper, resample_seed, epidemic_seed, cfg.final_forecast.include_epidemic_seed_variation);
-            fit_AICc = fit_info.AICc;
+            ensemble_paths = forecast_closed("ARX", forecast_configuration, Rt_past, U_past, sirs_state, 1, num_draws, horizon, "I", base_stepper, resample_seed, epidemic_seed, cfg.final_forecast.include_epidemic_seed_variation);
         else
             ensemble_paths = local_forecast_fixed_arx(fixed_fit_info, Rt_past, U_past, sirs_state, num_draws, horizon, base_stepper, resample_seed, epidemic_seed, cfg.final_forecast.include_epidemic_seed_variation);
-            fit_AICc = fixed_fit_info.calibration_AICc;
         end
 
     otherwise
@@ -434,7 +360,7 @@ forecast_median = median(ensemble_paths, 2);
 forecast_lower = quantile(ensemble_paths, wis_alphas.' / 2, 2);
 forecast_upper = quantile(ensemble_paths, 1 - wis_alphas.' / 2, 2);
 
-result = struct("origin_index", origin_index, "origin_date", prepared.dates(origin_index), "target_indices", target_indices, "target_dates", target_dates, "target_Rt_estimated", target_Rt_estimated, "forecast_median", forecast_median, "forecast_lower", forecast_lower, "forecast_upper", forecast_upper, "fit_AICc", fit_AICc, "resample_seed", resample_seed, "epidemic_seed", epidemic_seed);
+result = struct("origin_date", prepared.dates(origin_index), "target_dates", target_dates, "target_Rt_estimated", target_Rt_estimated, "forecast_median", forecast_median, "forecast_lower", forecast_lower, "forecast_upper", forecast_upper);
 
 end
 
@@ -444,7 +370,7 @@ function ensemble = local_forecast_fixed_ar(fit_info, Rt_past, num_draws, horizo
 p = fit_info.configuration(1);
 y = log(Rt_past);
 
-innovations = local_resample_centred(fit_info.centred_calibration_residuals, horizon, num_draws, resample_seed);
+innovations = local_resample_centred(fit_info.centred_residuals, horizon, num_draws, resample_seed);
 
 seed_values = y(end - p + 1:end);
 rolling_y = [repmat(seed_values, 1, num_draws); zeros(horizon, num_draws)];
@@ -477,7 +403,7 @@ nk = configuration(3);
 y = log(Rt_past);
 num_observations = numel(y);
 
-innovations = local_resample_centred(fit_info.centred_calibration_residuals, horizon, num_draws, resample_seed);
+innovations = local_resample_centred(fit_info.centred_residuals, horizon, num_draws, resample_seed);
 
 pop_size = base_stepper.model_params.pop_size;
 min_susceptible = base_stepper.model_params.min_susceptible;
@@ -565,36 +491,21 @@ end
 
 end
 
-function artifact = local_build_artifact(active_configuration, strategy, forecast_configuration, fixed_fit_info, selection, results, cfg)
+function artifact = local_build_artifact(active_configuration, strategy, forecast_configuration, results, wis_alphas)
 %LOCAL_BUILD_ARTIFACT Assemble one final forecast artifact.
 
 artifact = struct();
-
 artifact.model_type = active_configuration.model_type;
 artifact.exo_mode = active_configuration.exo_mode;
 artifact.strategy = strategy.identifier;
-artifact.strategy_description = strategy.description;
-artifact.configuration_source = strategy.configuration_source;
-artifact.parameter_update_mode = strategy.parameter_update_mode;
 artifact.forecast_configuration = forecast_configuration;
-artifact.partA_selected_configuration = selection.partA_selected_configuration;
-artifact.local_selected_configuration = selection.selected_configuration;
-artifact.selection_artifact_path = selection.artifact_path;
-artifact.prepared_artifact_path = cfg.output.prepared_artifact_path;
-artifact.calibration_end_date = cfg.validation.calibration_end_date;
-artifact.test_start_date = cfg.validation.test_start_date;
-artifact.study_end_date = cfg.study.end_date;
-artifact.wis_alphas = cfg.final_forecast.wis_alphas;
+artifact.wis_alphas = wis_alphas;
 artifact.results = results;
-artifact.fixed_fit_info = fixed_fit_info;
-artifact.preparation_snapshot = selection.preparation_snapshot;
-artifact.local_selection_snapshot = selection.local_selection_snapshot;
-artifact.forecast_snapshot = cfg.snapshot.forecast;
 
 end
 
 function artifact_path = local_canonical_path(active_configuration, strategy, forecast_dir)
-%LOCAL_CANONICAL_PATH Construct one canonical Script 3 artifact path.
+%LOCAL_CANONICAL_PATH Construct one Script 3 artifact path.
 
 filename = sprintf('partC_03_forecast_%s_%s_%s.mat', active_configuration.model_type, active_configuration.exo_mode, strategy);
 artifact_path = fullfile(forecast_dir, filename);
