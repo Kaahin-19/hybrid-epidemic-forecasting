@@ -13,12 +13,12 @@
 %       4. Project forecast-driven and persistence SIRS trajectories.
 %       5. Save one forecast artifact per scenario.
 %
-%   See also PARTA_CONFIG, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, ...
-%            BUILD_FORECAST_WINDOWS, FORECAST_OPEN, FORECAST_CLOSED, ...
-%            PROJECT_SIRS_TRAJECTORY.
+%   See also PARTA_CONFIG, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS,
+%            BUILD_FORECAST_WINDOWS, FORECAST_OPEN, FORECAST_CLOSED,
+%            SIRS_INIT, SIRS_STEP.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-08-13
+% Modified: 2026-08-22
 
 %% 1. Initialization
 clear; close all; clc;
@@ -100,6 +100,7 @@ fprintf('=== Final Part A Forecast Generation Complete ===\n\n');
 
 function selection = local_load_selection(cfg, model_type, exo_mode)
 %LOCAL_LOAD_SELECTION Load the Script 2 selected configuration artifact.
+
 file_prefix = sprintf('partA_02_global_hyperparameters_%s_%s', model_type, exo_mode);
 artifact_path = fullfile(cfg.output.model_selection_dir, [file_prefix, '.mat']);
 
@@ -112,10 +113,12 @@ selection = load(artifact_path);
 if ~isequaln(selection.snapshot, cfg.snapshot.selection)
     error('PARTA_03:SelectionConfigMismatch', 'Script 2 model-selection artifact does not match the current Part A selection protocol');
 end
+
 end
 
 function results = local_run_scenario_forecasts(model_type, exo_mode, params, window_data, S_true, I_true, pop_size, base_stepper, projection_stepper, base_seed, num_draws, horizon, wis_alphas, vary, scenario_index)
 %LOCAL_RUN_SCENARIO_FORECASTS Run selected-model forecasts for one scenario.
+
 template = struct('window_day', [], 'window_day_idx', [], 'time_horizon', [], 'truth_Rt_window', [], 'forecast_median', [], 'forecast_lower', [], 'forecast_upper', [], 'truth_S_window', [], 'truth_I_window', [], 'truth_R_window', [], 'projected_S', [], 'projected_I', [], 'projected_R', [], 'persistence_S', [], 'persistence_I', [], 'persistence_R', []);
 results = repmat(template, numel(window_data), 1);
 
@@ -152,8 +155,8 @@ for w = 1:numel(window_data)
     forecast_Rt_drivers = [win.Rt_past(end); Rt_pred(1:horizon - 1)];
     persistence_Rt_drivers = repmat(win.Rt_past(end), horizon, 1);
 
-    projected_states = project_sirs_trajectory(projection_stepper, initial_state, forecast_Rt_drivers);
-    persistence_states = project_sirs_trajectory(projection_stepper, initial_state, persistence_Rt_drivers);
+    projected_states = local_project_sirs_trajectory(projection_stepper, initial_state, forecast_Rt_drivers);
+    persistence_states = local_project_sirs_trajectory(projection_stepper, initial_state, persistence_Rt_drivers);
 
     results(w).window_day = win.window_day;
     results(w).window_day_idx = win.window_day_idx;
@@ -172,4 +175,18 @@ for w = 1:numel(window_data)
     results(w).persistence_I = persistence_states(:, 2);
     results(w).persistence_R = persistence_states(:, 3);
 end
+
+end
+
+function projected_states = local_project_sirs_trajectory(stepper, initial_state, Rt_drivers)
+%LOCAL_PROJECT_SIRS_TRAJECTORY Propagate a SIRS state along an Rt trajectory.
+
+projected_states = zeros(numel(Rt_drivers), 3);
+state = initial_state;
+
+for h = 1:numel(Rt_drivers)
+    [state, stepper] = sirs_step(stepper, state, Rt_drivers(h));
+    projected_states(h, :) = state.';
+end
+
 end

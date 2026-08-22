@@ -1,26 +1,26 @@
-%PARTC_01_PREPARE_DATA Prepare Swedish incidence, estimated Rt, and SIRS state proxies.
+%PARTC_01_PREPARE_DATA Prepare observed incidence, estimated Rt, and SIRS state proxies.
 %
 %   Description:
-%       Reads and validates the configured WHO daily COVID-19 data, selects
-%       the Swedish study period, preserves reported incidence unchanged,
-%       estimates an operational renewal Rt series, and reconstructs a causal
-%       reported-case-based SIRS state proxy for later ARX/I forecasting.
-%       The renewal estimator retains its normal initial warm-up, and neither
-%       Rt_estimated nor the reconstructed compartments are biological truth.
+%       Reads the configured epidemiological CSV source, selects the configured
+%       series and study period, preserves observed incidence unchanged,
+%       estimates an operational renewal Rt series, and reconstructs causal
+%       reported-case SIRS state proxies for later forecasting. CSV-specific
+%       interpretation is defined entirely in PARTC_CONFIG. Rt_estimated and
+%       the reconstructed compartments are model-derived quantities rather
+%       than known biological truth.
 %
 %   Workflow:
-%       1. Load the Part C preparation configuration.
-%       2. Read and validate the Swedish study-period observations.
+%       1. Load the Part C configuration.
+%       2. Read and validate the configured incidence series.
 %       3. Estimate Rt using the configured renewal assumptions.
-%       4. Reconstruct causal reported-case-based SIRS state proxies.
-%       5. Validate all prepared signals and compatibility fields.
-%       6. Save one canonical prepared-data artifact.
+%       4. Reconstruct reported-case SIRS state proxies.
+%       5. Save one canonical prepared-data artifact.
 %
-%   See also PARTC_CONFIG, SERIAL_INTERVAL_WEIGHTS, ...
-%            ESTIMATE_RT_RENEWAL, RECONSTRUCT_SIRS_STATES_FROM_INCIDENCE.
+%   See also PARTC_CONFIG, SERIAL_INTERVAL_WEIGHTS, ESTIMATE_RT_RENEWAL,
+%            RECONSTRUCT_SIRS_STATES_FROM_INCIDENCE.
 %
 % A. M. Kaahin 2026-07-27
-% Modified: 2026-08-05
+% Modified: 2026-08-22
 
 %% 1. Initialization
 clear; close all; clc;
@@ -30,333 +30,141 @@ fprintf('=== Part C Observed-Incidence and State Preparation ===\n');
 cfg = partC_config();
 source_file = cfg.source.file;
 
-if exist(source_file, 'file') ~= 2
-    error('PARTC_01:MissingSourceFile', ...
-        'Configured WHO source file does not exist: %s.', source_file);
+if ~isfile(source_file)
+    error('PARTC_01:MissingSourceFile', 'Configured source file does not exist: %s.', source_file);
 end
 
-%% 2. WHO Source Ingestion and Swedish Study Selection
-import_options = detectImportOptions(source_file, ...
-    'FileType', 'text', 'VariableNamingRule', 'preserve');
+%% 2. Observed-Data Ingestion
+import_options = detectImportOptions(source_file, 'FileType', 'text', 'VariableNamingRule', 'preserve');
+
+required_columns = [cfg.source.date_column, cfg.source.incidence_column];
+
+if strlength(cfg.source.filter_column) > 0
+    required_columns(end + 1) = cfg.source.filter_column;
+end
 
 source_columns = string(import_options.VariableNames);
-required_columns = string(struct2cell(cfg.source.columns));
-if ~all(ismember(required_columns, source_columns))
-    missing_columns = required_columns(~ismember(required_columns, source_columns));
-    error('PARTC_01:MissingSourceColumns', ...
-        'Configured WHO source columns are missing: %s.', ...
-        strjoin(missing_columns, ', '));
+missing_columns = required_columns(~ismember(required_columns, source_columns));
+
+if ~isempty(missing_columns)
+    error('PARTC_01:MissingSourceColumns', 'Configured source columns are missing: %s.', strjoin(missing_columns, ', '));
 end
 
-import_options = setvartype(import_options, ...
-    [cfg.source.columns.date, cfg.source.columns.country_code, ...
-    cfg.source.columns.country], 'string');
-import_options = setvartype(import_options, ...
-    cfg.source.columns.incidence, 'double');
+import_options = setvartype(import_options, cfg.source.date_column, 'string');
+import_options = setvartype(import_options, cfg.source.incidence_column, 'double');
+
+if strlength(cfg.source.filter_column) > 0
+    import_options = setvartype(import_options, cfg.source.filter_column, 'string');
+end
+
 source_table = readtable(source_file, import_options);
 
-country_names = source_table.(cfg.source.columns.country);
-country_codes = source_table.(cfg.source.columns.country_code);
-sweden_mask = country_names == cfg.country.name ...
-    & country_codes == cfg.country.code;
-
-if ~any(sweden_mask)
-    error('PARTC_01:MissingCountry', ...
-        'No rows match country %s with code %s.', ...
-        cfg.country.name, cfg.country.code);
+if strlength(cfg.source.filter_column) == 0
+    source_mask = true(height(source_table), 1);
+else
+    source_mask = source_table.(cfg.source.filter_column) == cfg.source.filter_value;
 end
 
-sweden_date_text = source_table.(cfg.source.columns.date);
-sweden_date_text = sweden_date_text(sweden_mask);
-sweden_dates = datetime(sweden_date_text, 'InputFormat', 'yyyy-MM-dd');
-
-sweden_incidence = source_table.(cfg.source.columns.incidence);
-sweden_incidence = sweden_incidence(sweden_mask);
-
-study_mask = sweden_dates >= cfg.study.start_date ...
-    & sweden_dates <= cfg.study.end_date;
-dates = sweden_dates(study_mask);
-incidence_observed = sweden_incidence(study_mask);
-
-expected_dates = ...
-    (cfg.study.start_date:caldays(1):cfg.study.end_date)';
-
-if ~iscolumn(dates) || ~iscolumn(incidence_observed)
-    error('PARTC_01:InvalidStudyOrientation', ...
-        'Study-period dates and incidence must be column vectors.');
+if ~any(source_mask)
+    error('PARTC_01:MissingSourceSeries', 'No observations match the configured source series: %s.', cfg.source.series_name);
 end
 
-if any(isnat(dates))
-    error('PARTC_01:InvalidStudyDates', ...
-        'The configured Swedish study period contains invalid dates.');
+source_date_text = source_table.(cfg.source.date_column);
+source_incidence = source_table.(cfg.source.incidence_column);
+
+source_date_text = source_date_text(source_mask);
+source_incidence = source_incidence(source_mask);
+source_dates = datetime(source_date_text, 'InputFormat', cfg.source.date_format);
+
+if any(isnat(source_dates))
+    error('PARTC_01:InvalidSourceDates', 'The configured source series contains invalid dates.');
 end
 
-if numel(unique(dates)) ~= numel(dates)
-    error('PARTC_01:DuplicateStudyDates', ...
-        'The configured Swedish study period contains duplicate dates.');
-end
+study_mask = source_dates >= cfg.study.start_date & source_dates <= cfg.study.end_date;
+dates = source_dates(study_mask);
+incidence_observed = source_incidence(study_mask);
 
-if numel(dates) ~= numel(expected_dates)
-    error('PARTC_01:IncompleteStudyPeriod', ...
-        ['The configured Swedish study period %s through %s must contain ' ...
-        'exactly %d daily rows, but %d were found.'], ...
-        string(cfg.study.start_date), string(cfg.study.end_date), ...
-        numel(expected_dates), numel(dates));
-end
-
-if any(diff(dates) <= days(0))
-    error('PARTC_01:InvalidStudyDateOrder', ...
-        'Swedish study-period dates must be strictly increasing.');
-end
-
-if any(diff(dates) ~= days(1))
-    error('PARTC_01:MissingStudyObservations', ...
-        'Swedish study-period dates must have exactly one observation per day.');
-end
+expected_dates = (cfg.study.start_date:caldays(1):cfg.study.end_date)';
 
 if ~isequal(dates, expected_dates)
-    error('PARTC_01:StudyDateCoverageMismatch', ...
-        'Swedish dates do not exactly match the configured study period.');
+    error('PARTC_01:IncompleteStudyPeriod', 'The selected source series must contain exactly one chronological observation per day from %s through %s.', string(cfg.study.start_date), string(cfg.study.end_date));
 end
 
-if ~isnumeric(incidence_observed) || ...
-        ~isreal(incidence_observed) || ...
-        any(~isfinite(incidence_observed)) || ...
-        any(incidence_observed < 0)
-    error('PARTC_01:InvalidStudyIncidence', ...
-        'Swedish study-period incidence must be real, finite, and nonnegative.');
+if any(~isfinite(incidence_observed)) || any(incidence_observed < 0)
+    error('PARTC_01:InvalidStudyIncidence', 'Study-period incidence must be finite and nonnegative.');
 end
 
-switch cfg.preparation.incidence_preprocessing
-    case "none"
-        incidence_renewal_input = incidence_observed;
-    otherwise
-        error('PARTC_01:UnsupportedIncidencePreprocessing', ...
-            'Unsupported incidence preprocessing method: %s.', ...
-            cfg.preparation.incidence_preprocessing);
+if cfg.preparation.incidence_preprocessing ~= "none"
+    error('PARTC_01:UnsupportedIncidencePreprocessing', 'Unsupported incidence preprocessing method: %s.', cfg.preparation.incidence_preprocessing);
 end
 
-if numel(incidence_renewal_input) ~= numel(dates) || ...
-        ~iscolumn(incidence_renewal_input)
-    error('PARTC_01:SignalLengthMismatch', ...
-        'Study-period dates and renewal-input incidence must have matching column lengths.');
-end
+incidence_renewal_input = incidence_observed;
 
-fprintf('Swedish study period: %s to %s (%d days)\n', ...
-    string(dates(1)), string(dates(end)), numel(dates));
+fprintf('%s study period: %s to %s (%d days)\n', cfg.source.series_name, string(dates(1)), string(dates(end)), numel(dates));
 
 %% 3. Renewal Rt Estimation
-weights = serial_interval_weights( ...
-    cfg.renewal.serial_interval_mean_days, ...
-    cfg.renewal.serial_interval_sd_days, ...
-    cfg.renewal.serial_interval_max_lag_days);
+weights = serial_interval_weights(cfg.renewal.serial_interval_mean_days, cfg.renewal.serial_interval_sd_days, cfg.renewal.serial_interval_max_lag_days);
 
-Rt_estimated = estimate_rt_renewal( ...
-    incidence_renewal_input, weights, ...
-    cfg.renewal.min_infectiousness);
-
-if ~isnumeric(Rt_estimated) || ~isreal(Rt_estimated) || ...
-        ~iscolumn(Rt_estimated) || numel(Rt_estimated) ~= numel(dates)
-    error('PARTC_01:SignalLengthMismatch', ...
-        'Study-period dates and estimated Rt must have matching column lengths.');
-end
-
+Rt_estimated = estimate_rt_renewal(incidence_renewal_input, weights, cfg.renewal.min_infectiousness);
 Rt_valid_mask = isfinite(Rt_estimated) & Rt_estimated > 0;
 
-if ~all(isnan(Rt_estimated(1:numel(weights)))) || ...
-        any(Rt_valid_mask(1:numel(weights)))
-    error('PARTC_01:InvalidRenewalWarmup', ...
-        'The complete-lag renewal warm-up must remain undefined and invalid.');
-end
-
-if ~isequal(Rt_valid_mask, ...
-        isfinite(Rt_estimated) & Rt_estimated > 0) || ...
-        any(~isfinite(Rt_estimated(Rt_valid_mask))) || ...
-        any(Rt_estimated(Rt_valid_mask) <= 0)
-    error('PARTC_01:InvalidRtValidityMask', ...
-        'Rt_valid_mask must identify exactly the finite, strictly positive Rt estimates.');
-end
-
 %% 4. Reported-Case SIRS State Reconstruction
-state_model_params = struct( ...
-    "reference_population", ...
-    cfg.state_reconstruction.reference_population, ...
-    "reporting_fraction", ...
-    cfg.state_reconstruction.reporting_fraction, ...
-    "effective_population", ...
-    cfg.state_reconstruction.effective_population, ...
-    "gamma", cfg.state_reconstruction.gamma, ...
-    "xi", cfg.state_reconstruction.xi, ...
-    "initial_susceptible", ...
-    cfg.state_reconstruction.initial_susceptible, ...
-    "initial_infectious", ...
-    cfg.state_reconstruction.initial_infectious, ...
-    "initial_recovered", ...
-    cfg.state_reconstruction.initial_recovered, ...
-    "min_susceptible", ...
-    cfg.state_reconstruction.min_susceptible, ...
-    "conservation_tolerance", ...
-    cfg.state_reconstruction.conservation_tolerance);
+state_model_params = struct("reference_population", cfg.state_reconstruction.reference_population, "reporting_fraction", cfg.state_reconstruction.reporting_fraction, "effective_population", cfg.state_reconstruction.effective_population, "gamma", cfg.state_reconstruction.gamma, "xi", cfg.state_reconstruction.xi, "initial_susceptible", cfg.state_reconstruction.initial_susceptible, "initial_infectious", cfg.state_reconstruction.initial_infectious, "initial_recovered", cfg.state_reconstruction.initial_recovered, "min_susceptible", cfg.state_reconstruction.min_susceptible, "conservation_tolerance", cfg.state_reconstruction.conservation_tolerance);
 
-[S_proxy, I_proxy, R_proxy, ...
-    incidence_scaled_proxy, state_diagnostics] = ...
-    reconstruct_sirs_states_from_incidence( ...
-    incidence_observed, state_model_params);
+[S_proxy, I_proxy, R_proxy, incidence_scaled_proxy, state_diagnostics] = reconstruct_sirs_states_from_incidence(incidence_observed, state_model_params);
 
-%% 5. Prepared-Signal Validation
-num_observations = numel(dates);
-if numel(incidence_observed) ~= num_observations || ...
-        numel(incidence_renewal_input) ~= num_observations || ...
-        numel(incidence_scaled_proxy) ~= num_observations || ...
-        numel(Rt_estimated) ~= num_observations || ...
-        numel(S_proxy) ~= num_observations || ...
-        numel(I_proxy) ~= num_observations || ...
-        numel(R_proxy) ~= num_observations
-    error('PARTC_01:SignalLengthMismatch', ...
-        'All prepared study-period signals must have matching lengths.');
-end
+I_fraction_proxy = I_proxy ./ cfg.state_reconstruction.effective_population;
 
-if ~iscolumn(incidence_observed) || ...
-        ~iscolumn(incidence_renewal_input) || ...
-        ~iscolumn(incidence_scaled_proxy) || ...
-        ~iscolumn(Rt_estimated) || ...
-        ~iscolumn(S_proxy) || ~iscolumn(I_proxy) || ~iscolumn(R_proxy)
-    error('PARTC_01:SignalOrientationMismatch', ...
-        'All prepared study-period signals must be column vectors.');
-end
-
-if any(~isfinite(incidence_observed)) || ...
-        any(incidence_observed < 0) || ...
-        any(~isfinite(incidence_renewal_input)) || ...
-        any(incidence_renewal_input < 0) || ...
-        any(~isfinite(incidence_scaled_proxy)) || ...
-        any(incidence_scaled_proxy < 0)
-    error('PARTC_01:InvalidPreparedIncidence', ...
-        'Prepared incidence signals must be finite and nonnegative.');
-end
-
-I_fraction_proxy = I_proxy ./ ...
-    cfg.state_reconstruction.effective_population;
-
-if ~isnumeric(I_fraction_proxy) || ~isreal(I_fraction_proxy) || ...
-        ~iscolumn(I_fraction_proxy) || ...
-        any(~isfinite(I_fraction_proxy)) || ...
-        any(I_fraction_proxy < 0) || any(I_fraction_proxy > 1)
-    error('PARTC_01:InvalidInfectiousFractionProxy', ...
-        'I_fraction_proxy must be a real, finite column vector in [0, 1].');
-end
-
-state_valid_mask = ...
-    all(isfinite([S_proxy, I_proxy, R_proxy]), 2) ...
-    & S_proxy > cfg.state_reconstruction.min_susceptible ...
-    & I_proxy >= 0 ...
-    & R_proxy >= 0 ...
-    & abs(S_proxy + I_proxy + R_proxy ...
-    - cfg.state_reconstruction.effective_population) ...
-    <= cfg.state_reconstruction.conservation_tolerance;
+state_valid_mask = S_proxy > cfg.state_reconstruction.min_susceptible & I_proxy >= 0 & R_proxy >= 0 & abs(S_proxy + I_proxy + R_proxy - cfg.state_reconstruction.effective_population) <= cfg.state_reconstruction.conservation_tolerance;
 
 if any(~state_valid_mask)
     invalid_state_index = find(~state_valid_mask, 1);
-    error('PARTC_01:InvalidStudyStateProxy', ...
-        'The reconstructed SIRS proxy state is invalid on %s.', ...
-        string(dates(invalid_state_index)));
+    error('PARTC_01:InvalidStudyStateProxy', 'The reconstructed SIRS proxy state is invalid on %s.', string(dates(invalid_state_index)));
 end
 
-%% 6. Metadata and Persistence
+%% 5. Metadata and Persistence
 source_metadata = struct();
 source_metadata.source_file = source_file;
-source_metadata.source_columns = cfg.source.columns;
-source_metadata.country = cfg.country.name;
-source_metadata.country_code = cfg.country.code;
+source_metadata.date_column = cfg.source.date_column;
+source_metadata.incidence_column = cfg.source.incidence_column;
+source_metadata.date_format = cfg.source.date_format;
+source_metadata.filter_column = cfg.source.filter_column;
+source_metadata.filter_value = cfg.source.filter_value;
+source_metadata.series_name = cfg.source.series_name;
 source_metadata.selected_start_date = dates(1);
 source_metadata.selected_end_date = dates(end);
-source_metadata.observation_count = num_observations;
-source_metadata.incidence_processing = ...
-    "Observed daily incidence was used directly; no smoothing or incidence repair was applied.";
-source_metadata.study_period_history = ...
-    cfg.state_reconstruction.history_assumption;
-source_metadata.rt_interpretation = ...
-    "Rt_estimated is an operational incidence-derived estimate and is not known true Rt.";
-source_metadata.serial_interval_assumption_source = ...
-    cfg.renewal.serial_interval_source;
-source_metadata.serial_interval_assumption = compose( ...
-    "Part C gamma approximation using an early-COVID mean of %.1f days and standard deviation of %.1f days; an explicit modelling assumption, not universally fixed biological truth.", ...
-    cfg.renewal.serial_interval_mean_days, ...
-    cfg.renewal.serial_interval_sd_days);
-source_metadata.serial_interval_truncation = compose( ...
-    "The positive gamma approximation was numerically truncated at %d daily lags and renormalized.", ...
-    cfg.renewal.serial_interval_max_lag_days);
+source_metadata.observation_count = numel(dates);
+source_metadata.incidence_processing = cfg.preparation.incidence_preprocessing;
+source_metadata.serial_interval_source = cfg.renewal.serial_interval_source;
+source_metadata.rt_interpretation = "Rt_estimated is an operational incidence-derived estimate and is not known true Rt.";
 
 state_reconstruction_metadata = struct();
-state_reconstruction_metadata.method = ...
-    cfg.state_reconstruction.method;
-state_reconstruction_metadata.interpretation = ...
-    "S_proxy, I_proxy, and R_proxy are causal model-derived reported-case SIRS state proxies; they are not observed or true biological compartments.";
-state_reconstruction_metadata.reference_population = ...
-    cfg.state_reconstruction.reference_population;
-state_reconstruction_metadata.reference_population_source = ...
-    cfg.state_reconstruction.reference_population_source;
-state_reconstruction_metadata.reporting_fraction = ...
-    cfg.state_reconstruction.reporting_fraction;
-state_reconstruction_metadata.reporting_fraction_interpretation = ...
-    "The baseline value 1.0 uses reported cases directly as an infection-flow proxy; a constant reporting fraction is an explicit assumption, not an estimated reporting fact.";
-state_reconstruction_metadata.effective_population = ...
-    cfg.state_reconstruction.effective_population;
-state_reconstruction_metadata.effective_population_source = ...
-    cfg.state_reconstruction.effective_population_source;
+state_reconstruction_metadata.method = cfg.state_reconstruction.method;
+state_reconstruction_metadata.interpretation = "S_proxy, I_proxy, and R_proxy are model-derived reported-case SIRS state proxies rather than observed biological compartments.";
+state_reconstruction_metadata.reference_population = cfg.state_reconstruction.reference_population;
+state_reconstruction_metadata.reference_population_source = cfg.state_reconstruction.reference_population_source;
+state_reconstruction_metadata.reporting_fraction = cfg.state_reconstruction.reporting_fraction;
+state_reconstruction_metadata.effective_population = cfg.state_reconstruction.effective_population;
+state_reconstruction_metadata.effective_population_source = cfg.state_reconstruction.effective_population_source;
 state_reconstruction_metadata.gamma = cfg.state_reconstruction.gamma;
 state_reconstruction_metadata.xi = cfg.state_reconstruction.xi;
-state_reconstruction_metadata.sirs_parameter_source = ...
-    cfg.state_reconstruction.sirs_parameter_source;
-state_reconstruction_metadata.lookback_days = ...
-    cfg.state_reconstruction.lookback_days;
-state_reconstruction_metadata.study_start_date = cfg.study.start_date;
-state_reconstruction_metadata.study_end_date = cfg.study.end_date;
-state_reconstruction_metadata.initial_state_before_study = [
-    cfg.state_reconstruction.initial_susceptible
-    cfg.state_reconstruction.initial_infectious
-    cfg.state_reconstruction.initial_recovered
-    ];
-state_reconstruction_metadata.state_timing_convention = ...
-    cfg.state_reconstruction.state_timing_convention;
-state_reconstruction_metadata.incidence_scaling_definition = ...
-    "incidence_scaled_proxy = incidence_observed / (reference_population * reporting_fraction) * effective_population.";
-state_reconstruction_metadata.causality_and_processing = ...
-    "No pre-study observations were used. Reported cases are processed chronologically from the configured study start date with no future observations, smoothing, clipping, interpolation, or state renormalisation.";
+state_reconstruction_metadata.sirs_parameter_source = cfg.state_reconstruction.sirs_parameter_source;
+state_reconstruction_metadata.initial_state_before_study = [cfg.state_reconstruction.initial_susceptible; cfg.state_reconstruction.initial_infectious; cfg.state_reconstruction.initial_recovered];
+state_reconstruction_metadata.state_timing_convention = cfg.state_reconstruction.state_timing_convention;
 state_reconstruction_metadata.diagnostics = state_diagnostics;
 
 preparation_snapshot = cfg.snapshot.preparation;
 
-if exist(cfg.output.prepared_artifact_dir, 'dir') ~= 7
+if ~exist(cfg.output.prepared_artifact_dir, 'dir')
     mkdir(cfg.output.prepared_artifact_dir);
 end
 
-artifact = struct();
-artifact.dates = dates;
-artifact.incidence_observed = incidence_observed;
-artifact.incidence_renewal_input = incidence_renewal_input;
-artifact.incidence_scaled_proxy = incidence_scaled_proxy;
-artifact.Rt_estimated = Rt_estimated;
-artifact.Rt_valid_mask = Rt_valid_mask;
-artifact.serial_interval_weights = weights;
-artifact.S_proxy = S_proxy;
-artifact.I_proxy = I_proxy;
-artifact.R_proxy = R_proxy;
-artifact.I_fraction_proxy = I_fraction_proxy;
-artifact.state_valid_mask = state_valid_mask;
-artifact.source_metadata = source_metadata;
-artifact.state_reconstruction_metadata = ...
-    state_reconstruction_metadata;
-artifact.preparation_snapshot = preparation_snapshot;
+artifact = struct("dates", dates, "incidence_observed", incidence_observed, "incidence_renewal_input", incidence_renewal_input, "incidence_scaled_proxy", incidence_scaled_proxy, "Rt_estimated", Rt_estimated, "Rt_valid_mask", Rt_valid_mask, "serial_interval_weights", weights, "S_proxy", S_proxy, "I_proxy", I_proxy, "R_proxy", R_proxy, "I_fraction_proxy", I_fraction_proxy, "state_valid_mask", state_valid_mask, "source_metadata", source_metadata, "state_reconstruction_metadata", state_reconstruction_metadata, "preparation_snapshot", preparation_snapshot);
 
 save(cfg.output.prepared_artifact_path, '-struct', 'artifact');
 
-fprintf('Estimated Rt on %d days; %d entries remain invalid.\n', ...
-    nnz(Rt_valid_mask), nnz(~Rt_valid_mask));
-fprintf('Reconstructed %d valid reported-case SIRS proxy states.\n', ...
-    nnz(state_valid_mask));
-fprintf('Maximum state-conservation error: %.6g\n', ...
-    state_diagnostics.maximum_conservation_error);
-fprintf('Prepared artifact saved to: %s\n', ...
-    cfg.output.prepared_artifact_path);
+fprintf('Estimated Rt on %d days; %d entries remain invalid.\n', nnz(Rt_valid_mask), nnz(~Rt_valid_mask));
+fprintf('Reconstructed %d valid reported-case SIRS proxy states.\n', nnz(state_valid_mask));
+fprintf('Maximum state-conservation error: %.6g\n', state_diagnostics.maximum_conservation_error);
+fprintf('Prepared artifact saved to: %s\n', cfg.output.prepared_artifact_path);
 fprintf('=== Part C Observed-Incidence and State Preparation Complete ===\n\n');
