@@ -1,11 +1,11 @@
-%PARTA_01_GENERATE_TRUTH Generate and persist Part A synthetic truth data.
+%PARTA_01_GENERATE_TRUTH Generate and persist synthetic SIRS truth data.
 %
 %   Description:
-%       Executes the Part A SIRS synthetic truth stage. The script loads the
-%       configured analytic effective-Rt scenarios, generates each Rt signal,
-%       simulates the corresponding SIRS ground truth via sirs_init/sirs_step,
-%       and saves one MATLAB artifact per scenario for downstream
-%       model-selection and forecasting stages.
+%       Generates synthetic SIRS truth data from the configured analytic
+%       effective-Rt scenarios. The script generates each Rt signal, simulates
+%       the corresponding SIRS trajectory via sirs_init/sirs_step, and saves
+%       one MATLAB artifact per scenario for downstream model selection and
+%       forecasting.
 %
 %   Workflow:
 %       1. Load configuration and initialize the Part A data directory.

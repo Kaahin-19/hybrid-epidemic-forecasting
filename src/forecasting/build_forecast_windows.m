@@ -8,11 +8,11 @@ function [window_data, num_exo] = build_forecast_windows(Rt_true, S_true, I_true
 %           tspan, exo_mode, pop_size, min_window, step_size, horizon)
 %
 %   Description:
-%       Builds the expanding-window forecast entries used by Part A model
-%       selection and final forecasting. Each window stores the past Rt history,
-%       the matching exogenous covariate history and forecast-origin SIRS state
-%       (for closed-loop modes), the horizon time axis, and the truth Rt window
-%       to be scored. Window origins are the configured endpoints whose forecast
+%       Builds the expanding-window entries used for global model selection and
+%       final forecasting. Each window stores the past Rt history, the matching
+%       exogenous covariate history and forecast-origin SIRS state for
+%       closed-loop modes, the horizon time axis, and the truth Rt window to be
+%       scored. Window origins are the configured endpoints whose forecast
 %       horizon stays inside the truth length.
 %
 %   Inputs:

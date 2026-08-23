@@ -1,13 +1,13 @@
-%PARTB_03_EVALUATE_FORECASTS Evaluate Part B robustness forecasts.
+%PARTB_03_EVALUATE_FORECASTS Evaluate synthetic robustness forecasts.
 %
 %   Description:
-%       Scores every successfully saved Part B forecast artifact against its
-%       latent Rt_true truth windows, aggregates the scores through the
-%       replicate -> scenario -> stress-case hierarchy with equal scenario
-%       weighting, compares Part B WIS with the matching Part A baseline at the
-%       same scenario, model, exogenous mode, forecast origin and lead, and
-%       reports the Script 2 execution outcomes. Lower WIS is better; a WIS
-%       ratio above one indicates degradation relative to the Part A baseline.
+%       Scores every successfully saved robustness forecast artifact against
+%       its latent Rt_true windows and aggregates results through the replicate
+%       -> scenario -> stress-case hierarchy with equal scenario weighting. It
+%       compares robustness-case WIS with the matched synthetic baseline at the
+%       same scenario, model, exogenous mode, forecast origin, and lead, then
+%       reports forecast-execution outcomes. A WIS ratio above one indicates
+%       degradation relative to the matched baseline.
 %
 %   Workflow:
 %       1. Initialize evaluation paths and configuration.
@@ -166,7 +166,7 @@ end
 end
 
 function [window_tbl, horizon_tbl, interval_tbl] = local_score_artifact(artifact, horizon)
-%LOCAL_SCORE_ARTIFACT Score one Part B forecast artifact against latent truth windows.
+%LOCAL_SCORE_ARTIFACT Score one robustness forecast artifact against latent truth windows.
 case_id      = string(artifact.case_id);
 scenario_id  = string(artifact.scenario_id);
 replicate_id = string(artifact.replicate_id);
@@ -344,7 +344,7 @@ execution_summary.SuccessRate = execution_summary.Saved ./ execution_summary.Att
 end
 
 function [degradation_summary, num_undefined] = local_degradation_summary(horizon_scores, partA_horizon)
-%LOCAL_DEGRADATION_SUMMARY Match Part B horizon WIS to the Part A baseline and aggregate degradation.
+%LOCAL_DEGRADATION_SUMMARY Match robustness WIS to the synthetic baseline and aggregate degradation.
 match_keys = {'Scenario', 'Model', 'ExoMode', 'WindowDay', 'HorizonIdx'};
 
 baseline = partA_horizon(:, [match_keys, {'WIS'}]);
@@ -410,7 +410,7 @@ end
 end
 
 function snapshot = local_evaluation_snapshot(cfg, partA_eval_path, status_counts)
-%LOCAL_EVALUATION_SNAPSHOT Minimal provenance for the Part B evaluation.
+%LOCAL_EVALUATION_SNAPSHOT Build minimal provenance for the robustness evaluation.
 snapshot = struct();
 snapshot.experiment_id           = cfg.partB.experiment_id;
 snapshot.model_types             = cfg.partB.run.model_types;

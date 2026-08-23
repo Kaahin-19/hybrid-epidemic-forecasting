@@ -1,4 +1,4 @@
-%PARTC_05_GENERATE_FIGURES Generate Part C thesis figures.
+%PARTC_05_GENERATE_FIGURES Generate real-data adaptation thesis figures.
 %
 %   Description:
 %       Generates seven thesis-ready figures from the prepared-data, held-out
@@ -834,7 +834,7 @@ light_color = color + amount * (1 - color);
 end
 
 function style = local_style()
-%LOCAL_STYLE Define the consistent Part C thesis figure style.
+%LOCAL_STYLE Define the consistent real-data thesis figure style.
 
 style = struct();
 

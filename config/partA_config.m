@@ -6,9 +6,9 @@ function cfg = partA_config()
 %       cfg = partA_config()
 %
 %   Description:
-%       Defines the Part A time grid, effective-Rt scenarios, SIRS parameters,
-%       active model configuration, forecasting protocol, predictive interval
-%       settings, artifact snapshots, and output paths.
+%       Defines the synthetic-validation time grid, effective-Rt scenarios,
+%       SIRS parameters, active model configuration, forecasting protocol,
+%       predictive interval settings, artifact snapshots, and output paths.
 %
 %   Inputs:
 %       None.

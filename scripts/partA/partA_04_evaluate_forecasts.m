@@ -1,10 +1,11 @@
-%PARTA_04_EVALUATE_FORECASTS Evaluate Part A forecast performance.
+%PARTA_04_EVALUATE_FORECASTS Evaluate synthetic forecast performance.
 %
 %   Description:
-%       Scores final Part A Rt forecasts using WIS, point-forecast error, and
-%       interval diagnostics. Also evaluates deterministic forecast-driven and
-%       persistence-Rt SIRS projections of the infected compartment. Exports
-%       window-level scores, horizon-level scores, and compact summaries.
+%       Scores final synthetic Rt forecasts using WIS, point-forecast error,
+%       and interval diagnostics. It also evaluates deterministic
+%       forecast-driven and persistence-Rt SIRS projections of the infected
+%       compartment, then exports window-level scores, horizon-level scores,
+%       and compact summaries.
 %
 %   Workflow:
 %       1. Initialize the Part A evaluation paths and inputs.

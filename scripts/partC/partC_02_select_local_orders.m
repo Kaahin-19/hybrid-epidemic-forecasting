@@ -1,7 +1,7 @@
 %PARTC_02_SELECT_LOCAL_ORDERS Select local AR/None and ARX/I configurations.
 %
 %   Description:
-%       Starts from the AR/None and ARX/I configurations selected in Part A,
+%       Starts from the globally selected AR/None and ARX/I configurations,
 %       constructs a limited neighbourhood around each selected order, and
 %       evaluates the candidates on one shared chronological calibration block
 %       from the prepared real-data series. Candidates are refitted at every
@@ -196,7 +196,7 @@ forecast_origin_dates = calibration_dates(forecast_origin_indices);
 end
 
 function selected_configuration = local_load_partA_baseline(active_configuration)
-%LOCAL_LOAD_PARTA_BASELINE Load the Part A selected configuration.
+%LOCAL_LOAD_PARTA_BASELINE Load the globally selected configuration.
 
 artifact_path = active_configuration.partA_selection_artifact_path;
 
@@ -210,7 +210,7 @@ selected_configuration = selection.selected_configuration;
 end
 
 function candidate_configurations = local_construct_candidate_grid(partA_configuration, model_type, order_radius)
-%LOCAL_CONSTRUCT_CANDIDATE_GRID Construct the limited neighbourhood around Part A.
+%LOCAL_CONSTRUCT_CANDIDATE_GRID Construct the limited neighbourhood around the global selection.
 
 switch model_type
     case "AR"

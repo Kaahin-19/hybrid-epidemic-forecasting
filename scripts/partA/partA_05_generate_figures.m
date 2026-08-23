@@ -1,10 +1,10 @@
-%PARTA_05_GENERATE_FIGURES Generate Part A thesis figures.
+%PARTA_05_GENERATE_FIGURES Generate synthetic-validation thesis figures.
 %
 %   Description:
-%       Exports the Part A figures used to inspect synthetic Rt trajectories,
-%       fixed-lead forecast behaviour, window-level forecast accuracy,
-%       horizon-wise forecast degradation, empirical interval coverage, and
-%       infected-state projection error relative to Rt persistence.
+%       Exports figures summarizing synthetic Rt trajectories, fixed-lead
+%       forecast behaviour, window-level forecast accuracy, horizon-wise
+%       forecast degradation, empirical interval coverage, and infected-state
+%       projection error relative to Rt persistence.
 %
 %   Workflow:
 %       1. Initialize figure paths, source artifacts, and shared styling.
@@ -362,7 +362,7 @@ series = struct('type', "line", 'x', [], 'y', [], 'lower', [], 'upper', [], 'col
 end
 
 function style = local_style()
-%LOCAL_STYLE Return Part A figure style constants.
+%LOCAL_STYLE Return synthetic-validation figure style constants.
 style = struct();
 style.font_name        = "Arial";
 style.axis_font_size   = 9;

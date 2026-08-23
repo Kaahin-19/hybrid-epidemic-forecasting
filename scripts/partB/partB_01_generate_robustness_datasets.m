@@ -1,10 +1,10 @@
-%PARTB_01_GENERATE_ROBUSTNESS_DATASETS Generate Part B robustness datasets.
+%PARTB_01_GENERATE_ROBUSTNESS_DATASETS Generate synthetic robustness datasets.
 %
 %   Description:
 %       Generates synthetic robustness dataset artifacts by combining the
-%       existing Part A analytic Rt scenarios with controlled measurement error
-%       in the model-visible Rt input, stochastic process noise, structural
-%       mismatch, and combined stress cases. Baseline truth follows the Part A
+%       configured analytic Rt scenarios with controlled measurement error in
+%       the model-visible Rt input, stochastic process noise, structural
+%       mismatch, and combined stress cases. Baseline truth follows the shared
 %       SIR/SIRS immunity-waning configuration, while structural-mismatch truth
 %       adds an exposed compartment and therefore follows SEIR when xi = 0 or
 %       SEIRS when xi > 0.

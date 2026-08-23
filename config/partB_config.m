@@ -6,16 +6,13 @@ function cfg = partB_config()
 %       cfg = partB_config()
 %
 %   Description:
-%       Extends the Part A configuration with the Part B robustness design.
-%       Part A supplies the shared time grid, effective-Rt bounds, SIR/SIRS
-%       parameters, and analytic Rt scenarios. Part B adds the four
-%       robustness cases (noisy Rt input, process noise, structural
-%       mismatch, and combined stress), the SEIR/SEIRS truth parameters used
-%       by the structural-mismatch and combined-stress cases, the
-%       model-visible Rt measurement-error setting, and the Part B output
-%       paths. The structural-mismatch truth preserves the Part A
-%       immunity-waning assumption: SIR baselines use SEIR truth and SIRS
-%       baselines use SEIRS truth.
+%       Extends the shared synthetic-validation configuration with four
+%       robustness cases: noisy Rt input, process noise, structural mismatch,
+%       and combined stress. It defines the SEIR/SEIRS truth parameters used
+%       by structural-mismatch cases, the model-visible Rt measurement-error
+%       setting, and the robustness output paths. Structural-mismatch truth
+%       preserves the shared immunity-waning assumption: SIR baselines use
+%       SEIR truth and SIRS baselines use SEIRS truth.
 %
 %   Inputs:
 %       None.

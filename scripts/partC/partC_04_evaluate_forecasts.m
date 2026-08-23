@@ -1,12 +1,12 @@
-%PARTC_04_EVALUATE_FORECASTS Evaluate held-out Part C Rt forecasts.
+%PARTC_04_EVALUATE_FORECASTS Evaluate held-out real-data Rt forecasts.
 %
 %   Description:
-%       Evaluates the six Part C held-out forecast artifacts against the
-%       operational Rt estimates stored with their held-out targets. Computes
-%       WIS, point-error diagnostics, empirical interval coverage, and interval
-%       width by origin, lead time, interval level, model, and strategy.
-%       Matched strategy comparisons are descriptive because the forecast
-%       horizons overlap across successive origins.
+%       Evaluates six held-out forecast artifacts against the operational Rt
+%       estimates stored with their targets. It computes WIS, point-error
+%       diagnostics, empirical interval coverage, and interval width by origin,
+%       lead time, interval level, model, and strategy. Matched strategy
+%       comparisons are descriptive because forecast horizons overlap across
+%       successive origins.
 %
 %   Workflow:
 %       1. Initialize evaluation paths and configuration.
@@ -408,7 +408,7 @@ row = table(comparison_type, context, left_label, right_label, numel(differences
 end
 
 function equivalence = local_online_equivalence(artifacts)
-%LOCAL_ONLINE_EQUIVALENCE Compare Part A and locally selected online strategies.
+%LOCAL_ONLINE_EQUIVALENCE Compare globally and locally selected online strategies.
 
 rows = cell(2, 1);
 

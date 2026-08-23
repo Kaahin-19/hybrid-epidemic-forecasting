@@ -1,4 +1,4 @@
-%PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS Select Part A model hyperparameters.
+%PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS Select global model hyperparameters.
 %
 %   Description:
 %       Evaluates candidate model configurations across all synthetic Rt

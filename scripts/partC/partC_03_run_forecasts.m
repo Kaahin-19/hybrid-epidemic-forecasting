@@ -1,13 +1,14 @@
-%PARTC_03_RUN_FORECASTS Generate held-out Part C Rt forecasts.
+%PARTC_03_RUN_FORECASTS Generate held-out real-data Rt forecasts.
 %
 %   Description:
 %       Generates held-out forecasts of the operational Rt estimate for
-%       AR/None and ARX/I under three transfer strategies: Part A online
-%       fitting, Part C local online fitting, and Part A fixed calibration
-%       fitting. All strategies use the same held-out forecast origins and
-%       common random-number construction. Fixed strategies retain coefficients
-%       and residuals fitted only on the calibration block while updating the
-%       observed lag history and current SIRS proxy state at each origin.
+%       AR/None and ARX/I under three transfer strategies: globally selected
+%       online fitting, locally selected online fitting, and globally selected
+%       fixed calibration fitting. All strategies use the same held-out
+%       forecast origins and common random-number construction. Fixed strategies
+%       retain coefficients and residuals fitted only on the calibration block
+%       while updating the observed lag history and current SIRS proxy state at
+%       each origin.
 %
 %   Workflow:
 %       1. Initialize the held-out forecasting paths and configuration.
@@ -176,7 +177,7 @@ selection = load(artifact_path, 'partA_selected_configuration', 'selected_config
 end
 
 function fixed_fit = local_fit_fixed_model(active_configuration, configuration, prepared)
-%LOCAL_FIT_FIXED_MODEL Fit one Part A configuration on calibration data only.
+%LOCAL_FIT_FIXED_MODEL Fit one globally selected configuration on calibration data only.
 
 calibration_indices = prepared.first_valid_index:prepared.calibration_end_index;
 calibration_Rt = prepared.Rt_estimated(calibration_indices);

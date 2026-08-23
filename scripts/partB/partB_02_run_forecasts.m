@@ -1,15 +1,14 @@
-%PARTB_02_RUN_FORECASTS Run Part A models on successful Part B datasets.
+%PARTB_02_RUN_FORECASTS Run frozen model configurations on robustness datasets.
 %
 %   Description:
-%       Runs the frozen Part A selected model configurations on the successful
-%       Part B robustness datasets. The requested model families are chosen
+%       Runs the frozen globally selected model configurations on successful
+%       synthetic robustness datasets. The requested model families are chosen
 %       through cfg.partB.run.model_types. For every requested model and
-%       exogenous-input combination the script loads the Part A model-selection
-%       artifact and applies its frozen selected_configuration. Each dataset
-%       is forecast with the same
-%       expanding-window protocol as Part A: the model is trained on the
-%       model-visible Rt_model_input (respecting its dataset validity mask)
-%       while the saved truth windows are taken from the latent Rt_true.
+%       exogenous-input combination, the script loads the corresponding global
+%       model-selection artifact and applies its selected_configuration. Each
+%       dataset uses the expanding-window synthetic-validation protocol: the
+%       model is trained on Rt_model_input within its validity mask, while the
+%       saved truth windows are taken from latent Rt_true.
 %
 %   Workflow:
 %       1. Initialize the Part B forecast run and output paths.
@@ -179,7 +178,7 @@ end
 end
 
 function exo_modes = local_valid_exo_modes(model_type)
-%LOCAL_VALID_EXO_MODES Valid exogenous-input modes for a model family (matches Part A).
+%LOCAL_VALID_EXO_MODES Return valid exogenous-input modes for a model family.
 switch model_type
     case "AR"
         exo_modes = "None";
@@ -191,7 +190,7 @@ end
 end
 
 function [available, report] = local_load_selections(cfg, combos)
-%LOCAL_LOAD_SELECTIONS Load Part A selected configurations and build an availability report.
+%LOCAL_LOAD_SELECTIONS Load globally selected configurations and report availability.
 report_template = struct('model_type', "", 'exo_mode', "", 'available', false, 'reason', "", 'artifact_name', "", 'selected_configuration', []);
 report          = repmat(report_template, numel(combos), 1);
 
@@ -345,7 +344,7 @@ end
 end
 
 function artifact = local_build_artifact(dataset, entry, combo, valid_range, wis_alphas, results, cfg)
-%LOCAL_BUILD_ARTIFACT Assemble one Part B forecast artifact.
+%LOCAL_BUILD_ARTIFACT Assemble one robustness forecast artifact.
 snapshot            = cfg.snapshot.forecast;
 snapshot.model_type = combo.model_type;
 snapshot.exo_mode   = combo.exo_mode;

@@ -1,10 +1,11 @@
-%PARTA_03_RUN_FORECASTS Run final Part A forecasts.
+%PARTA_03_RUN_FORECASTS Run final expanding-window forecasts.
 %
 %   Description:
 %       Generates final expanding-window Rt forecasts for each synthetic
 %       scenario using the selected model configuration. Propagates each median
-%       Rt forecast and an origin-only Rt persistence baseline through the Part A
-%       SIRS model, then exports the Rt forecasts and matching state trajectories.
+%       Rt forecast and an origin-only Rt persistence baseline through the
+%       configured SIRS model, then exports the Rt forecasts and matching state
+%       trajectories.
 %
 %   Workflow:
 %       1. Initialize the configured Part A forecasting run.

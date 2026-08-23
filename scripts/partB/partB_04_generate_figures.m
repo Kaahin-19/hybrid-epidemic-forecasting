@@ -1,13 +1,12 @@
-%PARTB_04_GENERATE_FIGURES Generate Part B robustness thesis figures.
+%PARTB_04_GENERATE_FIGURES Generate robustness thesis figures.
 %
 %   Description:
-%       Visualizes the completed Part B Script 3 evaluation summaries as a
-%       compact set of thesis figures: a robustness overview (mean WIS by
-%       stress case and WIS degradation relative to the matched Part A
-%       baseline), horizon-wise WIS, replicate-level WIS distributions,
-%       interval calibration, and Script 2 execution outcomes from the saved
-%       evaluation summaries. Lower WIS is better and a WIS ratio above one
-%       indicates degradation relative to the Part A baseline.
+%       Visualizes the saved robustness evaluation summaries as a compact set
+%       of thesis figures: mean WIS by stress case, WIS degradation relative
+%       to the matched synthetic baseline, horizon-wise WIS, replicate-level
+%       WIS distributions, interval calibration, and forecast-execution
+%       outcomes. A WIS ratio above one indicates degradation relative to the
+%       matched baseline.
 %
 %   Workflow:
 %       1. Initialize figure paths and shared styling.
@@ -413,7 +412,7 @@ series = struct('type', "line", 'x', [], 'y', [], 'lower', [], 'upper', [], 'col
 end
 
 function style = local_style()
-%LOCAL_STYLE Return Part B figure style constants (matching the Part A palette).
+%LOCAL_STYLE Return robustness figure style constants using the shared palette.
 style = struct();
 style.font_name        = "Arial";
 style.axis_font_size   = 9;
