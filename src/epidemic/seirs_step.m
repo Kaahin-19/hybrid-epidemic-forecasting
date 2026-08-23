@@ -1,4 +1,5 @@
 function [next_state, stepper] = seirs_step(stepper, current_state, Rt_next)
+
 %SEIRS_STEP Advance one reusable SEIRS stepper by one day.
 %
 %   Syntax:
@@ -19,9 +20,10 @@ function [next_state, stepper] = seirs_step(stepper, current_state, Rt_next)
 %       next_state - Advanced [S; E; I; R] state, 4-by-1.
 %       stepper    - Updated stepper with incremented call count.
 %
-%   See also SEIRS_INIT, SIRS_STEP.
+%   See also PARTB_01_GENERATE_ROBUSTNESS_DATASETS, SEIRS_INIT.
 %
 % A. M. Kaahin 2026-08-20
+% Modified: 2026-08-23
 
 %% 1. Prepare Inputs
 params = stepper.model_params;

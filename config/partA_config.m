@@ -1,10 +1,17 @@
 function cfg = partA_config()
+
 %PARTA_CONFIG Configure Part A synthetic-validation experiments.
+%
+%   Syntax:
+%       cfg = partA_config()
 %
 %   Description:
 %       Defines the Part A time grid, effective-Rt scenarios, SIRS parameters,
 %       active model configuration, forecasting protocol, predictive interval
 %       settings, artifact snapshots, and output paths.
+%
+%   Inputs:
+%       None.
 %
 %   Outputs:
 %       cfg - Structure containing:
@@ -18,22 +25,23 @@ function cfg = partA_config()
 %           .snapshot   : Artifact compatibility snapshots.
 %           .output     : Data, result, figure, and table paths.
 %
-%   See also PARTA_01_GENERATE_TRUTH, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS, PARTA_04_EVALUATE_FORECASTS, PARTA_05_GENERATE_FIGURES.
+%   See also PARTA_01_GENERATE_TRUTH, PARTB_CONFIG, PARTC_CONFIG.
 %
 % A. M. Kaahin 2026-02-18
-% Modified: 2026-06-28
+% Modified: 2026-08-23
 
+%% 1. Configuration Initialization
 cfg = struct();
 
-%% 1. Time Grid
+%% 2. Time Grid
 cfg.time.T_end = 365;
 cfg.time.dt    = 1;
 cfg.time.tspan = 0:cfg.time.dt:cfg.time.T_end;
 
-%% 2. Effective-Reproduction-Number Bounds
+%% 3. Effective-Reproduction-Number Bounds
 cfg.Rt.bounds = [0.5, 2.0];
 
-%% 3. SIRS Simulation Parameters
+%% 4. SIRS Simulation Parameters
 cfg.sirs.gamma    = 1/7;
 cfg.sirs.xi       = 1/90;
 cfg.sirs.pop_size = 100000;
@@ -43,7 +51,7 @@ cfg.sirs.R0_init  = 0;
 cfg.sirs.min_susceptible_fraction = 0.05;
 cfg.sirs.min_susceptible = cfg.sirs.min_susceptible_fraction * cfg.sirs.pop_size;
 
-%% 4. Scenario Definitions
+%% 5. Scenario Definitions
 cfg.scenarios = repmat(struct("id", "", "name", "", "signal_type", "", "params", struct()), 1, 4);
 
 T_end      = cfg.time.T_end;
@@ -71,7 +79,7 @@ cfg.scenarios(4).name        = "Amplifying Recurrent Waves";
 cfg.scenarios(4).signal_type = "multi_wave";
 cfg.scenarios(4).params      = struct("baseline", 0.90, "mu1", 1 * wave_space, "A1", wave_scale * 1.00, "mu2", 2 * wave_space, "A2", wave_scale * 1.05, "mu3", 3 * wave_space, "A3", wave_scale * 1.05^2, "mu4", 4 * wave_space, "A4", wave_scale * 1.05^3, "denom", wave_denom);
 
-%% 5. Active Run Configuration
+%% 6. Active Run Configuration
 cfg.run.seed        = 23487;
 cfg.run.model_type  = string(local_env_or_default('PARTA_MODEL_TYPE', 'ARX'));
 cfg.run.exo_mode    = string(local_env_or_default('PARTA_EXO_MODE', 'I'));
@@ -79,7 +87,7 @@ cfg.run.num_workers = 4;
 
 cfg.run.exo_mode = local_resolve_run_configuration(cfg.run.model_type, cfg.run.exo_mode);
 
-%% 6. Forecasting Hyperparameters
+%% 7. Forecasting Hyperparameters
 cfg.forecast.min_window = 49;
 cfg.forecast.step_size  = 7;
 cfg.forecast.horizon    = 14;
@@ -94,18 +102,18 @@ cfg.forecast.wis_alphas     = [0.05; 0.10; 0.20; 0.50];
 cfg.forecast.plot_alphas    = [0.10, 0.50];
 cfg.forecast.plot_lead_time = 7;
 
-%% 7. Predictive Interval Settings
+%% 8. Predictive Interval Settings
 cfg.intervals.num_draws = 60;
 cfg.intervals.include_epidemic_seed_variation = true;
 
-%% 8. Artifact Compatibility Snapshots
+%% 9. Artifact Compatibility Snapshots
 cfg.snapshot.truth = struct("T_end", cfg.time.T_end, "dt", cfg.time.dt, "Rt_bounds", cfg.Rt.bounds, "sirs", cfg.sirs);
 
 cfg.snapshot.selection = struct("model_type", cfg.run.model_type, "exo_mode", cfg.run.exo_mode, "seed", cfg.run.seed, "min_window", cfg.forecast.min_window, "step_size", cfg.forecast.step_size, "horizon", cfg.forecast.horizon, "max_ar_order", cfg.forecast.max_ar_order, "max_exo_order", cfg.forecast.max_exo_order, "max_exo_delay", cfg.forecast.max_exo_delay, "max_state_order", cfg.forecast.max_state_order, "state_diff_orders", cfg.forecast.state_diff_orders, "wis_alphas", cfg.forecast.wis_alphas, "num_draws", cfg.intervals.num_draws, "include_epidemic_seed_variation", cfg.intervals.include_epidemic_seed_variation, "sirs", cfg.sirs);
 
 cfg.snapshot.forecast = struct("model_type", cfg.run.model_type, "exo_mode", cfg.run.exo_mode, "seed", cfg.run.seed, "min_window", cfg.forecast.min_window, "step_size", cfg.forecast.step_size, "horizon", cfg.forecast.horizon, "wis_alphas", cfg.forecast.wis_alphas, "num_draws", cfg.intervals.num_draws, "include_epidemic_seed_variation", cfg.intervals.include_epidemic_seed_variation, "sirs", cfg.sirs);
 
-%% 9. Output Paths
+%% 10. Output Paths
 thisDir  = fileparts(mfilename('fullpath'));
 repoRoot = fileparts(thisDir);
 
@@ -119,6 +127,7 @@ cfg.output.table_dir           = fullfile(cfg.output.root_dir, "tables");
 
 end
 
+%% 11. Local Functions
 function value = local_env_or_default(env_name, default_value)
 %LOCAL_ENV_OR_DEFAULT Return environment value or default string.
 value = getenv(env_name);

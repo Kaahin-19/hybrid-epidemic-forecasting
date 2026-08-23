@@ -10,18 +10,20 @@
 %       ratio above one indicates degradation relative to the Part A baseline.
 %
 %   Workflow:
-%       1. Load and validate the Script 2 forecast-execution status.
-%       2. Load the Part A baseline evaluation artifact.
-%       3. Score each saved forecast artifact into raw window/horizon/interval
-%          tables against truth_Rt_window.
-%       4. Aggregate replicate, scenario, stress, horizon and interval
-%          summaries, the execution summary, and the Part A degradation summary.
-%       5. Save the evaluation artifact and compact summary CSV tables.
+%       1. Initialize evaluation paths and configuration.
+%       2. Load and validate the Script 2 forecast-execution status.
+%       3. Load the matching Part A baseline evaluation.
+%       4. Score each saved Part B forecast artifact.
+%       5. Build robustness, execution, and degradation summaries.
+%       6. Save the evaluation artifact.
+%       7. Export the compact summary tables.
 %
-%   See also PARTB_CONFIG, PARTA_04_EVALUATE_FORECASTS, PARTB_02_RUN_FORECASTS, ...
-%            COMPUTE_WIS, COMPUTE_POINT_ERROR, COMPUTE_INTERVAL_DIAGNOSTICS.
+%   See also PARTB_CONFIG, PARTB_02_RUN_FORECASTS,
+%            PARTB_04_GENERATE_FIGURES, COMPUTE_WIS, COMPUTE_POINT_ERROR,
+%            COMPUTE_INTERVAL_DIAGNOSTICS.
 %
 % A. M. Kaahin 2026-07-18
+% Modified: 2026-08-23
 
 %% 1. Initialization
 clear; close all; clc;

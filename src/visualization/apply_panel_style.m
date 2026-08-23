@@ -1,14 +1,14 @@
 function apply_panel_style(ax, opts)
+
 %APPLY_PANEL_STYLE Apply shared conservative panel styling to an axes.
 %
 %   Syntax:
 %       apply_panel_style(ax, opts)
 %
 %   Description:
-%       Applies the Part A thesis figure style (Arial font, tex interpreter,
-%       conservative axis styling) to a caller-supplied axes. The function is
-%       a leaf styler: it does not create figures, draw data, set a title, or
-%       save files. Both PLOT_SERIES and PLOT_DISTRIBUTION call it after
+%       Applies the shared thesis panel style to a caller-supplied axes,
+%       including fonts, labels, limits, color order, tick rotation, and grid
+%       settings. PLOT_SERIES and PLOT_DISTRIBUTION apply this style after
 %       drawing their data.
 %
 %   Inputs:
@@ -23,9 +23,13 @@ function apply_panel_style(ax, opts)
 %                axis_font_size     - Axis label font size (default 9).
 %                tick_font_size     - Tick label font size (default 8).
 %
-%   See also PLOT_SERIES, PLOT_DISTRIBUTION.
+%   Outputs:
+%       None.
+%
+%   See also PARTB_04_GENERATE_FIGURES, PLOT_SERIES, PLOT_DISTRIBUTION.
 %
 % A. M. Kaahin 2026-06-22
+% Modified: 2026-08-23
 
 %% 1. Resolve Style Options
 font_name      = local_opt(opts, 'font_name', "Arial");
@@ -66,6 +70,7 @@ else
 end
 end
 
+%% 5. Local Functions
 function value = local_opt(opts, name, default_value)
 %LOCAL_OPT Return an option field value or its default.
 if isfield(opts, name) && ~isempty(opts.(name))

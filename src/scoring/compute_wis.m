@@ -1,4 +1,5 @@
 function [wis, components] = compute_wis(truth, pred, lower, upper, alphas)
+
 %COMPUTE_WIS Weighted interval score across H forecast horizons and K interval levels.
 %
 %   Syntax:
@@ -22,10 +23,13 @@ function [wis, components] = compute_wis(truth, pred, lower, upper, alphas)
 %       components - Struct with fields median_term, dispersion,
 %                    underprediction, and overprediction.
 %
-%   See also FORECAST_OPEN, FORECAST_CLOSED.
+%   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS,
+%            PARTA_04_EVALUATE_FORECASTS, PARTB_03_EVALUATE_FORECASTS,
+%            PARTC_02_SELECT_LOCAL_ORDERS, PARTC_04_EVALUATE_FORECASTS,
+%            COMPUTE_INTERVAL_DIAGNOSTICS.
 %
 % A. M. Kaahin 2026-06-15
-% Modified: 2026-06-21
+% Modified: 2026-08-23
 
 %% 1. Interval Count
 K = numel(alphas);

@@ -10,20 +10,18 @@
 %       forecast-domain failures make the affected candidate infeasible.
 %
 %   Workflow:
-%       1. Load the prepared Part C calibration data.
-%       2. Build the common expanding-window calibration origins.
-%       3. Load each Part A-selected baseline configuration.
-%       4. Construct the limited local candidate neighbourhood.
-%       5. Refit and score every candidate across all calibration origins.
-%       6. Select the simplest configuration within one standard error.
-%       7. Save one local-selection artifact per supported configuration.
+%       1. Initialize configuration and model-selection paths.
+%       2. Load calibration data and build the shared forecast origins.
+%       3. Construct, refit, and score each local candidate grid.
+%       4. Select the simplest configuration within one standard error.
+%       5. Save one local-selection artifact per supported configuration.
 %
 %   See also PARTC_CONFIG, PARTC_01_PREPARE_DATA,
-%            PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, FORECAST_OPEN,
-%            FORECAST_CLOSED, SIRS_INIT, COMPUTE_WIS.
+%            PARTC_03_RUN_FORECASTS, FORECAST_OPEN, FORECAST_CLOSED,
+%            SIRS_INIT, COMPUTE_WIS.
 %
 % A. M. Kaahin 2026-07-28
-% Modified: 2026-08-22
+% Modified: 2026-08-23
 
 %% 1. Initialization
 clear; close all; clc;
@@ -85,7 +83,7 @@ for configuration_index = 1:numel(configurations)
         candidate_feasible_mask(candidate_index) = candidate_feasible;
     end
 
-    %% 4. One-Standard-Error Selection
+%% 4. One-Standard-Error Selection
     feasible_indices = find(candidate_feasible_mask);
 
     if isempty(feasible_indices)
@@ -110,7 +108,7 @@ for configuration_index = 1:numel(configurations)
     selected_index = eligible_ranking(1, 3);
     selected_configuration = candidate_configurations(selected_index, :);
 
-    %% 5. Persistence
+%% 5. Persistence
     artifact = struct();
 
     artifact.model_type = model_type;

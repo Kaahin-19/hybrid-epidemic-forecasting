@@ -2,9 +2,9 @@
 %
 %   Description:
 %       Generates seven thesis-ready figures from the prepared-data, held-out
-%       forecast, and evaluation artifacts. The script performs visualization
-%       only and does not prepare data, fit models, generate forecasts, or
-%       recompute evaluation metrics.
+%       forecast, and evaluation artifacts. It draws the observed-data and
+%       reconstructed-state summaries together with held-out forecast and
+%       evaluation comparisons, then exports each figure as a vector PDF.
 %
 %   Workflow:
 %       1. Load the prepared-data, forecast, and evaluation artifacts.
@@ -12,12 +12,11 @@
 %       3. Export each figure directly as a vector PDF.
 %       4. Report the saved figure paths.
 %
-%   See also PARTC_CONFIG, PARTC_01_PREPARE_DATA,
-%            PARTC_03_RUN_FORECASTS, PARTC_04_EVALUATE_FORECASTS,
-%            PLOT_SERIES, PLOT_DISTRIBUTION.
+%   See also PARTC_CONFIG, PARTC_04_EVALUATE_FORECASTS, PLOT_SERIES,
+%            PLOT_DISTRIBUTION.
 %
 % A. M. Kaahin 2026-08-06
-% Modified: 2026-08-22
+% Modified: 2026-08-23
 
 %% 1. Initialization
 clear; close all; clc;

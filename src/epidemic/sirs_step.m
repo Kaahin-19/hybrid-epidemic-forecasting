@@ -1,5 +1,9 @@
 function [next_state, stepper] = sirs_step(stepper, current_state, Rt_next)
+
 %SIRS_STEP Advance one reusable SIRS stepper by one day.
+%
+%   Syntax:
+%       [next_state, stepper] = sirs_step(stepper, current_state, Rt_next)
 %
 %   Description:
 %       Advances the prepared URDME SIRS model by one effective-Rt-driven
@@ -16,10 +20,12 @@ function [next_state, stepper] = sirs_step(stepper, current_state, Rt_next)
 %       next_state - Advanced [S, I, R] state.
 %       stepper    - Updated stepper with incremented call count.
 %
-%   See also SIRS_INIT.
+%   See also PARTA_01_GENERATE_TRUTH, PARTA_03_RUN_FORECASTS,
+%            PARTB_01_GENERATE_ROBUSTNESS_DATASETS, PARTC_03_RUN_FORECASTS,
+%            FORECAST_CLOSED, SIRS_INIT.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-28
+% Modified: 2026-08-23
 
 %% 1. Prepare Inputs
 params = stepper.model_params;

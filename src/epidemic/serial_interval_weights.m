@@ -1,5 +1,9 @@
 function weights = serial_interval_weights(mean_days, sd_days, max_lag_days)
+
 %SERIAL_INTERVAL_WEIGHTS Construct normalized discrete gamma lag weights.
+%
+%   Syntax:
+%       weights = serial_interval_weights(mean_days, sd_days, max_lag_days)
 %
 %   Description:
 %       Matches a gamma distribution to the supplied serial-interval mean and
@@ -14,10 +18,10 @@ function weights = serial_interval_weights(mean_days, sd_days, max_lag_days)
 %   Outputs:
 %       weights - Normalized lag weights for days 1:max_lag_days.
 %
-%   See also ESTIMATE_RT_RENEWAL, PARTC_CONFIG.
+%   See also PARTC_01_PREPARE_DATA, ESTIMATE_RT_RENEWAL.
 %
 % A. M. Kaahin 2026-07-27
-% Modified: 2026-08-22
+% Modified: 2026-08-23
 
 %% 1. Parameter Domains
 if ~isfinite(mean_days) || mean_days <= 0

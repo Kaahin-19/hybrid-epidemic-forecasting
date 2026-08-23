@@ -1,5 +1,6 @@
 function [window_data, num_exo] = build_forecast_windows(Rt_true, S_true, I_true, ...
     tspan, exo_mode, pop_size, min_window, step_size, horizon)
+
 %BUILD_FORECAST_WINDOWS Expanding-window forecast entries for one scenario.
 %
 %   Syntax:
@@ -31,14 +32,18 @@ function [window_data, num_exo] = build_forecast_windows(Rt_true, S_true, I_true
 %                     U_past and sirs_state are empty when exo_mode is "None".
 %       num_exo     - Number of exogenous covariate columns (0 for "None").
 %
-%   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS.
+%   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS,
+%            PARTB_02_RUN_FORECASTS.
 %
 % A. M. Kaahin 2026-06-28
+% Modified: 2026-08-23
 
+%% 1. Exogenous Covariate Construction
 U_true  = local_exo_matrix(S_true, I_true, exo_mode, pop_size);
 num_exo = size(U_true, 2);
 has_exo = num_exo > 0;
 
+%% 2. Forecast Origin Initialization
 win_endpoints = min_window : step_size : (numel(Rt_true) - horizon);
 
 template = struct('window_day', [], 'window_day_idx', [], 'time_horizon', [], ...
@@ -46,6 +51,7 @@ template = struct('window_day', [], 'window_day_idx', [], 'time_horizon', [], ..
 built = repmat(template, numel(win_endpoints), 1);
 keep  = false(numel(win_endpoints), 1);
 
+%% 3. Window Construction
 for k = 1:numel(win_endpoints)
     idx_T = find(tspan == win_endpoints(k), 1);
     if isempty(idx_T) || idx_T + horizon > numel(Rt_true)
@@ -67,9 +73,11 @@ for k = 1:numel(win_endpoints)
     keep(k) = true;
 end
 
+%% 4. Output Assembly
 window_data = built(keep);
 end
 
+%% 5. Local Functions
 function U_true = local_exo_matrix(S_true, I_true, exo_mode, pop_size)
 %LOCAL_EXO_MATRIX Build the exogenous covariate matrix for one scenario.
 switch exo_mode

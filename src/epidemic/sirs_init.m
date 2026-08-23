@@ -1,4 +1,5 @@
 function stepper = sirs_init(model_params, sim_options)
+
 %SIRS_INIT Prepare a reusable one-day URDME SIRS stepper.
 %
 %   Syntax:
@@ -19,11 +20,11 @@ function stepper = sirs_init(model_params, sim_options)
 %   Outputs:
 %       stepper - Reusable SIRS stepper structure.
 %
-%   See also PARTA_01_GENERATE_TRUTH, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, ...
-%            PARTA_03_RUN_FORECASTS, SIRS_STEP.
+%   See also PARTA_01_GENERATE_TRUTH, PARTB_01_GENERATE_ROBUSTNESS_DATASETS,
+%            PARTC_02_SELECT_LOCAL_ORDERS, SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-06-28
+% Modified: 2026-08-23
 
 %% 1. Prepare Inputs
 sim_options.solver  = char(sim_options.solver);
@@ -80,6 +81,7 @@ stepper.seed          = sim_options.seed;
 stepper.call_count    = 0;
 end
 
+%% 5. Local Functions
 function build_dir = local_prepare_build_dir(repo_root)
 %LOCAL_PREPARE_BUILD_DIR Prepare the URDME build directory for this process.
 base_build = fullfile(repo_root, 'build', 'urdme');

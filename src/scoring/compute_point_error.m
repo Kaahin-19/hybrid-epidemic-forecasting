@@ -1,4 +1,5 @@
 function point_error = compute_point_error(truth, pred)
+
 %COMPUTE_POINT_ERROR Point-forecast error metrics across H forecast horizons.
 %
 %   Syntax:
@@ -7,9 +8,8 @@ function point_error = compute_point_error(truth, pred)
 %   Description:
 %       Computes signed, squared, and absolute point-forecast errors together
 %       with the root-mean-square error and mean absolute error from an H-by-1
-%       truth vector and an H-by-1 predictive-median vector. Inputs are assumed
-%       to already follow the internal H-by-1 convention; no reshaping,
-%       conversion, validation, or repair is performed.
+%       truth vector and an H-by-1 predictive-median vector. The returned
+%       pointwise errors preserve the documented H-by-1 orientation.
 %
 %   Inputs:
 %       truth - H-by-1 vector of observed values.
@@ -23,9 +23,12 @@ function point_error = compute_point_error(truth, pred)
 %           rmse           - Scalar root-mean-square error.
 %           mae            - Scalar mean absolute error.
 %
-%   See also COMPUTE_WIS, COMPUTE_INTERVAL_DIAGNOSTICS.
+%   See also PARTA_04_EVALUATE_FORECASTS, PARTB_03_EVALUATE_FORECASTS,
+%            PARTC_04_EVALUATE_FORECASTS, COMPUTE_WIS,
+%            COMPUTE_INTERVAL_DIAGNOSTICS.
 %
 % A. M. Kaahin 2026-06-22
+% Modified: 2026-08-23
 
 %% 1. Main Computation
 error          = pred - truth;

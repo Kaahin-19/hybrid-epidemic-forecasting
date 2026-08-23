@@ -1,5 +1,10 @@
 function [S_proxy, I_proxy, R_proxy, incidence_scaled_proxy] = reconstruct_sirs_states_from_incidence(incidence_observed, model_params)
+
 %RECONSTRUCT_SIRS_STATES_FROM_INCIDENCE Reconstruct causal SIRS state proxies.
+%
+%   Syntax:
+%       [S_proxy, I_proxy, R_proxy, incidence_scaled_proxy] = ...
+%           reconstruct_sirs_states_from_incidence(incidence_observed, model_params)
 %
 %   Description:
 %       Scales reported daily incidence to the configured effective SIRS
@@ -18,10 +23,10 @@ function [S_proxy, I_proxy, R_proxy, incidence_scaled_proxy] = reconstruct_sirs_
 %       R_proxy                - End-of-day recovered proxy.
 %       incidence_scaled_proxy - Incidence on the effective-population scale.
 %
-%   See also PARTC_01_PREPARE_DATA, PARTC_CONFIG.
+%   See also PARTC_01_PREPARE_DATA.
 %
 % A. M. Kaahin 2026-07-28
-% Modified: 2026-08-22
+% Modified: 2026-08-23
 
 %% 1. Parameter Domains
 if model_params.reference_population <= 0 || model_params.effective_population <= 0

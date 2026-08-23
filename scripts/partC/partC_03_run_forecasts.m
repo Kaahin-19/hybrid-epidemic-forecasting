@@ -10,19 +10,20 @@
 %       observed lag history and current SIRS proxy state at each origin.
 %
 %   Workflow:
-%       1. Load the prepared Part C data and local-selection artifacts.
-%       2. Construct the common held-out forecast-origin grid.
-%       3. Fit the fixed Part A models on the calibration block.
-%       4. Generate all six model-strategy forecast combinations.
-%       5. Check online-strategy equality when both use the same configuration.
-%       6. Save one forecast artifact per model-strategy combination.
+%       1. Initialize the held-out forecasting paths and configuration.
+%       2. Load prepared data and construct the common forecast origins.
+%       3. Load the Part C local-selection artifacts.
+%       4. Prepare the reusable closed-loop SIRS stepper.
+%       5. Fit fixed models and generate all model-strategy forecasts.
+%       6. Check online-strategy equality for matching configurations.
+%       7. Save one artifact per model-strategy combination.
 %
 %   See also PARTC_CONFIG, PARTC_01_PREPARE_DATA,
-%            PARTC_02_SELECT_LOCAL_ORDERS, FORECAST_OPEN,
-%            FORECAST_CLOSED, SIRS_INIT, SIRS_STEP.
+%            PARTC_02_SELECT_LOCAL_ORDERS, PARTC_04_EVALUATE_FORECASTS,
+%            FORECAST_OPEN, FORECAST_CLOSED, SIRS_INIT, SIRS_STEP.
 %
 % A. M. Kaahin 2026-08-06
-% Modified: 2026-08-22
+% Modified: 2026-08-23
 
 %% 1. Initialization
 clear; close all; clc;

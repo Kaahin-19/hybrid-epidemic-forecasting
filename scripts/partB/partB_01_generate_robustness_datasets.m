@@ -10,16 +10,15 @@
 %       SEIRS when xi > 0.
 %
 %   Workflow:
-%       1. Load Part B configuration and resolve cases/scenarios.
-%       2. Generate analytic Rt signals inline for each scenario.
-%       3. Simulate latent SIR/SIRS or SEIR/SEIRS epidemic truth.
-%       4. Build model-visible inputs.
-%       5. Save successful dataset artifacts and record generation status.
+%       1. Initialize configuration, output paths, and generation status.
+%       2. Generate Rt signals, simulate epidemic truth, and save each dataset.
+%       3. Verify completion and persist the final generation status.
 %
-%   See also PARTB_CONFIG, SIRS_INIT, SIRS_STEP, SEIRS_INIT, SEIRS_STEP.
+%   See also PARTB_CONFIG, PARTB_02_RUN_FORECASTS, SIRS_INIT, SIRS_STEP,
+%            SEIRS_INIT, SEIRS_STEP.
 %
 % A. M. Kaahin 2026-06-30
-% Modified: 2026-08-20
+% Modified: 2026-08-23
 
 %% 1. Initialization
 clear; close all; clc;

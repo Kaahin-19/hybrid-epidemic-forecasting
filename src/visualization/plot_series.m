@@ -1,4 +1,5 @@
 function [handles, labels] = plot_series(ax, spec)
+
 %PLOT_SERIES Draw line, ribbon, and reference series into an axes.
 %
 %   Syntax:
@@ -7,10 +8,9 @@ function [handles, labels] = plot_series(ax, spec)
 %   Description:
 %       Draws an ordered set of line, interval-ribbon, and reference-line
 %       series into a caller-supplied axes, then applies shared panel styling
-%       via APPLY_PANEL_STYLE. The function never creates figures or tiled
-%       layouts, never sets a title, and never saves files. Series are drawn
-%       in the order given, so callers place ribbon bands before line series
-%       to keep the fills behind the lines in vector output.
+%       via APPLY_PANEL_STYLE. Series are drawn in the supplied order so ribbon
+%       bands can precede line series in vector output. The returned handles
+%       and labels support caller-managed legends.
 %
 %   Inputs:
 %       ax   - Target axes handle.
@@ -31,9 +31,12 @@ function [handles, labels] = plot_series(ax, spec)
 %       handles - Graphics handles of labelled series, for a shared legend.
 %       labels  - Legend text matching handles.
 %
-%   See also APPLY_PANEL_STYLE, PLOT_DISTRIBUTION.
+%   See also PARTA_05_GENERATE_FIGURES, PARTB_04_GENERATE_FIGURES,
+%            PARTC_05_GENERATE_FIGURES, APPLY_PANEL_STYLE,
+%            PLOT_DISTRIBUTION.
 %
 % A. M. Kaahin 2026-06-29
+% Modified: 2026-08-23
 
 %% 1. Draw Series In Order
 was_held = ishold(ax);
@@ -79,6 +82,7 @@ else
 end
 end
 
+%% 3. Local Functions
 function h = local_draw_line(ax, s)
 %LOCAL_DRAW_LINE Draw a single line or reference series.
 args = {};

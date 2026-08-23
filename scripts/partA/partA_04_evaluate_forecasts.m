@@ -7,16 +7,18 @@
 %       window-level scores, horizon-level scores, and compact summaries.
 %
 %   Workflow:
-%       1. Load final forecast artifacts.
-%       2. Compute Rt and infected-state projection scores.
+%       1. Initialize the Part A evaluation paths and inputs.
+%       2. Load and score every final forecast artifact.
 %       3. Aggregate Rt and infected-state projection summaries.
-%       4. Save the evaluation artifact and report tables.
+%       4. Save the evaluation artifact.
+%       5. Export the summary tables.
 %
-%   See also PARTA_CONFIG, PARTA_03_RUN_FORECASTS, COMPUTE_WIS, ...
-%            COMPUTE_POINT_ERROR, COMPUTE_INTERVAL_DIAGNOSTICS.
+%   See also PARTA_CONFIG, PARTA_03_RUN_FORECASTS,
+%            PARTA_05_GENERATE_FIGURES, COMPUTE_WIS, COMPUTE_POINT_ERROR,
+%            COMPUTE_INTERVAL_DIAGNOSTICS.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-08-20
+% Modified: 2026-08-23
 
 %% 1. Initialization
 clear; close all; clc;

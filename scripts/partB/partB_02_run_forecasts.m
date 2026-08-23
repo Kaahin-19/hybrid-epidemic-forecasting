@@ -5,25 +5,27 @@
 %       Part B robustness datasets. The requested model families are chosen
 %       through cfg.partB.run.model_types. For every requested model and
 %       exogenous-input combination the script loads the Part A model-selection
-%       artifact and reuses its selected_configuration without any further
-%       model-order selection. Each dataset is forecast with the same
+%       artifact and applies its frozen selected_configuration. Each dataset
+%       is forecast with the same
 %       expanding-window protocol as Part A: the model is trained on the
 %       model-visible Rt_model_input (respecting its dataset validity mask)
 %       while the saved truth windows are taken from the latent Rt_true.
 %
 %   Workflow:
-%       1. Resolve the requested model/exogenous combinations.
-%       2. Load the available Part A selected configurations and report gaps.
-%       3. Load the Part B generation status and select successful datasets.
-%       4. Forecast each dataset with every available combination.
-%       5. Save one forecast artifact per dataset/combination and checkpoint
-%          a forecast-execution status artifact after every attempt.
+%       1. Initialize the Part B forecast run and output paths.
+%       2. Resolve the requested model and exogenous-input combinations.
+%       3. Load the available Part A selected configurations.
+%       4. Load the Part B generation status and successful datasets.
+%       5. Initialize the forecast-execution status artifact.
+%       6. Forecast each dataset and checkpoint every attempt.
+%       7. Verify completion and persist the final forecast status.
 %
-%   See also PARTB_CONFIG, PARTA_03_RUN_FORECASTS, BUILD_FORECAST_WINDOWS, ...
+%   See also PARTB_CONFIG, PARTB_01_GENERATE_ROBUSTNESS_DATASETS,
+%            PARTB_03_EVALUATE_FORECASTS, BUILD_FORECAST_WINDOWS,
 %            FORECAST_OPEN, FORECAST_CLOSED.
 %
 % A. M. Kaahin 2026-07-18
-% Modified: 2026-08-12
+% Modified: 2026-08-23
 
 %% 1. Initialization
 clear; close all; clc;

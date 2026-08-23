@@ -5,23 +5,23 @@
 %       compact set of thesis figures: a robustness overview (mean WIS by
 %       stress case and WIS degradation relative to the matched Part A
 %       baseline), horizon-wise WIS, replicate-level WIS distributions,
-%       interval calibration, and Script 2 execution outcomes. The script is a
-%       visualization layer only: it never rescores forecasts, reruns models,
-%       retunes configurations, reconstructs Script 3 aggregations, or reads
-%       raw forecast artifacts. Lower WIS is better and a WIS ratio above one
+%       interval calibration, and Script 2 execution outcomes from the saved
+%       evaluation summaries. Lower WIS is better and a WIS ratio above one
 %       indicates degradation relative to the Part A baseline.
 %
 %   Workflow:
-%       1. Load and validate the Part B evaluation artifact and its summaries.
-%       2. Derive model/exogenous combinations, stress cases, and scenarios.
-%       3. Draw the shared robustness overview and execution-outcome figures.
-%       4. Draw the per-combination horizon, replicate, and calibration figures.
+%       1. Initialize figure paths and shared styling.
+%       2. Load and validate the Part B evaluation summaries.
+%       3. Derive the plotted combinations, stress cases, and scenarios.
+%       4. Generate the shared robustness overview.
+%       5. Generate the execution-outcome figure.
+%       6. Generate horizon, replicate, and calibration figures by combination.
 %
-%   See also PARTB_CONFIG, PARTB_03_EVALUATE_FORECASTS, PARTA_05_GENERATE_FIGURES, ...
-%            PLOT_SERIES, PLOT_DISTRIBUTION, APPLY_PANEL_STYLE.
+%   See also PARTB_CONFIG, PARTB_03_EVALUATE_FORECASTS, PLOT_SERIES,
+%            PLOT_DISTRIBUTION, APPLY_PANEL_STYLE.
 %
 % A. M. Kaahin 2026-07-18
-% Modified: 2026-08-12
+% Modified: 2026-08-23
 
 %% 1. Initialization
 clear; close all; clc;

@@ -1,4 +1,5 @@
 function [handles, labels] = plot_distribution(ax, spec)
+
 %PLOT_DISTRIBUTION Draw a grouped boxchart distribution into an axes.
 %
 %   Syntax:
@@ -7,8 +8,8 @@ function [handles, labels] = plot_distribution(ax, spec)
 %   Description:
 %       Draws a grouped boxchart (one box per category, colored by an
 %       optional grouping variable) into a caller-supplied axes, then applies
-%       shared panel styling via APPLY_PANEL_STYLE. The function never creates
-%       figures, never sets a title, and never saves files.
+%       shared panel styling via APPLY_PANEL_STYLE and returns handles and
+%       labels for caller-managed legends.
 %
 %   Inputs:
 %       ax   - Target axes handle.
@@ -23,9 +24,11 @@ function [handles, labels] = plot_distribution(ax, spec)
 %       handles - BoxChart handles (one per color group) for a shared legend.
 %       labels  - Group labels matching handles.
 %
-%   See also APPLY_PANEL_STYLE, PLOT_SERIES.
+%   See also PARTA_05_GENERATE_FIGURES, PARTB_04_GENERATE_FIGURES,
+%            PARTC_05_GENERATE_FIGURES, APPLY_PANEL_STYLE, PLOT_SERIES.
 %
 % A. M. Kaahin 2026-06-22
+% Modified: 2026-08-23
 
 %% 1. Draw Grouped Boxchart
 if isfield(spec, 'color_order') && ~isempty(spec.color_order)

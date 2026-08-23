@@ -8,14 +8,14 @@
 %       model-selection and forecasting stages.
 %
 %   Workflow:
-%       1. Load configuration and ensure the Part A data directory exists.
-%       2. Generate each configured effective-Rt signal and check bounds.
-%       3. Simulate and save one SIRS truth artifact per scenario.
+%       1. Load configuration and initialize the Part A data directory.
+%       2. Generate, simulate, validate, and save each configured scenario.
 %
-%   See also PARTA_CONFIG, SIRS_INIT, SIRS_STEP.
+%   See also PARTA_CONFIG, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, SIRS_INIT,
+%            SIRS_STEP.
 %
 % A. M. Kaahin 2026-05-31
-% Modified: 2026-06-28
+% Modified: 2026-08-23
 
 %% 1. Initialization
 clear; close all; clc;

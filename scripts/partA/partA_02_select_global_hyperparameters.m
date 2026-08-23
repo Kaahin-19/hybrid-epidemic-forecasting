@@ -4,20 +4,23 @@
 %       Evaluates candidate model configurations across all synthetic Rt
 %       scenarios using expanding-window forecasts and WIS scoring. Exports
 %       the selected configuration together with the valid candidate grid,
-%       global candidate WIS scores, and per-candidate fitted-model AICc as a
-%       diagnostic that never influences selection (WIS is the sole criterion).
+%       global candidate WIS scores, and per-candidate fitted-model AICc.
+%       Selection uses WIS as its criterion and retains AICc as a diagnostic.
 %
 %   Workflow:
-%       1. Load synthetic truth trajectories and build forecast windows.
-%       2. Evaluate candidate configurations across all scenarios.
-%       3. Select the simplest configuration within the one-standard-error rule.
-%       4. Save the selected configuration and candidate-score evidence.
+%       1. Initialize the configured Part A selection run.
+%       2. Load scenario truth and construct forecast windows.
+%       3. Construct the candidate configuration grid.
+%       4. Fit, forecast, and score every candidate across all scenarios.
+%       5. Apply the one-standard-error selection rule.
+%       6. Save the selected configuration and candidate-score evidence.
 %
-%   See also PARTA_CONFIG, PARTA_03_RUN_FORECASTS, BUILD_FORECAST_WINDOWS, ...
-%            FORECAST_OPEN, FORECAST_CLOSED, COMPUTE_WIS.
+%   See also PARTA_CONFIG, PARTA_01_GENERATE_TRUTH, PARTA_03_RUN_FORECASTS,
+%            BUILD_FORECAST_WINDOWS, FORECAST_OPEN, FORECAST_CLOSED,
+%            COMPUTE_WIS.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-06-28
+% Modified: 2026-08-23
 
 %% 1. Initialization
 clear; close all; clc;

@@ -7,15 +7,16 @@
 %       infected-state projection error relative to Rt persistence.
 %
 %   Workflow:
-%       1. Generate Rt scenario trajectory panels.
-%       2. Generate fixed-lead forecast comparison figures.
-%       3. Generate Rt evaluation and infected-state projection figures.
+%       1. Initialize figure paths, source artifacts, and shared styling.
+%       2. Generate the Rt scenario trajectory panels.
+%       3. Generate the fixed-lead forecast comparison figures.
+%       4. Generate the Rt evaluation and infected-state projection figures.
 %
-%   See also PARTA_01_GENERATE_TRUTH, PARTA_03_RUN_FORECASTS, ...
-%            PARTA_04_EVALUATE_FORECASTS, PLOT_SERIES, PLOT_DISTRIBUTION.
+%   See also PARTA_CONFIG, PARTA_04_EVALUATE_FORECASTS, PLOT_SERIES,
+%            PLOT_DISTRIBUTION.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-08-20
+% Modified: 2026-08-23
 
 %% 1. Initialization
 clear; close all; clc;

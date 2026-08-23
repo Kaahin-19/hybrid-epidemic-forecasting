@@ -6,9 +6,16 @@
 %       expected to be available from the user's MATLAB environment. The
 %       script also initializes the required directory structure for data and
 %       results artifacts.
-
+%
+%   Workflow:
+%       1. Add project configuration, script, and source folders to the path.
+%       2. Create the data and result directories required by the pipelines.
+%
+%   See also PARTA_01_GENERATE_TRUTH, PARTB_01_GENERATE_ROBUSTNESS_DATASETS,
+%            PARTC_01_PREPARE_DATA.
+%
 % A. M. Kaahin 2026-02-18
-% Modified: 2026-06-11
+% Modified: 2026-08-23
 
 %% 1. Path Management
 repo_root = fileparts(mfilename('fullpath'));

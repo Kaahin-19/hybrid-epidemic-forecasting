@@ -1,4 +1,5 @@
 function interval = compute_interval_diagnostics(truth, lower, upper, alphas)
+
 %COMPUTE_INTERVAL_DIAGNOSTICS Raw prediction-interval diagnostics across H horizons and K levels.
 %
 %   Syntax:
@@ -10,9 +11,8 @@ function interval = compute_interval_diagnostics(truth, lower, upper, alphas)
 %       and per-interval diagnostics needed for interval scoring and
 %       calibration analysis: empirical coverage, interval width, calibration
 %       error, the interval score, the per-interval weighted-interval-score
-%       components, and their per-horizon means across interval levels. Inputs
-%       are assumed to already follow the internal orientation conventions; no
-%       reshaping, conversion, validation, or repair is performed.
+%       components, and their per-horizon means across interval levels. The
+%       returned arrays preserve the documented horizon-by-level dimensions.
 %
 %   Inputs:
 %       truth  - H-by-1 vector of observed values.
@@ -39,9 +39,11 @@ function interval = compute_interval_diagnostics(truth, lower, upper, alphas)
 %           absolute_calibration_mean     - H-by-1 mean |coverage error|.
 %           width_mean                    - H-by-1 mean interval width.
 %
-%   See also COMPUTE_WIS, COMPUTE_POINT_ERROR.
+%   See also PARTA_04_EVALUATE_FORECASTS, PARTB_03_EVALUATE_FORECASTS,
+%            PARTC_04_EVALUATE_FORECASTS, COMPUTE_WIS, COMPUTE_POINT_ERROR.
 %
 % A. M. Kaahin 2026-06-22
+% Modified: 2026-08-23
 
 %% 1. Coverage and Width
 nominal_coverage = 1 - alphas;

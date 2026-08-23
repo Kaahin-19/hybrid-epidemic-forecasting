@@ -7,18 +7,17 @@
 %       SIRS model, then exports the Rt forecasts and matching state trajectories.
 %
 %   Workflow:
-%       1. Load the selected model configuration.
-%       2. Build forecast windows for each synthetic scenario.
-%       3. Run final forecasts with the selected configuration.
-%       4. Project forecast-driven and persistence SIRS trajectories.
-%       5. Save one forecast artifact per scenario.
+%       1. Initialize the configured Part A forecasting run.
+%       2. Load the selected model configuration.
+%       3. Resolve the scenario artifacts and reusable SIRS steppers.
+%       4. Forecast, project, and save each synthetic scenario.
 %
 %   See also PARTA_CONFIG, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS,
-%            BUILD_FORECAST_WINDOWS, FORECAST_OPEN, FORECAST_CLOSED,
-%            SIRS_INIT, SIRS_STEP.
+%            PARTA_04_EVALUATE_FORECASTS, BUILD_FORECAST_WINDOWS,
+%            FORECAST_OPEN, FORECAST_CLOSED, SIRS_INIT, SIRS_STEP.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-08-22
+% Modified: 2026-08-23
 
 %% 1. Initialization
 clear; close all; clc;

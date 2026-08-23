@@ -1,5 +1,9 @@
 function cfg = partB_config()
+
 %PARTB_CONFIG Configure Part B robustness-dataset experiments.
+%
+%   Syntax:
+%       cfg = partB_config()
 %
 %   Description:
 %       Extends the Part A configuration with the Part B robustness design.
@@ -12,6 +16,9 @@ function cfg = partB_config()
 %       paths. The structural-mismatch truth preserves the Part A
 %       immunity-waning assumption: SIR baselines use SEIR truth and SIRS
 %       baselines use SEIRS truth.
+%
+%   Inputs:
+%       None.
 %
 %   Outputs:
 %       cfg - Structure inheriting all Part A fields plus:
@@ -29,7 +36,7 @@ function cfg = partB_config()
 %   See also PARTA_CONFIG, PARTB_01_GENERATE_ROBUSTNESS_DATASETS.
 %
 % A. M. Kaahin 2026-06-30
-% Modified: 2026-08-20
+% Modified: 2026-08-23
 
 %% 1. Inherit Part A Configuration
 cfg = partA_config();

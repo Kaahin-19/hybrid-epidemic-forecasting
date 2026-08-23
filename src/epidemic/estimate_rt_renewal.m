@@ -1,5 +1,9 @@
 function Rt_estimated = estimate_rt_renewal(incidence, weights, min_infectiousness)
+
 %ESTIMATE_RT_RENEWAL Estimate Rt from incidence using renewal weights.
+%
+%   Syntax:
+%       Rt_estimated = estimate_rt_renewal(incidence, weights, min_infectiousness)
 %
 %   Description:
 %       Estimates an operational effective reproduction-number series from
@@ -19,10 +23,10 @@ function Rt_estimated = estimate_rt_renewal(incidence, weights, min_infectiousne
 %   Outputs:
 %       Rt_estimated - T-by-1 renewal Rt estimate with undefined entries NaN.
 %
-%   See also SERIAL_INTERVAL_WEIGHTS, PARTC_01_PREPARE_DATA.
+%   See also PARTC_01_PREPARE_DATA, SERIAL_INTERVAL_WEIGHTS.
 %
 % A. M. Kaahin 2026-06-30
-% Modified: 2026-08-22
+% Modified: 2026-08-23
 
 %% 1. Parameter Domain
 if min_infectiousness < 0

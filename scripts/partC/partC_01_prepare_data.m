@@ -13,11 +13,12 @@
 %       4. Reconstruct reported-case SIRS state proxies.
 %       5. Save the prepared data required by downstream Part C scripts.
 %
-%   See also PARTC_CONFIG, SERIAL_INTERVAL_WEIGHTS, ESTIMATE_RT_RENEWAL,
+%   See also PARTC_CONFIG, PARTC_02_SELECT_LOCAL_ORDERS,
+%            SERIAL_INTERVAL_WEIGHTS, ESTIMATE_RT_RENEWAL,
 %            RECONSTRUCT_SIRS_STATES_FROM_INCIDENCE.
 %
 % A. M. Kaahin 2026-07-27
-% Modified: 2026-08-22
+% Modified: 2026-08-23
 
 %% 1. Initialization
 clear; close all; clc;

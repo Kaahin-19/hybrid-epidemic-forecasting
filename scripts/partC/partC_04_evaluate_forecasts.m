@@ -9,19 +9,20 @@
 %       horizons overlap across successive origins.
 %
 %   Workflow:
-%       1. Load the six held-out forecast artifacts.
-%       2. Verify their common held-out forecast grid.
+%       1. Initialize evaluation paths and configuration.
+%       2. Load and verify the held-out forecast artifacts.
 %       3. Score every forecast origin, lead time, and interval level.
-%       4. Build strategy, lead-time, and interval summaries.
-%       5. Compute matched descriptive WIS comparisons.
-%       6. Report exact equivalence of the two online strategies.
-%       7. Save one evaluation artifact and eight CSV tables.
+%       4. Build summaries, comparisons, and online-equivalence results.
+%       5. Assemble the evaluation artifact.
+%       6. Save the evaluation artifact and CSV tables.
+%       7. Report the completed outputs.
 %
-%   See also PARTC_CONFIG, PARTC_03_RUN_FORECASTS, COMPUTE_WIS,
-%            COMPUTE_POINT_ERROR, COMPUTE_INTERVAL_DIAGNOSTICS.
+%   See also PARTC_CONFIG, PARTC_03_RUN_FORECASTS,
+%            PARTC_05_GENERATE_FIGURES, COMPUTE_WIS, COMPUTE_POINT_ERROR,
+%            COMPUTE_INTERVAL_DIAGNOSTICS.
 %
 % A. M. Kaahin 2026-08-06
-% Modified: 2026-08-22
+% Modified: 2026-08-23
 
 %% 1. Initialization
 clear; close all; clc;

@@ -1,4 +1,5 @@
 function [ensemble_paths, fit_info] = forecast_open(model_type, params, Rt_past, num_draws, horizon, resample_seed)
+
 %FORECAST_OPEN Bootstrap forecast ensemble for output-only models (num_exo == 0).
 %
 %   Syntax:
@@ -24,16 +25,19 @@ function [ensemble_paths, fit_info] = forecast_open(model_type, params, Rt_past,
 %
 %   Outputs:
 %       ensemble_paths - horizon×num_draws matrix of finite Rt bootstrap draws.
-%       fit_info       - Struct with field AICc (corrected AIC of the fitted model);
-%                        a diagnostic that never influences model selection.
+%       fit_info       - Struct containing the fitted model's corrected AIC in AICc.
 %
-%   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS, FORECAST_CLOSED.
+%   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS,
+%            PARTB_02_RUN_FORECASTS, PARTC_02_SELECT_LOCAL_ORDERS,
+%            PARTC_03_RUN_FORECASTS, FORECAST_CLOSED.
 %
 % A. M. Kaahin 2026-06-15
-% Modified: 2026-08-15
+% Modified: 2026-08-23
 
+%% 1. Forecast Setup
 y = log(Rt_past);
 
+%% 2. Model-Specific Forecast
 switch model_type
     case "AR"
         [ensemble_paths, aicc] = local_ar(y, params(1), num_draws, horizon, resample_seed);
@@ -43,10 +47,11 @@ switch model_type
         error('FORECAST_OPEN:UnknownModel', 'Unsupported model type: %s', model_type);
 end
 
+%% 3. Output Assembly
 fit_info = struct('AICc', aicc);
 end
 
-%% Local functions
+%% 4. Local Functions
 
 function [ensemble, aicc] = local_ar(y, p, num_draws, horizon, resample_seed)
 %LOCAL_AR AR bootstrap ensemble on the log scale.
