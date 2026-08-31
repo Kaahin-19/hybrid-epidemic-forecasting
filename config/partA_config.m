@@ -92,9 +92,9 @@ cfg.forecast.min_window = 49;
 cfg.forecast.step_size  = 7;
 cfg.forecast.horizon    = 14;
 
-cfg.forecast.max_ar_order      = 2;
-cfg.forecast.max_exo_order     = 2;
-cfg.forecast.max_exo_delay     = 2;
+cfg.forecast.max_ar_order      = 7;
+cfg.forecast.max_exo_order     = 4;
+cfg.forecast.max_exo_delay     = 4;
 cfg.forecast.max_state_order   = 2;
 cfg.forecast.state_diff_orders = 0;
 

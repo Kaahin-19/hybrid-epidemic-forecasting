@@ -20,7 +20,7 @@
 %            COMPUTE_WIS.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-08-23
+% Modified: 2026-08-31
 
 %% 1. Initialization
 clear; close all; clc;
@@ -115,13 +115,14 @@ candidate_aicc   = inf(num_candidates, num_scenarios);
 global_mean_aicc = inf(num_candidates, 1);
 
 parfor idx = 1:num_candidates
-    params              = candidate_grid(idx, :);
-    scen_wis            = nan(1, num_scenarios);
-    scen_aicc           = nan(1, num_scenarios);
-    completed_count     = 0;
-    domain_failure      = false;
-    scenario_data_local = scenario_data_const.Value;
-    wis_alphas_local    = wis_alphas_const.Value;
+    params               = candidate_grid(idx, :);
+    scen_wis             = nan(1, num_scenarios);
+    scen_aicc            = nan(1, num_scenarios);
+    completed_count      = 0;
+    candidate_infeasible = false;
+    scenario_data_local  = scenario_data_const.Value;
+    wis_alphas_local     = wis_alphas_const.Value;
+
     for s = 1:num_scenarios
         data        = scenario_data_local(s);
         window_wis  = inf(numel(data.window_data), 1);
@@ -163,8 +164,9 @@ parfor idx = 1:num_candidates
                 window_aicc(w)  = fit_info.AICc;
                 completed_count = completed_count + 1;
             catch ME
-                if strcmp(ME.identifier, 'EPIDEMIC:SusceptibleBelowThreshold')
-                    domain_failure = true;
+                if any(strcmp(ME.identifier, {'FORECAST_CLOSED:InvalidForecastDraw', 'EPIDEMIC:SusceptibleBelowThreshold'}))
+                    candidate_infeasible = true;
+                    fprintf('Infeasible candidate %s in scenario %s at window %d: %s\n', mat2str(params), data.scenario_id, w, ME.identifier);
                     break;
                 else
                     rethrow(ME);
@@ -172,7 +174,7 @@ parfor idx = 1:num_candidates
             end
         end
 
-        if domain_failure
+        if candidate_infeasible
             break;
         end
 
@@ -180,7 +182,7 @@ parfor idx = 1:num_candidates
         scen_aicc(s) = mean(window_aicc);
     end
 
-    if ~domain_failure && completed_count == intended_window_count
+    if ~candidate_infeasible && completed_count == intended_window_count
         candidate_scores(idx, :) = scen_wis;
         global_mean_wis(idx)     = mean(scen_wis);
         candidate_aicc(idx, :)   = scen_aicc;
@@ -195,7 +197,7 @@ clear pool_cleanup scenario_data_const wis_alphas_const sirs_stepper_const
 [best_global_wis, raw_best_index] = min(global_mean_wis);
 
 if ~isfinite(best_global_wis)
-    error('PARTA_02:NoFeasibleCandidate', 'No candidate completed all intended windows without domain failures.');
+    error('PARTA_02:NoFeasibleCandidate', 'No candidate completed all intended windows without feasibility failures.');
 end
 
 one_se_threshold     = best_global_wis + local_one_se(candidate_scores(raw_best_index, :));
