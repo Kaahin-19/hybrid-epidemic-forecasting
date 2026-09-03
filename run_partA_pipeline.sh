@@ -9,24 +9,35 @@ RUN_ID=""
 RUN_LOG_DIR=""
 PIPELINE_LOG=""
 MANIFEST_FILE=""
+PIPELINE_STARTED_AT=""
+PIPELINE_STARTED_EPOCH=""
 
 show_help() {
   cat <<'EOF'
 Usage:
-  ./run_partA_pipeline.sh [--models <ids>] [--exo <ids>] [--fresh] [--help]
+  ./run_partA_pipeline.sh
+  ./run_partA_pipeline.sh --models <ids> --exo <ids>
+  ./run_partA_pipeline.sh --models <ids> --exo <ids> --fresh
+  ./run_partA_pipeline.sh --help
 
 Description:
-  Runs the Part A pipeline in the following order:
-    1. scripts/partA/partA_01_generate_truth.m
+  Runs the configuration-driven Part A synthetic forecasting pipeline:
+
+    1. Generate synthetic ground truth.
     2. For each selected valid Model/Exo combination:
-         - scripts/partA/partA_02_select_global_hyperparameters.m
-         - scripts/partA/partA_03_run_forecasts.m
-    3. scripts/partA/partA_04_evaluate_forecasts.m
-    4. scripts/partA/partA_05_generate_figures.m
+         - select global model configuration;
+         - run probabilistic forecasts.
+    3. Evaluate accumulated forecast artifacts.
+    4. Generate Part A thesis figures.
 
   Each invocation creates a timestamped run folder under:
     results/partA/logs/<run_id>/
-  containing a pipeline log, per-stage MATLAB logs, and a manifest file.
+
+  The folder contains the pipeline log, per-stage MATLAB logs, and a
+  manifest file.
+
+  The terminal shows one compact row per stage. Long-running stages update
+  their progress in place while full MATLAB output remains in the stage logs.
 
 Model Type Options:
   1 = AR
@@ -42,25 +53,23 @@ Exogenous Mode Options:
 
 Selection Behavior:
   --models and --exo accept comma-separated numeric lists.
-  The script forms the cross-product of the selected sets and runs only
-  valid combinations.
+  The script forms the cross-product of the selected sets and keeps only
+  combinations supported by the current Part A pipeline.
 
-  Valid combinations:
-    AR    -> None only
-    ARX   -> S, I, Both
-    N4SID -> None, S, I, Both
-    SSEST -> None, S, I, Both
+  Current valid combinations:
+    AR  -> None
+    ARX -> S, I, Both
 
 Examples:
   ./run_partA_pipeline.sh
   ./run_partA_pipeline.sh --models 2 --exo 2
-  ./run_partA_pipeline.sh --models 2,4 --exo 1,2,3
-  ./run_partA_pipeline.sh --models 1,2 --exo 0,1,2 --fresh
+  ./run_partA_pipeline.sh --models 1,2 --exo 0,1,2,3
+  ./run_partA_pipeline.sh --models 1,2 --exo 0,1,2,3 --fresh
 
 Options:
-  --models <ids>  Model type IDs to run. Default: all model types.
-  --exo <ids>     Exogenous mode IDs to run. Default: all exogenous modes.
-  --fresh         Clear data/partA and results/partA before execution.
+  --models <ids>  Model type IDs to run. Default: all model type IDs.
+  --exo <ids>     Exogenous mode IDs to run. Default: all exogenous mode IDs.
+  --fresh         Clear generated Part A data/results before execution.
   --help, -h      Show this help message.
 EOF
 }
@@ -68,10 +77,6 @@ EOF
 die() {
   printf 'Error: %s\n' "$1" >&2
   exit 1
-}
-
-warn() {
-  printf 'Warning: %s\n' "$1" >&2
 }
 
 timestamp_now() {
@@ -82,10 +87,35 @@ log_status() {
   local message="$1"
   local line="[$(timestamp_now)] $message"
 
-  printf '%s\n' "$line"
   if [[ -n "${PIPELINE_LOG:-}" ]]; then
     printf '%s\n' "$line" >> "$PIPELINE_LOG"
   fi
+}
+
+format_duration() {
+  local total_secs="$1"
+  local hours=$(( total_secs / 3600 ))
+  local minutes=$(( (total_secs % 3600) / 60 ))
+  local seconds=$(( total_secs % 60 ))
+
+  if (( hours > 0 )); then
+    printf '%dh %02dm %02ds' "$hours" "$minutes" "$seconds"
+  elif (( minutes > 0 )); then
+    printf '%dm %02ds' "$minutes" "$seconds"
+  else
+    printf '%ds' "$seconds"
+  fi
+}
+
+initialize_run_logging() {
+  RUN_ID="$(date '+%Y%m%d_%H%M%S')"
+  RUN_LOG_DIR="$LOG_ROOT/$RUN_ID"
+  PIPELINE_LOG="$RUN_LOG_DIR/pipeline.log"
+  MANIFEST_FILE="$RUN_LOG_DIR/manifest.tsv"
+
+  mkdir -p "$RUN_LOG_DIR"
+  : > "$PIPELINE_LOG"
+  printf 'Timestamp\tStep\tModel\tExo\tStatus\tLogFile\tDetails\n' > "$MANIFEST_FILE"
 }
 
 append_manifest() {
@@ -108,21 +138,33 @@ append_manifest() {
 
 sanitize_name() {
   local value="$1"
+
   value="${value// /_}"
   value="${value//|/_}"
   value="${value//[^A-Za-z0-9._-]/_}"
+
   printf '%s' "$value"
 }
 
-initialize_run_logging() {
-  RUN_ID="$(date '+%Y%m%d_%H%M%S')"
-  RUN_LOG_DIR="$LOG_ROOT/$RUN_ID"
-  PIPELINE_LOG="$RUN_LOG_DIR/pipeline.log"
-  MANIFEST_FILE="$RUN_LOG_DIR/manifest.tsv"
+create_partA_directories() {
+  mkdir -p \
+    "$REPO_ROOT/data/partA" \
+    "$REPO_ROOT/results/partA/model_selection" \
+    "$REPO_ROOT/results/partA/forecasts" \
+    "$REPO_ROOT/results/partA/evaluation" \
+    "$REPO_ROOT/results/partA/tables" \
+    "$REPO_ROOT/results/partA/figures" \
+    "$REPO_ROOT/results/partA/logs"
+}
 
-  mkdir -p "$RUN_LOG_DIR"
-  : > "$PIPELINE_LOG"
-  printf 'Timestamp\tStep\tModel\tExo\tStatus\tLogFile\tDetails\n' > "$MANIFEST_FILE"
+remove_partA_contents() {
+  printf 'Clearing generated Part A artifacts...\n'
+
+  rm -rf \
+    "$REPO_ROOT/data/partA" \
+    "$REPO_ROOT/results/partA"
+
+  create_partA_directories
 }
 
 model_name_from_id() {
@@ -150,10 +192,18 @@ combo_is_valid() {
   local exo_name="$2"
 
   case "$model_name" in
-    AR) [[ "$exo_name" == "None" ]] ;;
-    ARX) [[ "$exo_name" != "None" ]] ;;
-    N4SID|SSEST) return 0 ;;
-    *) return 1 ;;
+    AR)
+      [[ "$exo_name" == "None" ]]
+      ;;
+    ARX)
+      [[ "$exo_name" != "None" ]]
+      ;;
+    N4SID|SSEST)
+      return 1
+      ;;
+    *)
+      return 1
+      ;;
   esac
 }
 
@@ -169,9 +219,11 @@ parse_numeric_list() {
   [[ -n "$normalized" ]] || die "Missing value for ${option_name}."
 
   IFS=',' read -r -a tokens <<< "$normalized"
+
   for token in "${tokens[@]}"; do
     [[ -n "$token" ]] || continue
     [[ "$token" =~ ^[0-9]+$ ]] || die "Invalid ${option_name} entry '${token}'. Use numeric IDs."
+
     if [[ -z "${seen[$token]+x}" ]]; then
       output_ref+=("$token")
       seen["$token"]=1
@@ -191,6 +243,7 @@ collect_option_value() {
   while [[ "$idx" -lt "${#args_ref[@]}" ]]; do
     next_arg="${args_ref[$idx]}"
     [[ "$next_arg" == --* ]] && break
+
     collected+="$next_arg"
     idx=$((idx + 1))
   done
@@ -198,166 +251,173 @@ collect_option_value() {
   printf '%s\n%s\n' "$collected" "$idx"
 }
 
+render_stage() {
+  local stage_index="$1"
+  local total_stages="$2"
+  local label="$3"
+  local progress="$4"
+  local state="$5"
+
+  printf '\r\033[2K[%d/%d] %-34s %-22s %s' \
+    "$stage_index" \
+    "$total_stages" \
+    "$label" \
+    "$progress" \
+    "$state"
+}
+
+current_stage_progress() {
+  local step_name="$1"
+  local log_path="$2"
+  local completed
+  local line
+
+  case "$step_name" in
+    truth)
+      completed="$(grep -Ec '^  - Processing ' "$log_path" 2>/dev/null || true)"
+
+      if (( completed > 0 )); then
+        printf '%d scenarios' "$completed"
+      fi
+      ;;
+
+    model_selection)
+      line="$(grep -E '^Stage: Evaluating [0-9]+ candidate configurations' "$log_path" 2>/dev/null | tail -n 1 || true)"
+
+      if [[ "$line" =~ Evaluating[[:space:]]+([0-9]+)[[:space:]]+candidate ]]; then
+        printf '%s candidates' "${BASH_REMATCH[1]}"
+      fi
+      ;;
+
+    forecast)
+      line="$(grep -E '^Processing scenario [0-9]+/[0-9]+' "$log_path" 2>/dev/null | tail -n 1 || true)"
+
+      if [[ "$line" =~ Processing[[:space:]]+scenario[[:space:]]+([0-9]+)/([0-9]+) ]]; then
+        printf '%s/%s scenarios' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+      fi
+      ;;
+  esac
+}
+
+final_stage_progress() {
+  local step_name="$1"
+  local log_path="$2"
+  local completed
+  local line
+  local progress
+
+  case "$step_name" in
+    truth)
+      completed="$(grep -Ec '^  - Processing ' "$log_path" 2>/dev/null || true)"
+
+      if (( completed > 0 )); then
+        printf '%d/%d scenarios' "$completed" "$completed"
+      fi
+      ;;
+
+    model_selection)
+      line="$(grep -E '^Stage: Evaluating [0-9]+ candidate configurations' "$log_path" 2>/dev/null | tail -n 1 || true)"
+
+      if [[ "$line" =~ Evaluating[[:space:]]+([0-9]+)[[:space:]]+candidate ]]; then
+        printf '%s/%s candidates' "${BASH_REMATCH[1]}" "${BASH_REMATCH[1]}"
+      fi
+      ;;
+
+    forecast)
+      progress="$(current_stage_progress "$step_name" "$log_path")"
+      printf '%s' "$progress"
+      ;;
+  esac
+}
+
 run_matlab_code() {
-  local description="$1"
-  local step_name="$2"
-  local model_name="$3"
-  local exo_name="$4"
-  local log_path="$5"
-  local matlab_body="$6"
+  local stage_index="$1"
+  local total_stages="$2"
+  local step_name="$3"
+  local label="$4"
+  local description="$5"
+  local model_name="$6"
+  local exo_name="$7"
+  local log_path="$8"
+  local matlab_body="$9"
 
   local matlab_code
-  local exit_code
   local start_epoch
   local elapsed_secs
   local matlab_pid
-  local tail_pid
+  local exit_code
+  local progress=""
 
   matlab_code="warning('off', 'backtrace'); run('startup.m'); addpath(genpath('third_party')); ${matlab_body}"
 
   log_status "Starting ${description}"
   append_manifest "$step_name" "$model_name" "$exo_name" "started" "$log_path" "$description"
 
-  start_epoch=$(date +%s)
   : > "$log_path"
+  start_epoch="$(date +%s)"
 
-  set +e
+  render_stage "$stage_index" "$total_stages" "$label" "" "running"
+
   "$MATLAB_BIN" -batch "$matlab_code" > "$log_path" 2>&1 &
   matlab_pid=$!
 
-  tail -n +1 -f --pid="$matlab_pid" "$log_path" | filter_matlab_output &
-  tail_pid=$!
+  while kill -0 "$matlab_pid" 2>/dev/null; do
+    progress="$(current_stage_progress "$step_name" "$log_path")"
+    render_stage "$stage_index" "$total_stages" "$label" "$progress" "running"
+    sleep 1
+  done
 
+  set +e
   wait "$matlab_pid"
   exit_code=$?
-  wait "$tail_pid" || true
   set -e
 
+  elapsed_secs=$(( $(date +%s) - start_epoch ))
+
   if [[ "$exit_code" -eq 0 ]]; then
-    elapsed_secs=$(( $(date +%s) - start_epoch ))
+    progress="$(final_stage_progress "$step_name" "$log_path")"
+    render_stage "$stage_index" "$total_stages" "$label" "$progress" "✓ $(format_duration "$elapsed_secs")"
+    printf '\n'
+
     log_status "Completed ${description} in ${elapsed_secs}s"
     append_manifest "$step_name" "$model_name" "$exo_name" "completed" "$log_path" "${elapsed_secs}s"
   else
-    elapsed_secs=$(( $(date +%s) - start_epoch ))
+    render_stage "$stage_index" "$total_stages" "$label" "$progress" "✗ failed"
+    printf '\n'
+
     log_status "Failed ${description} after ${elapsed_secs}s (exit ${exit_code}). Log: ${log_path}"
     append_manifest "$step_name" "$model_name" "$exo_name" "failed" "$log_path" "exit=${exit_code}; elapsed=${elapsed_secs}s"
-    printf '\nLast log lines from %s:\n' "$log_path" >&2
-    tail -n 20 "$log_path" >&2 || true
+
+    printf '\nPipeline failed.\n'
+    printf 'Finished: %s\n' "$(timestamp_now)"
+    printf 'Log: %s\n' "$log_path"
+    printf '\nLast log lines:\n' >&2
+    tail -n 30 "$log_path" >&2 || true
+
     return "$exit_code"
   fi
 }
 
-filter_matlab_output() {
-  awk '
-    /^(===|Stage:|Progress:|Configuration:|Selected global hyperparameters:)/ {
-      print
-      fflush()
-      next
-    }
+run_matlab_script() {
+  local stage_index="$1"
+  local total_stages="$2"
+  local step_name="$3"
+  local label="$4"
+  local description="$5"
+  local log_path="$6"
+  local script_path="$7"
 
-    /saved to:/ {
-      print
-      fflush()
-      next
-    }
-
-    /Saving trajectories to:/ {
-      print
-      fflush()
-      next
-    }
-
-    /^  - Processing Scenario:/ {
-      print
-      fflush()
-      next
-    }
-
-    /^Starting parallel pool/ {
-      print
-      fflush()
-      next
-    }
-
-    /^Connected to parallel pool/ {
-      print
-      fflush()
-      next
-    }
-
-    /^Parallel pool using/ {
-      print
-      fflush()
-      next
-    }
-
-    /^Warning:/ {
-      next
-    }
-
-    /^=== MATLAB ERROR ===$/ {
-      print
-      fflush()
-      next
-    }
-
-    /^Message:/ {
-      print
-      fflush()
-      next
-    }
-
-    /^Stack trace \(most recent first\):$/ {
-      print
-      fflush()
-      next
-    }
-
-    /^  \// {
-      print
-      fflush()
-      next
-    }
-  '
+  run_matlab_code \
+    "$stage_index" \
+    "$total_stages" \
+    "$step_name" \
+    "$label" \
+    "$description" \
+    "-" \
+    "-" \
+    "$log_path" \
+    "run('${script_path}');"
 }
-
-run_matlab_scripts() {
-  local description="$1"
-  local step_name="$2"
-  local model_name="$3"
-  local exo_name="$4"
-  local log_path="$5"
-  shift 5
-
-  local matlab_body=""
-  local script_path
-
-  for script_path in "$@"; do
-    matlab_body+=" run('${script_path}');"
-  done
-
-  run_matlab_code "$description" "$step_name" "$model_name" "$exo_name" "$log_path" "$matlab_body"
-}
-
-remove_partA_contents() {
-  printf 'Clearing existing Part A data and result artifacts...\n'
-  rm -rf "$REPO_ROOT/data/partA" "$REPO_ROOT/results/partA"
-
-  mkdir -p \
-    "$REPO_ROOT/data/partA" \
-    "$REPO_ROOT/results/partA/model_selection" \
-    "$REPO_ROOT/results/partA/forecasts" \
-    "$REPO_ROOT/results/partA/evaluation" \
-    "$REPO_ROOT/results/partA/figures" \
-    "$REPO_ROOT/results/partA/tables" \
-    "$REPO_ROOT/results/partA/logs"
-}
-
-if [[ ! -f "$REPO_ROOT/startup.m" ]] || [[ ! -d "$REPO_ROOT/scripts" ]]; then
-  die "Run this script from the repository root: $REPO_ROOT"
-fi
-
-[[ -x "$MATLAB_BIN" ]] || die "MATLAB binary not found or not executable: $MATLAB_BIN"
 
 models_spec=""
 exo_spec=""
@@ -365,6 +425,7 @@ fresh_run=0
 
 args=("$@")
 idx=0
+
 while [[ "$idx" -lt "${#args[@]}" ]]; do
   arg="${args[$idx]}"
 
@@ -372,7 +433,9 @@ while [[ "$idx" -lt "${#args[@]}" ]]; do
     --models|--exo)
       option_name="$arg"
       idx=$((idx + 1))
+
       [[ "$idx" -lt "${#args[@]}" ]] || die "Missing value for ${option_name}."
+
       mapfile -t option_result < <(collect_option_value args "$idx")
       option_value="${option_result[0]}"
       idx="${option_result[1]}"
@@ -384,15 +447,19 @@ while [[ "$idx" -lt "${#args[@]}" ]]; do
         [[ -z "$exo_spec" ]] || die "The --exo option was provided more than once."
         exo_spec="$option_value"
       fi
+
       continue
       ;;
+
     --fresh)
       fresh_run=1
       ;;
+
     --help|-h)
       show_help
       exit 0
       ;;
+
     *)
       die "Unknown argument: ${arg}. Use --help for usage."
       ;;
@@ -400,6 +467,12 @@ while [[ "$idx" -lt "${#args[@]}" ]]; do
 
   idx=$((idx + 1))
 done
+
+if [[ ! -f "$REPO_ROOT/startup.m" ]] || [[ ! -d "$REPO_ROOT/scripts" ]]; then
+  die "Run this script from the repository root: $REPO_ROOT"
+fi
+
+[[ -x "$MATLAB_BIN" ]] || die "MATLAB binary not found or not executable: $MATLAB_BIN"
 
 declare -a selected_model_ids=()
 declare -a selected_exo_ids=()
@@ -443,26 +516,48 @@ cd "$REPO_ROOT"
 
 if [[ "$fresh_run" -eq 1 ]]; then
   remove_partA_contents
+else
+  create_partA_directories
 fi
 
 initialize_run_logging
 
-log_status "Run ID: ${RUN_ID}"
-log_status "Selected combinations to run:"
-for idx in "${!combo_models[@]}"; do
-  log_status "  - ${combo_models[$idx]} | ${combo_exos[$idx]}"
+PIPELINE_STARTED_AT="$(timestamp_now)"
+PIPELINE_STARTED_EPOCH="$(date +%s)"
+
+for skipped in "${skipped_combos[@]}"; do
+  append_manifest "selection" "-" "-" "skipped" "-" "$skipped"
 done
 
+TOTAL_STAGES=$((3 + 2 * ${#combo_models[@]}))
+
+log_status "Run ID: ${RUN_ID}"
+log_status "Running Part A synthetic forecasting pipeline"
+log_status "Pipeline started"
+
+printf 'Part A synthetic forecasting pipeline\n'
+printf 'Run: %s\n' "$RUN_ID"
+printf 'Started: %s\n' "$PIPELINE_STARTED_AT"
+printf 'Configurations: %d\n' "${#combo_models[@]}"
+
 if [[ "${#skipped_combos[@]}" -gt 0 ]]; then
-  for skipped in "${skipped_combos[@]}"; do
-    warn "Skipping invalid combination: ${skipped}"
-    append_manifest "selection" "-" "-" "skipped" "-" "$skipped"
-  done
+  printf 'Skipped invalid combinations: %d\n' "${#skipped_combos[@]}"
 fi
 
-run_matlab_scripts "Generating synthetic ground truth" \
-  "truth" "-" "-" "$RUN_LOG_DIR/partA_01_generate_truth.log" \
+printf '\n'
+
+stage_index=1
+
+run_matlab_script \
+  "$stage_index" \
+  "$TOTAL_STAGES" \
+  "truth" \
+  "Generate synthetic truth" \
+  "Generating Part A synthetic ground truth" \
+  "$RUN_LOG_DIR/partA_01_generate_truth.log" \
   "scripts/partA/partA_01_generate_truth.m"
+
+stage_index=$((stage_index + 1))
 
 for idx in "${!combo_models[@]}"; do
   model_name="${combo_models[$idx]}"
@@ -473,27 +568,62 @@ for idx in "${!combo_models[@]}"; do
   PARTA_MODEL_TYPE="$model_name" \
   PARTA_EXO_MODE="$exo_name" \
   run_matlab_code \
+    "$stage_index" \
+    "$TOTAL_STAGES" \
+    "model_selection" \
+    "Select ${model_name} | ${exo_name}" \
     "Selecting model configuration for ${model_name} | ${exo_name}" \
-    "model_selection" "$model_name" "$exo_name" \
+    "$model_name" \
+    "$exo_name" \
     "$RUN_LOG_DIR/${safe_model}_${safe_exo}_model_selection.log" \
-    "fprintf('Stage: Starting model-configuration selection\\n'); run('scripts/partA/partA_02_select_global_hyperparameters.m'); fprintf('Stage: Model-configuration selection complete\\n');"
+    "run('scripts/partA/partA_02_select_global_hyperparameters.m');"
+
+  stage_index=$((stage_index + 1))
 
   PARTA_MODEL_TYPE="$model_name" \
   PARTA_EXO_MODE="$exo_name" \
   run_matlab_code \
+    "$stage_index" \
+    "$TOTAL_STAGES" \
+    "forecast" \
+    "Forecast ${model_name} | ${exo_name}" \
     "Running forecasts for ${model_name} | ${exo_name}" \
-    "forecast" "$model_name" "$exo_name" \
+    "$model_name" \
+    "$exo_name" \
     "$RUN_LOG_DIR/${safe_model}_${safe_exo}_forecast.log" \
-    "fprintf('Stage: Starting forecast execution\\n'); run('scripts/partA/partA_03_run_forecasts.m'); fprintf('Stage: Forecast execution complete\\n');"
+    "run('scripts/partA/partA_03_run_forecasts.m');"
+
+  stage_index=$((stage_index + 1))
 done
 
-run_matlab_scripts "Evaluating accumulated forecast artifacts" \
-  "evaluation" "-" "-" "$RUN_LOG_DIR/partA_04_evaluate_forecasts.log" \
+run_matlab_script \
+  "$stage_index" \
+  "$TOTAL_STAGES" \
+  "evaluation" \
+  "Evaluate forecasts" \
+  "Evaluating accumulated Part A forecast artifacts" \
+  "$RUN_LOG_DIR/partA_04_evaluate_forecasts.log" \
   "scripts/partA/partA_04_evaluate_forecasts.m"
 
-run_matlab_scripts "Generating presentation figures" \
-  "figures" "-" "-" "$RUN_LOG_DIR/partA_05_generate_figures.log" \
+stage_index=$((stage_index + 1))
+
+run_matlab_script \
+  "$stage_index" \
+  "$TOTAL_STAGES" \
+  "figures" \
+  "Generate thesis figures" \
+  "Generating Part A thesis figures" \
+  "$RUN_LOG_DIR/partA_05_generate_figures.log" \
   "scripts/partA/partA_05_generate_figures.m"
 
-log_status "Part A pipeline completed successfully."
+PIPELINE_FINISHED_AT="$(timestamp_now)"
+PIPELINE_ELAPSED_SECS=$(( $(date +%s) - PIPELINE_STARTED_EPOCH ))
+
+log_status "Part A synthetic forecasting pipeline completed successfully in ${PIPELINE_ELAPSED_SECS}s"
+log_status "Thesis-level figures generated under: $REPO_ROOT/results/partA/figures"
 log_status "Run logs saved to: ${RUN_LOG_DIR}"
+
+printf '\nPipeline completed successfully.\n'
+printf 'Finished: %s\n\n' "$PIPELINE_FINISHED_AT"
+printf 'Figures: results/partA/figures\n'
+printf 'Logs:    results/partA/logs/%s\n' "$RUN_ID"
