@@ -83,7 +83,7 @@ for configuration_index = 1:numel(configurations)
         candidate_feasible_mask(candidate_index) = candidate_feasible;
     end
 
-%% 4. One-Standard-Error Selection
+    %% 4. One-Standard-Error Selection
     feasible_indices = find(candidate_feasible_mask);
 
     if isempty(feasible_indices)
@@ -108,7 +108,7 @@ for configuration_index = 1:numel(configurations)
     selected_index = eligible_ranking(1, 3);
     selected_configuration = candidate_configurations(selected_index, :);
 
-%% 5. Persistence
+    %% 5. Persistence
     artifact = struct();
 
     artifact.model_type = model_type;
@@ -210,22 +210,31 @@ selected_configuration = selection.selected_configuration;
 end
 
 function candidate_configurations = local_construct_candidate_grid(partA_configuration, model_type, order_radius)
-%LOCAL_CONSTRUCT_CANDIDATE_GRID Construct the limited neighbourhood around the global selection.
+%LOCAL_CONSTRUCT_CANDIDATE_GRID Construct a symmetric neighbourhood around the global selection.
 
 switch model_type
     case "AR"
-        candidate_configurations = ((partA_configuration - order_radius):(partA_configuration + order_radius)).';
-        candidate_configurations = candidate_configurations(candidate_configurations >= 1);
+        p = partA_configuration(1);
+        radius = min(order_radius, p - 1);
+
+        candidate_configurations = ((p - radius):(p + radius)).';
 
     case "ARX"
-        na_values = (partA_configuration(1) - order_radius):(partA_configuration(1) + order_radius);
-        nb_values = (partA_configuration(2) - order_radius):(partA_configuration(2) + order_radius);
-        nk_values = (partA_configuration(3) - order_radius):(partA_configuration(3) + order_radius);
+        na = partA_configuration(1);
+        nb = partA_configuration(2);
+        nk = partA_configuration(3);
+
+        na_radius = min(order_radius, na - 1);
+        nb_radius = min(order_radius, nb - 1);
+        nk_radius = min(order_radius, nk - 1);
+
+        na_values = (na - na_radius):(na + na_radius);
+        nb_values = (nb - nb_radius):(nb + nb_radius);
+        nk_values = (nk - nk_radius):(nk + nk_radius);
 
         [na_grid, nb_grid, nk_grid] = ndgrid(na_values, nb_values, nk_values);
 
         candidate_configurations = [na_grid(:), nb_grid(:), nk_grid(:)];
-        candidate_configurations = candidate_configurations(all(candidate_configurations >= 1, 2), :);
 
     otherwise
         error('PARTC_02:UnsupportedConfiguration', 'Unsupported local-selection model type: %s.', model_type);
@@ -268,7 +277,7 @@ candidate_feasible = true;
 
 recognized_failures = {'FORECAST_CLOSED:InvalidForecastDraw', 'EPIDEMIC:SusceptibleBelowThreshold'};
 
-for origin_position = 1:num_origins
+for origin_position = 1:numel(forecast_origin_indices)
     origin_index = forecast_origin_indices(origin_position);
     origin_date = calibration.dates(origin_index);
 

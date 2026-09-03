@@ -1,3 +1,3 @@
 Model,ExoMode,PartAConfiguration,LocalConfiguration,ConfigurationsEqual,ForecastsExactlyIdentical
-"AR","None","2","2",1,1
-"ARX","I","[2 1 1]","[2 1 1]",1,1
+"AR","None","5","7",0,0
+"ARX","I","[4 1 1]","[6 1 1]",0,0

@@ -84,7 +84,7 @@ if cfg.validation.test_start_date ~= cfg.validation.calibration_end_date + calda
 end
 
 %% 8. Local Configuration Selection
-cfg.local_selection.order_radius = 1;
+cfg.local_selection.order_radius = 2;
 cfg.local_selection.min_window = partA_cfg.forecast.min_window;
 cfg.local_selection.step_size = partA_cfg.forecast.step_size;
 cfg.local_selection.horizon = partA_cfg.forecast.horizon;
