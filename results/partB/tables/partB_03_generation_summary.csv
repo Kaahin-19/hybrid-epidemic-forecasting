@@ -1,5 +1,5 @@
 Case,Attempts,Saved,DomainFailures
-combined_stress,8,8,0
-observation_noise,8,8,0
-process_noise,8,8,0
+combined_stress,40,40,0
+observation_noise,40,40,0
+process_noise,40,39,1
 structural_mismatch,4,4,0

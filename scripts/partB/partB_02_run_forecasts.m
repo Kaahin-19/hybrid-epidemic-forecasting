@@ -24,7 +24,7 @@
 %            FORECAST_OPEN, FORECAST_CLOSED.
 %
 % A. M. Kaahin 2026-07-18
-% Modified: 2026-08-23
+% Modified: 2026-09-02
 
 %% 1. Initialization
 clear; close all; clc;
@@ -219,7 +219,8 @@ for i = 1:numel(combos)
     expected            = cfg.snapshot.selection;
     expected.model_type = model;
     expected.exo_mode   = exo;
-    if ~isequaln(selection.snapshot, expected)
+
+    if ~local_selection_snapshot_compatible(selection.snapshot, expected, model)
         report(i).reason = "incompatible selection snapshot";
         continue;
     end
@@ -230,6 +231,34 @@ for i = 1:numel(combos)
 end
 
 available = report([report.available]);
+end
+
+function compatible = local_selection_snapshot_compatible(saved, expected, model_type)
+%LOCAL_SELECTION_SNAPSHOT_COMPATIBLE Compare only settings relevant to the model family.
+switch model_type
+    case "AR"
+        irrelevant_fields = {'max_exo_order', 'max_exo_delay', 'max_state_order', 'state_diff_orders'};
+    case "ARX"
+        irrelevant_fields = {'max_state_order', 'state_diff_orders'};
+    case {"N4SID", "SSEST"}
+        irrelevant_fields = {'max_ar_order', 'max_exo_order', 'max_exo_delay'};
+    otherwise
+        error('PARTB_02:InvalidModelType', 'Unsupported model type for selection-snapshot comparison: %s.', model_type);
+end
+
+for i = 1:numel(irrelevant_fields)
+    field_name = irrelevant_fields{i};
+
+    if isfield(saved, field_name)
+        saved = rmfield(saved, field_name);
+    end
+
+    if isfield(expected, field_name)
+        expected = rmfield(expected, field_name);
+    end
+end
+
+compatible = isequaln(saved, expected);
 end
 
 function saved = local_saved_datasets(generation_status)

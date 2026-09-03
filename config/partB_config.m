@@ -133,7 +133,6 @@ cfg.partB.snapshot.Rt_bounds         = cfg.Rt.bounds;
 cfg.partB.snapshot.sirs              = cfg.sirs;
 cfg.partB.snapshot.seir              = cfg.partB.seir;
 cfg.partB.snapshot.observation_noise = cfg.partB.observation_noise;
-cfg.partB.snapshot.observation_noise_definition = "Mean-one multiplicative lognormal measurement error on an externally estimated or otherwise model-visible Rt signal: Rt_model_input = Rt_true .* exp(sigma_log .* z - 0.5 .* sigma_log.^2), z ~ N(0,1).";
 cfg.partB.snapshot.process_noise     = cfg.partB.process_noise;
 
 end
