@@ -57,14 +57,17 @@ Selection Behavior:
   combinations supported by the current Part A pipeline.
 
   Current valid combinations:
-    AR  -> None
-    ARX -> S, I, Both
+    AR    -> None
+    ARX   -> S, I, Both
+    N4SID -> None, S, I, Both
+    SSEST -> None, S, I, Both
 
 Examples:
   ./run_partA_pipeline.sh
   ./run_partA_pipeline.sh --models 2 --exo 2
-  ./run_partA_pipeline.sh --models 1,2 --exo 0,1,2,3
-  ./run_partA_pipeline.sh --models 1,2 --exo 0,1,2,3 --fresh
+  ./run_partA_pipeline.sh --models 3,4 --exo 3
+  ./run_partA_pipeline.sh --models 1,2,3,4 --exo 0,1,2,3
+  ./run_partA_pipeline.sh --models 1,2,3,4 --exo 0,1,2,3 --fresh
 
 Options:
   --models <ids>  Model type IDs to run. Default: all model type IDs.
@@ -199,7 +202,7 @@ combo_is_valid() {
       [[ "$exo_name" != "None" ]]
       ;;
     N4SID|SSEST)
-      return 1
+      return 0
       ;;
     *)
       return 1
