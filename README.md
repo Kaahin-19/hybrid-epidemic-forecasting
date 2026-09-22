@@ -35,7 +35,7 @@ The implementation is divided into three major phases as outlined in the project
 * **`run_partB_pipeline.sh`**: Orchestrates the configuration-driven Part B robustness pipeline and writes artifacts under `data/partB/` and `results/partB/`.
 * **`run_partC_pipeline.sh`**: Orchestrates the five-stage Part C Swedish COVID-19 real-data adaptation pipeline and writes artifacts under `data/partC/` and `results/partC/`.
 * **`config/partA_config.m`**: Defines the Part A time grid, analytic $R_t$ scenarios, SIRS parameters, active model/exogenous-input settings, forecast settings, and output paths.
-* **`config/partB_config.m`**: Extends the Part A configuration with noisy-$R_t$-input, process-noise, structural-mismatch, and combined-stress cases, SEIR/SEIRS truth parameters, and Part B output paths.
+* **`config/partB_config.m`**: Extends the Part A configuration with noisy $R_t$-input, process-noise, structural-mismatch, and combined-stress cases, SEIR/SEIRS truth parameters, and Part B output paths.
 * **`config/partC_config.m`**: Defines the WHO COVID-19 source, Sweden study period, renewal estimation, reported-case SIRS state reconstruction, chronological validation, local selection, held-out forecasting, evaluation, visualization, and output paths.
 
 ### Execution Scripts
@@ -62,10 +62,10 @@ The implementation is divided into three major phases as outlined in the project
 * **`estimate_rt_renewal.m`**: Estimates an operational effective reproduction-number series from incidence and renewal weights.
 * **`reconstruct_sirs_states_from_incidence.m`**: Reconstructs causal susceptible, infectious, and recovered state proxies from reported incidence.
 * **`seirs_init.m`**: Prepares a reusable one-day URDME SEIRS stepper for Part B structural-mismatch truth.
-* **`seirs_step.m`**: Advances the reusable effective-$R_t$-driven SEIRS stepper by one day.
+* **`seirs_step.m`**: Advances the reusable effective $R_t$-driven SEIRS stepper by one day.
 * **`serial_interval_weights.m`**: Constructs normalized discrete gamma serial-interval weights.
 * **`sirs_init.m`**: Prepares a reusable one-day URDME SIRS stepper for truth simulation and closed-loop forecasting.
-* **`sirs_step.m`**: Advances the reusable effective-$R_t$-driven SIRS stepper by one day.
+* **`sirs_step.m`**: Advances the reusable effective $R_t$-driven SIRS stepper by one day.
 
 #### **Forecasting functions (`src/forecasting/`)**
 
