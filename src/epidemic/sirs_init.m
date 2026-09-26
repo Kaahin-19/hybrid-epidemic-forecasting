@@ -24,10 +24,10 @@ function stepper = sirs_init(model_params, sim_options)
 %            PARTC_02_SELECT_LOCAL_ORDERS, SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-08-23
+% Modified: 2026-09-26
 
 %% 1. Prepare Inputs
-sim_options.solver  = char(sim_options.solver);
+sim_options.solver = char(sim_options.solver);
 
 epidemic_dir = fileparts(mfilename('fullpath'));
 src_dir      = fileparts(epidemic_dir);
@@ -59,9 +59,15 @@ gdata       = [model_params.gamma; model_params.xi];
 beta_driver = repmat(model_params.gamma, 1, numel(umod.tspan));
 
 %% 3. One-Time URDME Preparation
-mex_stem = ['mexuds_' model_name '_' model_name '_mexrhs'];
-mex_file = fullfile(build_dir, [mex_stem, '.', mexext()]);
-compile_model = exist(mex_file, 'file') ~= 2;
+if strcmp(sim_options.solver, 'uds')
+    mex_stem     = ['mexuds_' model_name '_' model_name];
+    mex_rhs_file = fullfile(build_dir, [mex_stem '_mexrhs.', mexext()]);
+    mex_jac_file = fullfile(build_dir, [mex_stem '_mexjac.', mexext()]);
+    compile_model = exist(mex_rhs_file, 'file') ~= 3 || exist(mex_jac_file, 'file') ~= 3;
+else
+    mex_file = fullfile(build_dir, ['mex' sim_options.solver '_' model_name '_' model_name '.', mexext()]);
+    compile_model = exist(mex_file, 'file') ~= 3;
+end
 
 umod = urdme(umod, 'solve', 0, 'compile', compile_model, 'solver', sim_options.solver, 'modelname', model_name, 'gdata', gdata, 'ldata_time', reshape(beta_driver, [1, numel(umod.vol), numel(umod.tspan)]), 'data_time', umod.tspan);
 
