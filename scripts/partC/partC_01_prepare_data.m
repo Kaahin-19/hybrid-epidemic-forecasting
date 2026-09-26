@@ -18,7 +18,7 @@
 %            RECONSTRUCT_SIRS_STATES_FROM_INCIDENCE.
 %
 % A. M. Kaahin 2026-07-27
-% Modified: 2026-08-23
+% Modified: 2026-09-26
 
 %% 1. Initialization
 clear; close all; clc;
@@ -96,7 +96,7 @@ end
 fprintf('%s study period: %s to %s (%d days)\n', cfg.source.series_name, string(dates(1)), string(dates(end)), numel(dates));
 
 %% 3. Renewal Rt Estimation
-weights = serial_interval_weights(cfg.renewal.serial_interval_mean_days, cfg.renewal.serial_interval_sd_days, cfg.renewal.serial_interval_max_lag_days);
+weights = serial_interval_weights(cfg.renewal.serial_interval_mean_days, cfg.renewal.serial_interval_sd_days, cfg.renewal.serial_interval_tail_probability);
 
 Rt_estimated = estimate_rt_renewal(incidence_observed, weights, cfg.renewal.min_infectiousness);
 Rt_valid_mask = isfinite(Rt_estimated) & Rt_estimated > 0;

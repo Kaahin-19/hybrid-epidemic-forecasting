@@ -31,7 +31,7 @@ function cfg = partC_config()
 %   See also PARTC_01_PREPARE_DATA, PARTA_CONFIG.
 %
 % A. M. Kaahin 2026-07-27
-% Modified: 2026-09-03
+% Modified: 2026-09-26
 
 %% 1. Configuration Initialization
 cfg = struct();
@@ -56,8 +56,12 @@ cfg.study.end_date = datetime(2021, 6, 14);
 %% 4. Renewal Parameters
 cfg.renewal.serial_interval_mean_days = 4.7;
 cfg.renewal.serial_interval_sd_days = 2.9;
-cfg.renewal.serial_interval_max_lag_days = 21;
+cfg.renewal.serial_interval_tail_probability = 1e-4;
 cfg.renewal.min_infectiousness = 0;
+
+if ~isfinite(cfg.renewal.serial_interval_tail_probability) || cfg.renewal.serial_interval_tail_probability <= 0 || cfg.renewal.serial_interval_tail_probability >= 1
+    error('PARTC_CONFIG:InvalidSerialIntervalTailProbability', 'serial_interval_tail_probability must be finite and strictly between zero and one.');
+end
 
 %% 5. Incidence Preparation
 cfg.preparation.incidence_preprocessing = "none";

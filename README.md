@@ -63,7 +63,7 @@ The implementation is divided into three major phases as outlined in the project
 * **`reconstruct_sirs_states_from_incidence.m`**: Reconstructs causal susceptible, infectious, and recovered state proxies from reported incidence.
 * **`seirs_init.m`**: Prepares a reusable one-day URDME SEIRS stepper for Part B structural-mismatch truth.
 * **`seirs_step.m`**: Advances the reusable effective $R_t$-driven SEIRS stepper by one day.
-* **`serial_interval_weights.m`**: Constructs normalized discrete gamma serial-interval weights.
+* **`serial_interval_weights.m`**: Constructs normalized discrete lognormal serial-interval weights from configured arithmetic moments with automatically determined finite numerical support.
 * **`sirs_init.m`**: Prepares a reusable one-day URDME SIRS stepper for truth simulation and closed-loop forecasting.
 * **`sirs_step.m`**: Advances the reusable effective $R_t$-driven SIRS stepper by one day.
 
