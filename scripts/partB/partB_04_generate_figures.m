@@ -20,7 +20,7 @@
 %            PLOT_DISTRIBUTION, APPLY_PANEL_STYLE.
 %
 % A. M. Kaahin 2026-07-18
-% Modified: 2026-08-23
+% Modified: 2026-09-26
 
 %% 1. Initialization
 clear; close all; clc;
@@ -76,17 +76,18 @@ if ~all(isfield(evaluation, required_top))
 end
 
 summaries        = evaluation.summaries;
-required_summary = {'replicate_summary', 'scenario_summary', 'stress_summary', 'horizon_summary', 'interval_summary', 'execution_summary', 'degradation_summary'};
+required_summary = {'replicate_summary', 'scenario_summary', 'stress_summary', 'horizon_summary', 'interval_summary', 'execution_summary', 'degradation_scenario_summary', 'degradation_summary'};
 if ~all(isfield(summaries, required_summary))
     error('PARTB_04:InvalidSummaries', 'summaries is missing one or more required summary tables.');
 end
 
 local_require_vars(summaries.replicate_summary, {'Case', 'Scenario', 'Replicate', 'Model', 'ExoMode', 'MeanWIS', 'NumWindows', 'NumHorizonRows'}, 'replicate_summary');
-local_require_vars(summaries.stress_summary, {'Case', 'Model', 'ExoMode', 'NumScenarios', 'TotalReplicates', 'MeanWIS', 'MeanMAE', 'MeanRMSE', 'MeanCoverage', 'MeanIntervalWidth'}, 'stress_summary');
-local_require_vars(summaries.horizon_summary, {'Case', 'Model', 'ExoMode', 'HorizonIdx', 'MeanWIS', 'MeanAbsoluteError', 'MeanSquaredError', 'RMSE', 'MeanCoverage', 'MeanIntervalWidth'}, 'horizon_summary');
-local_require_vars(summaries.interval_summary, {'Case', 'Model', 'ExoMode', 'Alpha', 'NominalCoverage', 'MeanCoverage', 'MeanIntervalWidth', 'CoverageError'}, 'interval_summary');
+local_require_vars(summaries.scenario_summary, {'Case', 'Scenario', 'Model', 'ExoMode', 'ReplicatesExpected', 'ReplicatesGenerated', 'GenerationDomainFailures', 'ForecastAttempts', 'SuccessfulForecasts', 'ForecastDomainFailures', 'ForecastSuccessRate', 'HasValidScore'}, 'scenario_summary');
+local_require_vars(summaries.stress_summary, {'Case', 'Model', 'ExoMode', 'NumScenariosExpected', 'NumScenariosWithScores', 'CompleteScenarioCoverage', 'ForecastAttempts', 'SuccessfulForecasts', 'ForecastDomainFailures', 'ForecastSuccessRate', 'MeanWIS', 'MeanMAE', 'MeanRMSE', 'MeanCoverage', 'MeanIntervalWidth'}, 'stress_summary');
+local_require_vars(summaries.horizon_summary, {'Case', 'Model', 'ExoMode', 'HorizonIdx', 'NumScenariosExpected', 'NumScenariosWithScores', 'CompleteScenarioCoverage', 'MeanWIS', 'MeanAbsoluteError', 'MeanSquaredError', 'RMSE', 'MeanCoverage', 'MeanIntervalWidth'}, 'horizon_summary');
+local_require_vars(summaries.interval_summary, {'Case', 'Model', 'ExoMode', 'Alpha', 'NominalCoverage', 'NumScenariosExpected', 'NumScenariosWithScores', 'CompleteScenarioCoverage', 'MeanCoverage', 'MeanIntervalWidth', 'CoverageError'}, 'interval_summary');
 local_require_vars(summaries.execution_summary, {'Case', 'Model', 'ExoMode', 'Attempts', 'Saved', 'NoWindows', 'DomainFailures', 'Pending', 'SuccessRate'}, 'execution_summary');
-local_require_vars(summaries.degradation_summary, {'Case', 'Model', 'ExoMode', 'PartA_MeanWIS', 'PartB_MeanWIS', 'MeanWISDifference', 'MeanWISRatio', 'RelativeWISIncrease'}, 'degradation_summary');
+local_require_vars(summaries.degradation_summary, {'Case', 'Model', 'ExoMode', 'NumScenariosExpected', 'NumScenariosWithScores', 'CompleteScenarioCoverage', 'PartA_MeanWIS', 'PartB_MeanWIS', 'MeanWISDifference', 'MeanWISRatio', 'RelativeWISIncrease'}, 'degradation_summary');
 
 exec = summaries.execution_summary;
 if any(exec.Attempts <= 0) || any(exec.Saved < 0) || any(exec.NoWindows < 0) || any(exec.DomainFailures < 0) || any(exec.Pending ~= 0)
@@ -95,19 +96,31 @@ end
 if any(exec.Saved + exec.NoWindows + exec.DomainFailures + exec.Pending ~= exec.Attempts)
     error('PARTB_04:InconsistentExecutionCounts', 'Execution outcome counts do not sum to the number of attempts.');
 end
+
+stress = summaries.stress_summary;
+stress_metrics = {'MeanWIS', 'MeanMAE', 'MeanRMSE', 'MeanCoverage', 'MeanIntervalWidth'};
+local_validate_coverage_metrics(stress, stress_metrics, 'stress_summary');
+local_validate_coverage_metrics(summaries.degradation_summary, {'PartA_MeanWIS', 'PartB_MeanWIS', 'MeanWISDifference', 'MeanWISRatio', 'RelativeWISIncrease'}, 'degradation_summary');
 end
 
 function local_require_vars(tbl, names, tbl_name)
-%LOCAL_REQUIRE_VARS Fail fast when a summary table lacks a required variable or holds non-finite metrics.
+%LOCAL_REQUIRE_VARS Fail fast when a summary table lacks a required variable.
 missing = names(~ismember(names, tbl.Properties.VariableNames));
 if ~isempty(missing)
     error('PARTB_04:MissingVariable', 'Summary table %s is missing required variable(s): %s.', tbl_name, strjoin(missing, ', '));
 end
+end
 
-for i = 1:numel(names)
-    column = tbl.(names{i});
-    if isnumeric(column) && ~all(isfinite(column))
-        error('PARTB_04:NonFiniteMetric', 'Summary table %s has non-finite values in %s.', tbl_name, names{i});
+function local_validate_coverage_metrics(tbl, metric_names, tbl_name)
+%LOCAL_VALIDATE_COVERAGE_METRICS Require complete metrics and unavailable incomplete aggregates.
+complete = tbl.CompleteScenarioCoverage;
+if any(tbl.NumScenariosWithScores > tbl.NumScenariosExpected) || any(complete ~= (tbl.NumScenariosWithScores == tbl.NumScenariosExpected))
+    error('PARTB_04:InvalidScenarioCoverage', 'Summary table %s has inconsistent scenario coverage.', tbl_name);
+end
+for i = 1:numel(metric_names)
+    values = tbl.(metric_names{i});
+    if any(~isfinite(values(complete))) || any(~isnan(values(~complete)))
+        error('PARTB_04:InvalidCoverageMetric', 'Summary table %s has invalid complete or incomplete values in %s.', tbl_name, metric_names{i});
     end
 end
 end
@@ -140,6 +153,8 @@ wis_matrix = local_case_combo_matrix(stress, case_ids, combo_labels, 'MeanWIS');
 ax = nexttile(tl);
 h = local_grouped_bars(ax, wis_matrix, style);
 local_style_bar_axis(ax, (1:numel(case_ids))', case_labels, "Mean WIS", style);
+complete_matrix = local_case_combo_matrix(stress, case_ids, combo_labels, 'CompleteScenarioCoverage');
+local_mark_incomplete(ax, h, complete_matrix, style);
 local_apply_legend(ax, h, combo_labels, style, numel(combo_labels));
 local_panel_label(ax, "(a)", style);
 
@@ -148,6 +163,7 @@ ratio_matrix = local_case_combo_matrix(degrade, case_ids, combo_labels, 'MeanWIS
 ax = nexttile(tl);
 h = local_grouped_bars(ax, ratio_matrix, style);
 local_style_bar_axis(ax, (1:numel(case_ids))', case_labels, "Mean WIS ratio (Part B / Part A)", style);
+local_mark_incomplete(ax, h, complete_matrix, style);
 yline(ax, 1, '--', 'Color', [0, 0, 0], 'LineWidth', 1.0, 'Label', 'Part A baseline', 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.legend_font_size, 'LabelHorizontalAlignment', 'left');
 local_apply_legend(ax, h, combo_labels, style, numel(combo_labels));
 local_panel_label(ax, "(b)", style);
@@ -217,7 +233,7 @@ stress  = summaries.stress_summary;
 series = repmat(local_series_template(), numel(case_ids), 1);
 for i = 1:numel(case_ids)
     rows = sortrows(horizon(horizon.Case == case_ids(i), :), 'HorizonIdx');
-    n_scen = local_scenario_count(stress, case_ids(i), combo);
+    [n_scen, n_expected] = local_scenario_support(stress, case_ids(i), combo);
 
     series(i).type        = "line";
     series(i).x           = rows.HorizonIdx;
@@ -226,7 +242,7 @@ for i = 1:numel(case_ids)
     series(i).line_width  = style.line_width;
     series(i).marker      = case_markers(i);
     series(i).marker_size = style.marker_size;
-    series(i).label       = case_labels(i) + " (" + string(n_scen) + local_scenario_word(n_scen) + ")";
+    series(i).label       = case_labels(i) + " (" + string(n_scen) + "/" + string(n_expected) + " scenarios)";
 end
 
 fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 16.0, 9.0], 'Color', 'w');
@@ -296,7 +312,7 @@ series(1) = reference;
 
 for i = 1:numel(case_ids)
     rows = sortrows(interval(interval.Case == case_ids(i), :), 'NominalCoverage');
-    n_scen = local_scenario_count(stress_summary, case_ids(i), combo);
+    [n_scen, n_expected] = local_scenario_support(stress_summary, case_ids(i), combo);
 
     series(i + 1).type        = "line";
     series(i + 1).x           = rows.NominalCoverage;
@@ -305,7 +321,7 @@ for i = 1:numel(case_ids)
     series(i + 1).line_width  = style.line_width;
     series(i + 1).marker      = case_markers(i);
     series(i + 1).marker_size = style.marker_size;
-    series(i + 1).label       = case_labels(i) + " (" + string(n_scen) + local_scenario_word(n_scen) + ")";
+    series(i + 1).label       = case_labels(i) + " (" + string(n_scen) + "/" + string(n_expected) + " scenarios)";
 end
 
 fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 16.0, 10.0], 'Color', 'w');
@@ -370,24 +386,16 @@ for i = 1:numel(case_ids)
 end
 end
 
-function n_scen = local_scenario_count(stress_summary, case_id, combo)
-%LOCAL_SCENARIO_COUNT Scenario count for one stress case and model/exogenous combination.
+function [n_scen, n_expected] = local_scenario_support(stress_summary, case_id, combo)
+%LOCAL_SCENARIO_SUPPORT Represented and expected scenario counts for one combination.
 row = stress_summary(stress_summary.Case == case_id & stress_summary.Model == combo.model & stress_summary.ExoMode == combo.exo, :);
 
 if height(row) ~= 1
     error('PARTB_04:StressRowCount', 'Expected one stress-summary row for case %s and combination %s, but found %d.', case_id, combo.label, height(row));
 end
 
-n_scen = row.NumScenarios;
-end
-
-function word = local_scenario_word(n_scen)
-%LOCAL_SCENARIO_WORD Singular or plural scenario word for legend text.
-if n_scen == 1
-    word = " scenario";
-else
-    word = " scenarios";
-end
+n_scen     = row.NumScenariosWithScores;
+n_expected = row.NumScenariosExpected;
 end
 
 function h = local_grouped_bars(ax, matrix, style)
@@ -397,6 +405,24 @@ for j = 1:numel(h)
     h(j).FaceColor = style.palette(mod(j - 1, size(style.palette, 1)) + 1, :);
     h(j).EdgeColor = 'none';
 end
+end
+
+function local_mark_incomplete(ax, bars, complete_matrix, style)
+%LOCAL_MARK_INCOMPLETE Mark aggregate slots withheld for incomplete scenario coverage.
+drawnow;
+hold(ax, 'on');
+y_limits = ylim(ax);
+y_marker = y_limits(1) + 0.04 * (y_limits(2) - y_limits(1));
+for j = 1:numel(bars)
+    incomplete = complete_matrix(:, j) == 0;
+    if any(incomplete)
+        plot(ax, bars(j).XEndPoints(incomplete), repmat(y_marker, sum(incomplete), 1), 'x', 'Color', [0.835, 0.369, 0.000], 'LineWidth', 1.2, 'MarkerSize', 6, 'HandleVisibility', 'off');
+    end
+end
+if any(complete_matrix == 0, 'all')
+    text(ax, 0.99, 0.98, '{\times} incomplete coverage', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'top', 'FontName', style.font_name, 'FontSize', style.tick_font_size, 'Color', [0.835, 0.369, 0.000], 'Interpreter', 'tex');
+end
+hold(ax, 'off');
 end
 
 function local_style_bar_axis(ax, ticks, tick_labels, y_label, style)

@@ -23,7 +23,7 @@
 %            COMPUTE_INTERVAL_DIAGNOSTICS.
 %
 % A. M. Kaahin 2026-07-18
-% Modified: 2026-08-23
+% Modified: 2026-09-26
 
 %% 1. Initialization
 clear; close all; clc;
@@ -86,14 +86,14 @@ fprintf('Evaluated %d forecast artifacts: %d window rows, %d horizon rows, %d in
 %% 5. Summaries
 summaries = struct();
 summaries.replicate_summary = local_replicate_summary(horizon_scores, horizon);
-summaries.scenario_summary  = local_scenario_summary(summaries.replicate_summary);
+summaries.scenario_summary  = local_scenario_summary(summaries.replicate_summary, generation.generation_status, forecast_status, cfg);
 summaries.stress_summary    = local_stress_summary(summaries.scenario_summary);
-summaries.horizon_summary   = local_horizon_summary(horizon_scores);
-summaries.interval_summary  = local_interval_summary(interval_scores);
+summaries.horizon_summary   = local_horizon_summary(horizon_scores, summaries.stress_summary);
+summaries.interval_summary  = local_interval_summary(interval_scores, summaries.stress_summary);
 summaries.generation_summary = local_generation_summary(generation.generation_status);
 summaries.execution_summary = local_execution_summary(forecast_status);
 
-[summaries.degradation_summary, num_undefined_ratios] = local_degradation_summary(horizon_scores, partA.horizon_scores);
+[summaries.degradation_scenario_summary, summaries.degradation_summary, num_undefined_ratios] = local_degradation_summary(horizon_scores, partA.horizon_scores, summaries.stress_summary);
 
 fprintf('Baseline comparison: %d Part B horizon rows matched to Part A; %d undefined WIS ratios (Part A WIS == 0).\n', height(horizon_scores), num_undefined_ratios);
 
@@ -112,6 +112,7 @@ local_write_table(table_dir, 'partB_03_horizon_summary.csv', summaries.horizon_s
 local_write_table(table_dir, 'partB_03_interval_summary.csv', summaries.interval_summary);
 local_write_table(table_dir, 'partB_03_generation_summary.csv', summaries.generation_summary);
 local_write_table(table_dir, 'partB_03_execution_summary.csv', summaries.execution_summary);
+local_write_table(table_dir, 'partB_03_degradation_scenario_summary.csv', summaries.degradation_scenario_summary);
 local_write_table(table_dir, 'partB_03_degradation_summary.csv', summaries.degradation_summary);
 
 fprintf('=== Part B Forecast Evaluation Complete ===\n\n');
@@ -249,11 +250,11 @@ replicate_summary.NumWindows = replicate_summary.NumHorizonRows / horizon;
 replicate_summary = movevars(replicate_summary, 'NumWindows', 'Before', 'NumHorizonRows');
 end
 
-function scenario_summary = local_scenario_summary(replicate_summary)
-%LOCAL_SCENARIO_SUMMARY Aggregate replicate rows to one row per scenario.
+function scenario_summary = local_scenario_summary(replicate_summary, generation_status, forecast_status, cfg)
+%LOCAL_SCENARIO_SUMMARY Combine scenario execution support with conditional forecast metrics.
 keys = {'Case', 'Scenario', 'Model', 'ExoMode'};
-scenario_summary = local_aggregate(replicate_summary, keys, { ...
-    'NumReplicates',     @numel,             'MeanWIS'; ...
+conditional = local_aggregate(replicate_summary, keys, { ...
+    'NumScoredReplicates', @numel,           'MeanWIS'; ...
     'MeanWIS',           @mean,              'MeanWIS'; ...
     'StdWIS',            @local_sample_std,  'MeanWIS'; ...
     'MedianWIS',         @median,            'MeanWIS'; ...
@@ -261,23 +262,99 @@ scenario_summary = local_aggregate(replicate_summary, keys, { ...
     'MeanRMSE',          @mean,              'RMSE'; ...
     'MeanCoverage',      @mean,              'MeanCoverage'; ...
     'MeanIntervalWidth', @mean,              'MeanIntervalWidth'});
+
+case_ids     = string({cfg.partB.robustness_cases.case_id})';
+scenario_ids = string({cfg.scenarios.id})';
+combo_table  = unique(table(string({forecast_status.model_type})', string({forecast_status.exo_mode})', 'VariableNames', {'Model', 'ExoMode'}), 'rows');
+num_rows     = numel(case_ids) * numel(scenario_ids) * height(combo_table);
+
+Case                     = strings(num_rows, 1);
+Scenario                 = strings(num_rows, 1);
+Model                    = strings(num_rows, 1);
+ExoMode                  = strings(num_rows, 1);
+ReplicatesExpected       = zeros(num_rows, 1);
+ReplicatesGenerated      = zeros(num_rows, 1);
+GenerationDomainFailures = zeros(num_rows, 1);
+ForecastAttempts         = zeros(num_rows, 1);
+SuccessfulForecasts      = zeros(num_rows, 1);
+NoValidWindows           = zeros(num_rows, 1);
+ForecastDomainFailures   = zeros(num_rows, 1);
+
+generation_case     = string({generation_status.case_id})';
+generation_scenario = string({generation_status.scenario_id})';
+generation_outcome  = string({generation_status.status})';
+forecast_case       = string({forecast_status.case_id})';
+forecast_scenario   = string({forecast_status.scenario_id})';
+forecast_model      = string({forecast_status.model_type})';
+forecast_exo        = string({forecast_status.exo_mode})';
+forecast_outcome    = string({forecast_status.status})';
+
+row = 0;
+for ci = 1:numel(case_ids)
+    for si = 1:numel(scenario_ids)
+        generation_mask = generation_case == case_ids(ci) & generation_scenario == scenario_ids(si);
+
+        for mi = 1:height(combo_table)
+            row = row + 1;
+            forecast_mask = forecast_case == case_ids(ci) & forecast_scenario == scenario_ids(si) & forecast_model == combo_table.Model(mi) & forecast_exo == combo_table.ExoMode(mi);
+
+            Case(row)                     = case_ids(ci);
+            Scenario(row)                 = scenario_ids(si);
+            Model(row)                    = combo_table.Model(mi);
+            ExoMode(row)                  = combo_table.ExoMode(mi);
+            ReplicatesExpected(row)       = sum(generation_mask);
+            ReplicatesGenerated(row)      = sum(generation_outcome(generation_mask) == "saved");
+            GenerationDomainFailures(row) = sum(generation_outcome(generation_mask) == "domain_failure");
+            ForecastAttempts(row)         = sum(forecast_mask);
+            SuccessfulForecasts(row)      = sum(forecast_outcome(forecast_mask) == "saved");
+            NoValidWindows(row)           = sum(forecast_outcome(forecast_mask) == "no_windows");
+            ForecastDomainFailures(row)   = sum(forecast_outcome(forecast_mask) == "domain_failure");
+        end
+    end
+end
+
+support = table(Case, Scenario, Model, ExoMode, ReplicatesExpected, ReplicatesGenerated, GenerationDomainFailures, ForecastAttempts, SuccessfulForecasts, NoValidWindows, ForecastDomainFailures);
+support.ForecastSuccessRate = support.SuccessfulForecasts ./ support.ForecastAttempts;
+support.HasValidScore       = support.SuccessfulForecasts > 0;
+
+scenario_summary = outerjoin(support, conditional, 'Keys', keys, 'MergeKeys', true, 'Type', 'left');
+if any(scenario_summary.HasValidScore ~= (scenario_summary.NumScoredReplicates > 0)) || any(scenario_summary.SuccessfulForecasts(scenario_summary.HasValidScore) ~= scenario_summary.NumScoredReplicates(scenario_summary.HasValidScore))
+    error('PARTB_03:ScoredForecastCountMismatch', 'Saved forecast counts disagree with scored replicate counts.');
+end
+scenario_summary = removevars(scenario_summary, 'NumScoredReplicates');
+scenario_summary = sortrows(scenario_summary, keys);
 end
 
 function stress_summary = local_stress_summary(scenario_summary)
-%LOCAL_STRESS_SUMMARY Aggregate scenario rows to one row per stress case with equal scenario weight.
+%LOCAL_STRESS_SUMMARY Aggregate complete scenario sets with equal scenario weight.
 keys = {'Case', 'Model', 'ExoMode'};
 stress_summary = local_aggregate(scenario_summary, keys, { ...
-    'NumScenarios',      @numel, 'MeanWIS'; ...
-    'TotalReplicates',   @sum,   'NumReplicates'; ...
+    'NumScenariosExpected',       @numel, 'Scenario'; ...
+    'NumScenariosWithScores',     @sum,   'HasValidScore'; ...
+    'ReplicatesExpected',         @sum,   'ReplicatesExpected'; ...
+    'ReplicatesGenerated',        @sum,   'ReplicatesGenerated'; ...
+    'GenerationDomainFailures',   @sum,   'GenerationDomainFailures'; ...
+    'ForecastAttempts',           @sum,   'ForecastAttempts'; ...
+    'SuccessfulForecasts',        @sum,   'SuccessfulForecasts'; ...
+    'NoValidWindows',             @sum,   'NoValidWindows'; ...
+    'ForecastDomainFailures',     @sum,   'ForecastDomainFailures'; ...
     'MeanWIS',           @mean,  'MeanWIS'; ...
     'MeanMAE',           @mean,  'MeanMAE'; ...
     'MeanRMSE',          @mean,  'MeanRMSE'; ...
     'MeanCoverage',      @mean,  'MeanCoverage'; ...
     'MeanIntervalWidth', @mean,  'MeanIntervalWidth'});
+stress_summary.ForecastSuccessRate       = stress_summary.SuccessfulForecasts ./ stress_summary.ForecastAttempts;
+stress_summary.CompleteScenarioCoverage = stress_summary.NumScenariosWithScores == stress_summary.NumScenariosExpected;
+
+incomplete = ~stress_summary.CompleteScenarioCoverage;
+metric_names = {'MeanWIS', 'MeanMAE', 'MeanRMSE', 'MeanCoverage', 'MeanIntervalWidth'};
+for i = 1:numel(metric_names)
+    stress_summary.(metric_names{i})(incomplete) = NaN;
+end
 end
 
-function horizon_summary = local_horizon_summary(horizon_scores)
-%LOCAL_HORIZON_SUMMARY Hierarchical horizon-wise aggregation with equal scenario weight.
+function horizon_summary = local_horizon_summary(horizon_scores, stress_summary)
+%LOCAL_HORIZON_SUMMARY Conditional horizon aggregation with explicit scenario support.
 replicate_level = local_aggregate(horizon_scores, {'Case', 'Scenario', 'Replicate', 'Model', 'ExoMode', 'HorizonIdx'}, { ...
     'MeanWIS',           @mean, 'WIS'; ...
     'MeanAbsoluteError', @mean, 'AbsoluteError'; ...
@@ -301,10 +378,11 @@ horizon_summary = local_aggregate(scenario_level, {'Case', 'Model', 'ExoMode', '
 
 horizon_summary.RMSE = sqrt(horizon_summary.MeanSquaredError);
 horizon_summary = movevars(horizon_summary, 'RMSE', 'After', 'MeanSquaredError');
+horizon_summary = local_add_scenario_coverage(horizon_summary, stress_summary);
 end
 
-function interval_summary = local_interval_summary(interval_scores)
-%LOCAL_INTERVAL_SUMMARY Hierarchical interval-calibration aggregation with equal scenario weight.
+function interval_summary = local_interval_summary(interval_scores, stress_summary)
+%LOCAL_INTERVAL_SUMMARY Conditional interval aggregation with explicit scenario support.
 replicate_level = local_aggregate(interval_scores, {'Case', 'Scenario', 'Replicate', 'Model', 'ExoMode', 'Alpha', 'NominalCoverage'}, { ...
     'MeanCoverage',      @mean, 'Coverage'; ...
     'MeanIntervalWidth', @mean, 'IntervalWidth'});
@@ -318,6 +396,7 @@ interval_summary = local_aggregate(scenario_level, {'Case', 'Model', 'ExoMode', 
     'MeanIntervalWidth', @mean, 'MeanIntervalWidth'});
 
 interval_summary.CoverageError = interval_summary.MeanCoverage - interval_summary.NominalCoverage;
+interval_summary = local_add_scenario_coverage(interval_summary, stress_summary);
 end
 
 function generation_summary = local_generation_summary(generation_status)
@@ -343,7 +422,7 @@ execution_summary = local_aggregate(status_tbl, {'Case', 'Model', 'ExoMode'}, { 
 execution_summary.SuccessRate = execution_summary.Saved ./ execution_summary.Attempts;
 end
 
-function [degradation_summary, num_undefined] = local_degradation_summary(horizon_scores, partA_horizon)
+function [degradation_scenario_summary, degradation_summary, num_undefined] = local_degradation_summary(horizon_scores, partA_horizon, stress_summary)
 %LOCAL_DEGRADATION_SUMMARY Match robustness WIS to the synthetic baseline and aggregate degradation.
 match_keys = {'Scenario', 'Model', 'ExoMode', 'WindowDay', 'HorizonIdx'};
 
@@ -373,16 +452,18 @@ replicate_level = local_aggregate(matched, {'Case', 'Scenario', 'Replicate', 'Mo
     'WIS_Difference', @mean,                   'WIS_Difference'; ...
     'WIS_Ratio',      @(x) mean(x, 'omitnan'), 'WIS_Ratio'});
 
-scenario_level = local_aggregate(replicate_level, {'Case', 'Scenario', 'Model', 'ExoMode'}, { ...
-    'PartA_WIS',      @mean,                   'PartA_WIS'; ...
-    'PartB_WIS',      @mean,                   'PartB_WIS'; ...
-    'WIS_Difference', @mean,                   'WIS_Difference'; ...
-    'WIS_Ratio',      @(x) mean(x, 'omitnan'), 'WIS_Ratio'});
-
-degradation_summary = local_aggregate(scenario_level, {'Case', 'Model', 'ExoMode'}, { ...
+degradation_scenario_summary = local_aggregate(replicate_level, {'Case', 'Scenario', 'Model', 'ExoMode'}, { ...
     'PartA_MeanWIS',     @mean, 'PartA_WIS'; ...
     'PartB_MeanWIS',     @mean, 'PartB_WIS'; ...
     'MeanWISDifference', @mean, 'WIS_Difference'});
+degradation_scenario_summary.MeanWISRatio = degradation_scenario_summary.PartB_MeanWIS ./ degradation_scenario_summary.PartA_MeanWIS;
+degradation_scenario_summary.MeanWISRatio(degradation_scenario_summary.PartA_MeanWIS == 0) = NaN;
+degradation_scenario_summary.RelativeWISIncrease = degradation_scenario_summary.MeanWISRatio - 1;
+
+degradation_summary = local_aggregate(degradation_scenario_summary, {'Case', 'Model', 'ExoMode'}, { ...
+    'PartA_MeanWIS',     @mean, 'PartA_MeanWIS'; ...
+    'PartB_MeanWIS',     @mean, 'PartB_MeanWIS'; ...
+    'MeanWISDifference', @mean, 'MeanWISDifference'});
 
 degradation_summary.MeanWISRatio = degradation_summary.PartB_MeanWIS ./ degradation_summary.PartA_MeanWIS;
 
@@ -390,6 +471,20 @@ undefined_summary_mask = degradation_summary.PartA_MeanWIS == 0;
 degradation_summary.MeanWISRatio(undefined_summary_mask) = NaN;
 
 degradation_summary.RelativeWISIncrease = degradation_summary.MeanWISRatio - 1;
+degradation_summary = local_add_scenario_coverage(degradation_summary, stress_summary);
+
+incomplete = ~degradation_summary.CompleteScenarioCoverage;
+metric_names = {'PartA_MeanWIS', 'PartB_MeanWIS', 'MeanWISDifference', 'MeanWISRatio', 'RelativeWISIncrease'};
+for i = 1:numel(metric_names)
+    degradation_summary.(metric_names{i})(incomplete) = NaN;
+end
+end
+
+function summary = local_add_scenario_coverage(summary, stress_summary)
+%LOCAL_ADD_SCENARIO_COVERAGE Attach expected and represented scenario counts.
+keys = {'Case', 'Model', 'ExoMode'};
+coverage = stress_summary(:, [keys, {'NumScenariosExpected', 'NumScenariosWithScores', 'CompleteScenarioCoverage'}]);
+summary = innerjoin(summary, coverage, 'Keys', keys);
 end
 
 function value = local_sample_std(values)
