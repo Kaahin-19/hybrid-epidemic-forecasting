@@ -2,19 +2,21 @@
 %
 %   Description:
 %       Scores every successfully saved robustness forecast artifact against
-%       its latent Rt_true windows and aggregates results through the replicate
-%       -> scenario -> stress-case hierarchy with equal scenario weighting. It
-%       compares robustness-case WIS with the matched synthetic baseline at the
-%       same scenario, model, exogenous mode, forecast origin, and lead, then
-%       reports forecast-execution outcomes. A WIS ratio above one indicates
-%       degradation relative to the matched baseline.
+%       its latent Rt_true windows and aggregates conditional forecast metrics
+%       through the replicate -> scenario -> stress-case hierarchy with equal
+%       scenario weighting. It combines those metrics with dataset-generation
+%       and forecast-execution support, reports explicit scenario coverage,
+%       withholds complete stress-level metrics when scenario coverage is
+%       incomplete, and compares valid Part B forecasts with their matched
+%       Part A synthetic baselines.
 %
 %   Workflow:
 %       1. Initialize evaluation paths and configuration.
 %       2. Load and validate the Script 2 forecast-execution status.
 %       3. Load the matching Part A baseline evaluation.
 %       4. Score each saved Part B forecast artifact.
-%       5. Build robustness, execution, and degradation summaries.
+%       5. Build conditional forecast, scenario-coverage, execution, and
+%          degradation summaries.
 %       6. Save the evaluation artifact.
 %       7. Export the compact summary tables.
 %
@@ -326,7 +328,7 @@ scenario_summary = sortrows(scenario_summary, keys);
 end
 
 function stress_summary = local_stress_summary(scenario_summary)
-%LOCAL_STRESS_SUMMARY Aggregate complete scenario sets with equal scenario weight.
+%LOCAL_STRESS_SUMMARY Aggregate scenario support and complete stress metrics with equal scenario weight.
 keys = {'Case', 'Model', 'ExoMode'};
 stress_summary = local_aggregate(scenario_summary, keys, { ...
     'NumScenariosExpected',       @numel, 'Scenario'; ...
