@@ -89,6 +89,10 @@ local_require_vars(summaries.interval_summary, {'Case', 'Model', 'ExoMode', 'Alp
 local_require_vars(summaries.execution_summary, {'Case', 'Model', 'ExoMode', 'Attempts', 'Saved', 'NoWindows', 'DomainFailures', 'Pending', 'SuccessRate'}, 'execution_summary');
 local_require_vars(summaries.degradation_summary, {'Case', 'Model', 'ExoMode', 'NumScenariosExpected', 'NumScenariosWithScores', 'CompleteScenarioCoverage', 'PartA_MeanWIS', 'PartB_MeanWIS', 'MeanWISDifference', 'MeanWISRatio', 'RelativeWISIncrease'}, 'degradation_summary');
 
+local_require_finite(summaries.replicate_summary, {'MeanWIS', 'NumWindows', 'NumHorizonRows'}, 'replicate_summary');
+local_require_finite(summaries.horizon_summary, {'HorizonIdx', 'MeanWIS', 'MeanAbsoluteError', 'MeanSquaredError', 'RMSE', 'MeanCoverage', 'MeanIntervalWidth'}, 'horizon_summary');
+local_require_finite(summaries.interval_summary, {'Alpha', 'NominalCoverage', 'MeanCoverage', 'MeanIntervalWidth', 'CoverageError'}, 'interval_summary');
+
 exec = summaries.execution_summary;
 if any(exec.Attempts <= 0) || any(exec.Saved < 0) || any(exec.NoWindows < 0) || any(exec.DomainFailures < 0) || any(exec.Pending ~= 0)
     error('PARTB_04:InvalidExecutionCounts', 'Execution counts violate the required non-negativity or zero-pending constraints.');
@@ -108,6 +112,15 @@ function local_require_vars(tbl, names, tbl_name)
 missing = names(~ismember(names, tbl.Properties.VariableNames));
 if ~isempty(missing)
     error('PARTB_04:MissingVariable', 'Summary table %s is missing required variable(s): %s.', tbl_name, strjoin(missing, ', '));
+end
+end
+
+function local_require_finite(tbl, names, tbl_name)
+%LOCAL_REQUIRE_FINITE Fail fast on non-finite values where metrics must be defined.
+for i = 1:numel(names)
+    if any(~isfinite(tbl.(names{i})))
+        error('PARTB_04:NonFiniteMetric', 'Summary table %s has non-finite values in %s.', tbl_name, names{i});
+    end
 end
 end
 
