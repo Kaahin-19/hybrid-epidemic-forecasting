@@ -12,7 +12,7 @@ The implementation is divided into three major phases as outlined in the project
 | :--------- | :-------------------- | :------------- | :----------- | :------------------- | :-------------- |
 | **Part A** | Synthetic Validation  | Completed      | 2026-08-23   | [ ] Pending          | -               |
 | **Part B** | Robustness Testing    | Completed      | 2026-09-26   | [ ] Pending          | -               |
-| **Part C** | Real-Data Application | Completed      | 2026-08-23   | [ ] Pending          | -               |
+| **Part C** | Real-Data Application | Completed      | 2026-09-26   | [ ] Pending          | -               |
 
 ---
 
