@@ -5,14 +5,17 @@
 %       of thesis figures: mean WIS by stress case, WIS degradation relative
 %       to the matched synthetic baseline, horizon-wise WIS, replicate-level
 %       WIS distributions, interval calibration, and forecast-execution
-%       outcomes. A WIS ratio above one indicates degradation relative to the
-%       matched baseline.
+%       outcomes. Incomplete stress-level aggregates are withheld and marked
+%       explicitly, while conditional horizon and calibration figures report
+%       represented versus expected scenario support. A WIS ratio above one
+%       indicates degradation relative to the matched baseline.
 %
 %   Workflow:
 %       1. Initialize figure paths and shared styling.
 %       2. Load and validate the Part B evaluation summaries.
 %       3. Derive the plotted combinations, stress cases, and scenarios.
-%       4. Generate the shared robustness overview.
+%       4. Generate the shared robustness overview with incomplete-coverage
+%          annotations.
 %       5. Generate the execution-outcome figure.
 %       6. Generate horizon, replicate, and calibration figures by combination.
 %
