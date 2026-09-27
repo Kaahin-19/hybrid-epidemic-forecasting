@@ -277,7 +277,7 @@ wis_alphas = cfg.local_selection.wis_alphas;
 origin_mean_wis = nan(1, num_origins);
 candidate_feasible = true;
 
-recognized_failures = {'FORECAST_CLOSED:InvalidForecastDraw', 'EPIDEMIC:SusceptibleBelowThreshold'};
+recognized_failures = {'FORECAST_CLOSED:InvalidForecastDraw', 'EPIDEMIC:SusceptibleBelowThreshold', 'EPIDEMIC:InvalidBeta', 'EPIDEMIC:InvalidState'};
 
 for origin_position = 1:numel(forecast_origin_indices)
     origin_index = forecast_origin_indices(origin_position);
