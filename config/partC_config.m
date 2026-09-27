@@ -31,7 +31,7 @@ function cfg = partC_config()
 %   See also PARTC_01_PREPARE_DATA, PARTA_CONFIG.
 %
 % A. M. Kaahin 2026-07-27
-% Modified: 2026-09-26
+% Modified: 2026-09-27
 
 %% 1. Configuration Initialization
 cfg = struct();

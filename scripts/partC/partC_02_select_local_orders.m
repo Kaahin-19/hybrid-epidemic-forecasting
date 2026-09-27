@@ -21,7 +21,7 @@
 %            SIRS_INIT, COMPUTE_WIS.
 %
 % A. M. Kaahin 2026-07-28
-% Modified: 2026-08-23
+% Modified: 2026-09-27
 
 %% 1. Initialization
 clear; close all; clc;
@@ -210,27 +210,17 @@ selected_configuration = selection.selected_configuration;
 end
 
 function candidate_configurations = local_construct_candidate_grid(partA_configuration, model_type, order_radius)
-%LOCAL_CONSTRUCT_CANDIDATE_GRID Construct a symmetric neighbourhood around the global selection.
+%LOCAL_CONSTRUCT_CANDIDATE_GRID Construct the bounded local neighbourhood around the global selection.
 
 switch model_type
     case "AR"
-        p = partA_configuration(1);
-        radius = min(order_radius, p - 1);
-
-        candidate_configurations = ((p - radius):(p + radius)).';
+        p_values = local_construct_order_values(partA_configuration(1), order_radius);
+        candidate_configurations = p_values.';
 
     case "ARX"
-        na = partA_configuration(1);
-        nb = partA_configuration(2);
-        nk = partA_configuration(3);
-
-        na_radius = min(order_radius, na - 1);
-        nb_radius = min(order_radius, nb - 1);
-        nk_radius = min(order_radius, nk - 1);
-
-        na_values = (na - na_radius):(na + na_radius);
-        nb_values = (nb - nb_radius):(nb + nb_radius);
-        nk_values = (nk - nk_radius):(nk + nk_radius);
+        na_values = local_construct_order_values(partA_configuration(1), order_radius);
+        nb_values = local_construct_order_values(partA_configuration(2), order_radius);
+        nk_values = local_construct_order_values(partA_configuration(3), order_radius);
 
         [na_grid, nb_grid, nk_grid] = ndgrid(na_values, nb_values, nk_values);
 
@@ -241,6 +231,18 @@ switch model_type
 end
 
 candidate_configurations = sortrows(candidate_configurations);
+
+end
+
+function order_values = local_construct_order_values(selected_order, order_radius)
+%LOCAL_CONSTRUCT_ORDER_VALUES Construct one bounded local order neighbourhood.
+
+if selected_order == 1
+    order_values = 1:2;
+else
+    effective_radius = min(order_radius, selected_order - 1);
+    order_values = (selected_order - effective_radius):(selected_order + effective_radius);
+end
 
 end
 
