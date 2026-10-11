@@ -10,9 +10,9 @@ The implementation is divided into three major phases as outlined in the project
 
 | Phase      | Scope / Description   | Current Status | Last Revised | Supervisor Validated | Validation Date |
 | :--------- | :-------------------- | :------------- | :----------- | :------------------- | :-------------- |
-| **Part A** | Synthetic Validation  | Completed      | 2026-08-23   | [ ] Pending          | -               |
-| **Part B** | Robustness Testing    | Completed      | 2026-09-26   | [ ] Pending          | -               |
-| **Part C** | Real-Data Application | Completed      | 2026-09-27   | [ ] Pending          | -               |
+| **Part A** | Synthetic Validation  | Completed      | 2026-10-12   | [ ] Pending          | -               |
+| **Part B** | Robustness Testing    | Completed      | 2026-10-12   | [ ] Pending          | -               |
+| **Part C** | Real-Data Application | Completed      | 2026-10-12   | [ ] Pending          | -               |
 
 ---
 
@@ -48,12 +48,12 @@ The implementation is divided into three major phases as outlined in the project
 * **`scripts/partB/partB_01_generate_robustness_datasets.m`**: Generates synthetic robustness datasets for noisy $R_t$ input, process noise, structural mismatch, and combined stress.
 * **`scripts/partB/partB_02_run_forecasts.m`**: Runs frozen Part A-selected model configurations on successful robustness datasets and records forecast-execution outcomes.
 * **`scripts/partB/partB_03_evaluate_forecasts.m`**: Scores successful robustness forecasts against latent $R_t$ truth and matched Part A baselines, combines conditional forecast metrics with scenario-coverage and execution support, withholds incomplete stress-level aggregates, and exports evaluation summaries.
-* **`scripts/partB/partB_04_generate_figures.m`**: Generates Part B thesis figures for robustness performance, degradation, interval calibration, and forecast-execution outcomes while explicitly marking incomplete scenario coverage.
+* **`scripts/partB/partB_04_generate_figures.m`**: Generates Part B thesis figures summarizing robustness performance, forecast degradation, replicate-level distributions and support, interval calibration, and forecast-execution outcomes.
 * **`scripts/partC/partC_01_prepare_data.m`**: Reads the configured WHO incidence series, estimates operational $R_t$, reconstructs causal reported-case SIRS state proxies, and saves the prepared artifact.
 * **`scripts/partC/partC_02_select_local_orders.m`**: Evaluates limited AR/None and ARX/I order neighbourhoods on the calibration block and saves one local-selection artifact per configuration.
 * **`scripts/partC/partC_03_run_forecasts.m`**: Generates held-out AR/None and ARX/I forecasts under global online, local online, and global fixed-fit transfer strategies.
 * **`scripts/partC/partC_04_evaluate_forecasts.m`**: Scores the held-out forecasts, builds strategy and interval summaries, and exports the Part C evaluation artifact and tables.
-* **`scripts/partC/partC_05_generate_figures.m`**: Generates seven Part C thesis figures from the prepared-data, held-out forecast, and evaluation artifacts.
+* **`scripts/partC/partC_05_generate_figures.m`**: Generates eight Part C thesis figures from prepared-data, held-out forecast, and evaluation artifacts, including comprehensive and focused fixed-lead forecast comparisons.
 
 ### Source Code (`src/`)
 
