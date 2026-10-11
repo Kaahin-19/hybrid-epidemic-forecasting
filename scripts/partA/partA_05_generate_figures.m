@@ -1,22 +1,17 @@
 %PARTA_05_GENERATE_FIGURES Generate synthetic-validation thesis figures.
 %
 %   Description:
-%       Exports figures summarizing synthetic Rt trajectories, fixed-lead
-%       forecast behaviour, window-level forecast accuracy, horizon-wise
-%       forecast degradation, empirical interval coverage, and infected-state
-%       projection error relative to Rt persistence. Window-level and
-%       horizon-wise WIS are drawn on logarithmic axes so that every scored
-%       window, including extreme errors, remains visible alongside small
-%       scores. Model/input configurations follow a fixed family and input
-%       order, and scenarios are labelled by their readable names.
+%       Exports thesis figures summarizing synthetic Rt trajectories,
+%       fixed-lead forecasts, window-level and horizon-wise WIS,
+%       empirical interval coverage, and infected-state projection
+%       error relative to Rt persistence. Evaluation figures use
+%       logarithmic WIS scales and consistent model/input ordering.
 %
 %   Workflow:
 %       1. Initialize figure paths, source artifacts, and shared styling.
 %       2. Generate the Rt scenario trajectory panels.
 %       3. Generate the fixed-lead forecast comparison figures.
-%       4. Generate the Rt evaluation figures (log-scale WIS distribution and
-%          horizon-wise WIS, interval coverage) and the infected-state
-%          projection figure.
+%       4. Generate the Rt evaluation and infected-state projection figures.
 %
 %   See also PARTA_CONFIG, PARTA_04_EVALUATE_FORECASTS, PLOT_SERIES,
 %            PLOT_DISTRIBUTION.

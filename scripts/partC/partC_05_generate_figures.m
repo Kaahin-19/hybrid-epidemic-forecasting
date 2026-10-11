@@ -1,22 +1,16 @@
 %PARTC_05_GENERATE_FIGURES Generate real-data adaptation thesis figures.
 %
 %   Description:
-%       Generates the thesis-ready figures listed in canonical_names from the
-%       prepared-data, held-out forecast, and evaluation artifacts. It draws
-%       the observed-data and reconstructed-state summaries, a comprehensive
-%       fixed-lead forecast comparison of every model and strategy
-%       combination, a focused two-panel comparison of the locally selected
-%       online AR/None and ARX/I forecasts, and held-out evaluation
-%       comparisons, then exports each figure as a vector PDF. Fixed-lead
-%       figures show the forecast at one lead issued from successive weekly
-%       origins, not one continuous recursive forecast trajectory, and share
-%       a legend that identifies the model-specific interval and median
-%       colours.
+%       Generates vector-PDF thesis figures from the prepared real-data,
+%       held-out forecast, and evaluation artifacts. The figures summarize
+%       observed epidemiological data, reconstructed SIRS state proxies,
+%       comprehensive and focused fixed-lead forecast comparisons,
+%       forecast accuracy, interval diagnostics, and matched strategy
+%       comparisons.
 %
 %   Workflow:
 %       1. Load the prepared-data, forecast, and evaluation artifacts.
-%       2. Generate the canonical thesis figures, including the comprehensive
-%          and focused fixed-lead forecast comparisons.
+%       2. Generate the data, state-proxy, forecast, and evaluation figures.
 %       3. Export each figure directly as a vector PDF.
 %       4. Report the saved figure paths.
 %
@@ -243,7 +237,7 @@ local_export_and_close(fig, output_path);
 end
 
 function local_generate_fixed_lead_forecasts(prepared, panels, num_columns, panel_height, cfg, style, output_path)
-%LOCAL_GENERATE_FIXED_LEAD_FORECASTS Generate one fixed-lead forecast figure from resolved display panels.
+%LOCAL_GENERATE_FIXED_LEAD_FORECASTS Generate one fixed-lead figure of forecasts issued at successive origins.
 
 lead_time = cfg.visualization.plot_lead_time;
 plot_alphas = cfg.visualization.plot_alphas;
@@ -319,7 +313,7 @@ local_export_and_close(fig, output_path);
 end
 
 function [handles, labels] = local_forecast_legend_entries(ax, panels, axis_style, style)
-%LOCAL_FORECAST_LEGEND_ENTRIES Draw invisible model-coloured forecast series for a shared legend.
+%LOCAL_FORECAST_LEGEND_ENTRIES Build model-specific entries for the shared forecast legend.
 
 empty_forecast = struct('target_dates', NaT, 'target_Rt', NaN, 'median', NaN, 'lower', NaN(1, 2), 'upper', NaN(1, 2));
 

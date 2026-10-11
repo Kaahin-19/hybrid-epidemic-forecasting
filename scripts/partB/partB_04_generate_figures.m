@@ -1,33 +1,22 @@
 %PARTB_04_GENERATE_FIGURES Generate robustness thesis figures.
 %
 %   Description:
-%       Visualizes the saved robustness evaluation summaries as a compact set
-%       of thesis figures: mean WIS by stress case, WIS degradation relative
-%       to the matched synthetic baseline, horizon-wise WIS, replicate-level
-%       WIS distributions, interval calibration, and forecast-execution
-%       outcomes. Incomplete stress-level aggregates are withheld and marked
-%       explicitly, while conditional horizon and calibration figures report
-%       represented versus expected scenario support. A WIS ratio above one
-%       indicates degradation relative to the matched baseline.
-%
-%       Replicate-level WIS is drawn on a shared logarithmic axis. Every
-%       successful replicate is shown as a point at deterministic horizontal
-%       offsets, box summaries are drawn only where enough replicates
-%       succeeded, and each category label reports successful forecasts out
-%       of forecast attempts from the scenario summary. Categories without a
-%       successful forecast are marked as unavailable, and dataset-generation
-%       shortfalls are flagged separately from forecast failures. A focused
-%       figure compares replicate support for the ARX input modes under
-%       process noise in the Policy Intervention scenario.
+%       Generates thesis figures from the saved robustness evaluation
+%       summaries, including stress-case WIS, degradation relative to
+%       matched synthetic baselines, horizon-wise performance,
+%       replicate-level distributions, interval calibration, and
+%       forecast-execution outcomes. The figures distinguish incomplete
+%       coverage and unavailable forecasts from valid scores and include
+%       a focused comparison of replicate support under process noise.
 %
 %   Workflow:
 %       1. Initialize figure paths and shared styling.
 %       2. Load and validate the Part B evaluation summaries.
-%       3. Derive the plotted combinations, scenarios, and the shared
+%       3. Prepare the plotted combinations, scenario labels, and shared
 %          replicate-WIS axis limits.
-%       4. Generate the shared robustness overview with incomplete-coverage
+%       4. Generate the robustness overview with incomplete-coverage
 %          annotations.
-%       5. Generate the execution-outcome figure.
+%       5. Generate the forecast-execution outcome figure.
 %       6. Generate horizon, replicate, and calibration figures by combination.
 %       7. Generate the focused replicate-support figure.
 %
@@ -59,7 +48,7 @@ end
 evaluation = load(evaluation_artifact);
 summaries  = local_validate_evaluation(evaluation);
 
-%% 3. Derive Combinations, Scenarios, and Shared Axis Limits
+%% 3. Plot Preparation
 combos = local_combinations(summaries.stress_summary);
 fprintf('Found %d model/exogenous combination(s).\n', numel(combos));
 
@@ -67,10 +56,10 @@ scenario_ids       = [cfg.scenarios.id]';
 scenario_names     = [cfg.scenarios.name]';
 replicate_y_limits = local_log_limits(summaries.replicate_summary.MeanWIS);
 
-%% 4. Figure 1: Robustness Overview
+%% 4. Robustness Overview
 local_figure_overview(summaries, style, figure_dir);
 
-%% 5. Figure 5: Execution Outcomes
+%% 5. Forecast Execution Outcomes
 local_figure_execution(summaries.execution_summary, combos, style, figure_dir);
 
 %% 6. Per-Combination Figures
@@ -83,7 +72,7 @@ for c = 1:numel(combos)
     local_figure_calibration(summaries.interval_summary, summaries.stress_summary, combo, style, figure_dir);
 end
 
-%% 7. Focused Replicate Support Figure
+%% 7. Focused Replicate Support
 focus_case     = "process_noise";
 focus_scenario = "A2";
 focus_labels   = ["ARX / S"; "ARX / I"; "ARX / Both"];
@@ -386,7 +375,7 @@ close(fig);
 end
 
 function local_replicate_panel(ax, panel, y_limits, style)
-%LOCAL_REPLICATE_PANEL Draw replicate WIS points, box summaries, and support counts for caller-styled categories.
+%LOCAL_REPLICATE_PANEL Draw replicate distributions and execution-support annotations.
 num_categories = numel(panel.labels);
 axis_style = struct('y_limits', y_limits, 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name);
 
