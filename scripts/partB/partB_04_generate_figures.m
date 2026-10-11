@@ -10,20 +10,32 @@
 %       represented versus expected scenario support. A WIS ratio above one
 %       indicates degradation relative to the matched baseline.
 %
+%       Replicate-level WIS is drawn on a shared logarithmic axis. Every
+%       successful replicate is shown as a point at deterministic horizontal
+%       offsets, box summaries are drawn only where enough replicates
+%       succeeded, and each category label reports successful forecasts out
+%       of forecast attempts from the scenario summary. Categories without a
+%       successful forecast are marked as unavailable, and dataset-generation
+%       shortfalls are flagged separately from forecast failures. A focused
+%       figure compares replicate support for the ARX input modes under
+%       process noise in the Policy Intervention scenario.
+%
 %   Workflow:
 %       1. Initialize figure paths and shared styling.
 %       2. Load and validate the Part B evaluation summaries.
-%       3. Derive the plotted combinations, stress cases, and scenarios.
+%       3. Derive the plotted combinations, scenarios, and the shared
+%          replicate-WIS axis limits.
 %       4. Generate the shared robustness overview with incomplete-coverage
 %          annotations.
 %       5. Generate the execution-outcome figure.
 %       6. Generate horizon, replicate, and calibration figures by combination.
+%       7. Generate the focused replicate-support figure.
 %
 %   See also PARTB_CONFIG, PARTB_03_EVALUATE_FORECASTS, PLOT_SERIES,
 %            PLOT_DISTRIBUTION, APPLY_PANEL_STYLE.
 %
 % A. M. Kaahin 2026-07-18
-% Modified: 2026-09-26
+% Modified: 2026-10-12
 
 %% 1. Initialization
 clear; close all; clc;
@@ -47,9 +59,13 @@ end
 evaluation = load(evaluation_artifact);
 summaries  = local_validate_evaluation(evaluation);
 
-%% 3. Derive Combinations, Cases, and Scenarios
+%% 3. Derive Combinations, Scenarios, and Shared Axis Limits
 combos = local_combinations(summaries.stress_summary);
 fprintf('Found %d model/exogenous combination(s).\n', numel(combos));
+
+scenario_ids       = [cfg.scenarios.id]';
+scenario_names     = [cfg.scenarios.name]';
+replicate_y_limits = local_log_limits(summaries.replicate_summary.MeanWIS);
 
 %% 4. Figure 1: Robustness Overview
 local_figure_overview(summaries, style, figure_dir);
@@ -63,14 +79,22 @@ for c = 1:numel(combos)
     fprintf('Drawing per-combination figures for %s...\n', combo.label);
 
     local_figure_horizon(summaries, combo, style, figure_dir);
-    local_figure_replicates(summaries.replicate_summary, combo, style, figure_dir);
+    local_figure_replicates(summaries, combo, scenario_ids, scenario_names, replicate_y_limits, style, figure_dir);
     local_figure_calibration(summaries.interval_summary, summaries.stress_summary, combo, style, figure_dir);
 end
+
+%% 7. Focused Replicate Support Figure
+focus_case     = "process_noise";
+focus_scenario = "A2";
+focus_labels   = ["ARX / S"; "ARX / I"; "ARX / Both"];
+
+fprintf('Drawing focused replicate-support figure...\n');
+local_figure_replicate_support(summaries, focus_case, focus_scenario, focus_labels, scenario_ids, scenario_names, style, figure_dir);
 
 fprintf('Figures saved under %s\n', figure_dir);
 fprintf('=== Part B Figure Generation Complete ===\n\n');
 
-%% 7. Local Functions
+%% 8. Local Functions
 function summaries = local_validate_evaluation(evaluation)
 %LOCAL_VALIDATE_EVALUATION Require the evaluation artifact and summary schemas before plotting.
 required_top = {'window_scores', 'horizon_scores', 'interval_scores', 'summaries', 'availability_report', 'evaluation_snapshot'};
@@ -273,40 +297,122 @@ exportgraphics(fig, fullfile(figure_dir, char("partB_04_mean_wis_by_horizon_" + 
 close(fig);
 end
 
-function local_figure_replicates(replicate_summary, combo, style, figure_dir)
-%LOCAL_FIGURE_REPLICATES Replicate-level WIS distributions, one panel per scenario.
-rows = replicate_summary(replicate_summary.Model == combo.model & replicate_summary.ExoMode == combo.exo, :);
-scenarios = sort(unique(rows.Scenario));
-
-y_max = max(rows.MeanWIS);
-y_limits = [0, y_max * 1.08 + eps];
+function local_figure_replicates(summaries, combo, scenario_ids, scenario_names, y_limits, style, figure_dir)
+%LOCAL_FIGURE_REPLICATES Log-scale replicate WIS by stress case with execution support, one panel per scenario.
+support_rows = summaries.scenario_summary(summaries.scenario_summary.Model == combo.model & summaries.scenario_summary.ExoMode == combo.exo, :);
+replicate_rows = summaries.replicate_summary(summaries.replicate_summary.Model == combo.model & summaries.replicate_summary.ExoMode == combo.exo, :);
+scenarios = sort(unique(support_rows.Scenario));
 
 n_panels = numel(scenarios);
 n_cols   = ceil(sqrt(n_panels));
 n_rows   = ceil(n_panels / n_cols);
 
-fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 11.0], 'Color', 'w');
+fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 12.0], 'Color', 'w');
 tl  = tiledlayout(fig, n_rows, n_cols, 'Padding', 'compact', 'TileSpacing', 'compact');
 
+any_shortfall = false;
 for s = 1:n_panels
-    panel_rows = rows(rows.Scenario == scenarios(s), :);
-    [case_ids, case_labels, case_colors] = local_case_system(unique(panel_rows.Case), style);
+    support = support_rows(support_rows.Scenario == scenarios(s), :);
+    [case_ids, case_labels, case_colors, case_markers] = local_case_system(support.Case, style);
+    [~, order] = ismember(case_ids, support.Case);
+    support = support(order, :);
 
-    [~, pos]     = ismember(panel_rows.Case, case_ids);
-    obs_labels   = case_labels(pos);
-    obs_category = categorical(obs_labels, case_labels);
+    observations = sortrows(replicate_rows(replicate_rows.Scenario == scenarios(s), :), 'Replicate');
+    [~, obs_category] = ismember(observations.Case, case_ids);
+
+    panel = struct('labels', case_labels, 'colors', case_colors, 'markers', case_markers, 'obs_category', obs_category, 'obs_wis', observations.MeanWIS, 'successes', support.SuccessfulForecasts, 'attempts', support.ForecastAttempts, 'generation_shortfall', support.ReplicatesGenerated < support.ReplicatesExpected);
+    any_shortfall = any_shortfall || any(panel.generation_shortfall);
 
     ax = nexttile(tl);
-    dist_spec = struct('x', obs_category, 'y', panel_rows.MeanWIS, 'group', obs_category, 'color_order', case_colors, 'style', struct('y_limits', y_limits, 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
-    plot_distribution(ax, dist_spec);
-    title(ax, char(scenarios(s)), 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal', 'Interpreter', 'tex');
+    local_replicate_panel(ax, panel, y_limits, style);
+    title(ax, scenario_names(scenario_ids == scenarios(s)), 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal', 'Interpreter', 'tex');
 end
 
-xlabel(tl, "Stress case", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
-ylabel(tl, "Replicate mean WIS", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+xlabel(tl, local_support_note("Stress case", any_shortfall, style), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+ylabel(tl, "Replicate mean WIS (log scale)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
 
 exportgraphics(fig, fullfile(figure_dir, char("partB_04_replicate_wis_distribution_" + combo.token + ".pdf")), 'ContentType', 'vector');
 close(fig);
+end
+
+function local_figure_replicate_support(summaries, case_id, scenario_id, combo_labels, scenario_ids, scenario_names, style, figure_dir)
+%LOCAL_FIGURE_REPLICATE_SUPPORT Focused replicate WIS and execution support for selected combinations in one case and scenario.
+support = summaries.scenario_summary(summaries.scenario_summary.Case == case_id & summaries.scenario_summary.Scenario == scenario_id, :);
+[~, order] = ismember(combo_labels, support.Model + " / " + support.ExoMode);
+support = support(order, :);
+
+observations = sortrows(summaries.replicate_summary(summaries.replicate_summary.Case == case_id & summaries.replicate_summary.Scenario == scenario_id, :), 'Replicate');
+[is_selected, obs_category] = ismember(observations.Model + " / " + observations.ExoMode, combo_labels);
+observations = observations(is_selected, :);
+obs_category = obs_category(is_selected);
+
+[~, palette_idx] = ismember(combo_labels, local_combo_labels(summaries.stress_summary));
+combo_colors = style.palette(mod(palette_idx - 1, size(style.palette, 1)) + 1, :);
+
+panel = struct('labels', combo_labels, 'colors', combo_colors, 'markers', repmat("o", numel(combo_labels), 1), 'obs_category', obs_category, 'obs_wis', observations.MeanWIS, 'successes', support.SuccessfulForecasts, 'attempts', support.ForecastAttempts, 'generation_shortfall', support.ReplicatesGenerated < support.ReplicatesExpected);
+
+[~, case_label] = local_case_system(case_id, style);
+
+fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 12.0, 8.5], 'Color', 'w');
+tl  = tiledlayout(fig, 1, 1, 'Padding', 'compact', 'TileSpacing', 'compact');
+
+ax = nexttile(tl);
+local_replicate_panel(ax, panel, local_log_limits(observations.MeanWIS), style);
+title(ax, case_label + " — " + scenario_names(scenario_ids == scenario_id), 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal', 'Interpreter', 'tex');
+
+xlabel(tl, local_support_note("Model / exogenous mode", any(panel.generation_shortfall), style), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+ylabel(tl, "Replicate mean WIS (log scale)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+
+exportgraphics(fig, fullfile(figure_dir, char("partB_04_replicate_support_" + local_safe_token(case_id) + "_" + local_safe_token(scenario_id) + ".pdf")), 'ContentType', 'vector');
+close(fig);
+end
+
+function local_replicate_panel(ax, panel, y_limits, style)
+%LOCAL_REPLICATE_PANEL Draw replicate WIS points, box summaries, and support counts for caller-styled categories.
+num_categories = numel(panel.labels);
+axis_style = struct('y_limits', y_limits, 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name);
+
+boxed = panel.successes(panel.obs_category) >= style.min_box_replicates;
+if any(boxed)
+    dist_spec = struct('x', categorical(panel.labels(panel.obs_category(boxed)), panel.labels), 'y', panel.obs_wis(boxed), 'group', [], 'style', axis_style);
+    h = plot_distribution(ax, dist_spec);
+    set(h, 'BoxFaceColor', style.box_color, 'BoxEdgeColor', style.box_color, 'MarkerStyle', 'none');
+else
+    apply_panel_style(ax, axis_style);
+    set(ax, 'XTick', 1:num_categories);
+    xlim(ax, [0.5, num_categories + 0.5]);
+end
+set(ax, 'YScale', 'log', 'YMinorGrid', 'off');
+
+hold(ax, 'on');
+for k = 1:num_categories
+    if panel.successes(k) == 0
+        text(ax, k, sqrt(y_limits(1) * y_limits(2)), "No valid forecasts", 'Rotation', 90, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', 'FontName', style.font_name, 'FontSize', style.tick_font_size, 'Color', style.unavailable_color, 'Interpreter', 'tex');
+    else
+        values = panel.obs_wis(panel.obs_category == k);
+        n = numel(values);
+        offsets = 0.3 * ((1:n)' - (n + 1) / 2) / max(n - 1, 1);
+        plot(ax, k + offsets, values, 'LineStyle', 'none', 'Marker', panel.markers(k), 'MarkerSize', style.marker_size, 'MarkerEdgeColor', panel.colors(k, :), 'MarkerFaceColor', 'w', 'LineWidth', 0.9);
+    end
+end
+hold(ax, 'off');
+
+count_labels = compose("%d/%d", panel.successes, panel.attempts);
+count_labels(panel.generation_shortfall) = count_labels(panel.generation_shortfall) + "†";
+xticklabels(ax, panel.labels + "\newline" + count_labels);
+end
+
+function note = local_support_note(axis_label, any_shortfall, style)
+%LOCAL_SUPPORT_NOTE Axis label with the support-count definition and, when needed, the generation-shortfall marker.
+note = [axis_label; sprintf("{\\itn}/{\\itN}: successful forecasts / forecast attempts; boxes only for {\\itn} \\geq %d", style.min_box_replicates)];
+if any_shortfall
+    note = [note; "† fewer datasets generated than requested: generation failures, not forecast failures"];
+end
+end
+
+function limits = local_log_limits(values)
+%LOCAL_LOG_LIMITS Whole-decade logarithmic axis limits enclosing all positive values.
+limits = 10 .^ [floor(log10(min(values))), ceil(log10(max(values)))];
 end
 
 function local_figure_calibration(interval_summary, stress_summary, combo, style, figure_dir)
@@ -456,15 +562,18 @@ end
 function style = local_style()
 %LOCAL_STYLE Return robustness figure style constants using the shared palette.
 style = struct();
-style.font_name        = "Arial";
-style.axis_font_size   = 9;
-style.tick_font_size   = 8;
-style.legend_font_size = 8;
-style.panel_font_size  = 9;
-style.line_width       = 1.2;
-style.truth_line_width = 1.3;
-style.marker_size      = 3.5;
-style.palette          = [
+style.font_name          = "Arial";
+style.axis_font_size     = 9;
+style.tick_font_size     = 8;
+style.legend_font_size   = 8;
+style.panel_font_size    = 9;
+style.line_width         = 1.2;
+style.truth_line_width   = 1.3;
+style.marker_size        = 3.5;
+style.min_box_replicates = 5;
+style.box_color          = [0.45, 0.45, 0.45];
+style.unavailable_color  = [0.835, 0.369, 0.000];
+style.palette            = [
     0.902, 0.624, 0.000;
     0.337, 0.706, 0.914;
     0.000, 0.620, 0.451;

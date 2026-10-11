@@ -4,19 +4,25 @@
 %       Exports figures summarizing synthetic Rt trajectories, fixed-lead
 %       forecast behaviour, window-level forecast accuracy, horizon-wise
 %       forecast degradation, empirical interval coverage, and infected-state
-%       projection error relative to Rt persistence.
+%       projection error relative to Rt persistence. Window-level and
+%       horizon-wise WIS are drawn on logarithmic axes so that every scored
+%       window, including extreme errors, remains visible alongside small
+%       scores. Model/input configurations follow a fixed family and input
+%       order, and scenarios are labelled by their readable names.
 %
 %   Workflow:
 %       1. Initialize figure paths, source artifacts, and shared styling.
 %       2. Generate the Rt scenario trajectory panels.
 %       3. Generate the fixed-lead forecast comparison figures.
-%       4. Generate the Rt evaluation and infected-state projection figures.
+%       4. Generate the Rt evaluation figures (log-scale WIS distribution and
+%          horizon-wise WIS, interval coverage) and the infected-state
+%          projection figure.
 %
 %   See also PARTA_CONFIG, PARTA_04_EVALUATE_FORECASTS, PLOT_SERIES,
 %            PLOT_DISTRIBUTION.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-08-23
+% Modified: 2026-10-12
 
 %% 1. Initialization
 clear; close all; clc;
@@ -126,14 +132,20 @@ else
     interval_summary = evaluation.summaries.interval_summary;
     i_projection_horizon_summary = evaluation.summaries.i_projection_horizon_summary;
 
+    scenario_ids   = [cfg.scenarios.id]';
+    scenario_names = [cfg.scenarios.name]';
+    [~, scenario_pos] = ismember(window_scores.Scenario, scenario_ids);
+    configuration_labels = local_configuration_order(window_scores.Model, window_scores.ExoMode);
+
     fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 9.5], 'Color', 'w');
 
     ax = axes('Parent', fig);
 
-    dist_spec = struct('x', window_scores.Model + " / " + window_scores.ExoMode, 'y', window_scores.WindowWIS, 'group', window_scores.Scenario, 'color_order', style.palette, 'style', struct('x_label', "Model / exogenous mode", 'y_label', "Window WIS", 'x_tick_rotation', 20, 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+    dist_spec = struct('x', categorical(window_scores.Model + " / " + window_scores.ExoMode, configuration_labels), 'y', window_scores.WindowWIS, 'group', categorical(scenario_names(scenario_pos), scenario_names), 'color_order', style.palette, 'style', struct('x_label', "Model / exogenous mode", 'y_label', "Window WIS (log scale)", 'y_limits', 10 .^ [floor(log10(min(window_scores.WindowWIS))), ceil(log10(max(window_scores.WindowWIS)))], 'x_tick_rotation', 30, 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
 
     [h, labels] = plot_distribution(ax, dist_spec);
-    local_apply_legend(ax, h, labels, style, numel(labels));
+    set(ax, 'YScale', 'log', 'YMinorGrid', 'off');
+    local_apply_legend(ax, h, labels, style, 2);
 
     exportgraphics(fig, fullfile(figure_dir, 'partA_05_model_wis_distribution.pdf'), 'ContentType', 'vector');
     close(fig);
@@ -144,9 +156,10 @@ else
 
     ax = axes('Parent', fig);
 
-    spec = struct('series', horizon_series, 'style', struct('x_label', "Forecast horizon, {\it h} (days)", 'y_label', "Mean WIS", 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+    spec = struct('series', horizon_series, 'style', struct('x_label', "Forecast horizon, {\it h} (days)", 'y_label', "Mean WIS (log scale)", 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
 
     [h, labels] = plot_series(ax, spec);
+    set(ax, 'YScale', 'log', 'YMinorGrid', 'off');
     local_apply_legend(ax, h, labels, style, 3);
 
     exportgraphics(fig, fullfile(figure_dir, 'partA_05_mean_wis_by_horizon.pdf'), 'ContentType', 'vector');
@@ -177,7 +190,7 @@ else
     exportgraphics(fig, fullfile(figure_dir, 'partA_05_coverage_summary.pdf'), 'ContentType', 'vector');
     close(fig);
 
-    projection_groups = unique(i_projection_horizon_summary.Model + " / " + i_projection_horizon_summary.ExoMode, 'stable');
+    projection_groups = local_configuration_order(i_projection_horizon_summary.Model, i_projection_horizon_summary.ExoMode);
     n_panels = numel(projection_groups);
     n_cols   = ceil(sqrt(n_panels));
     n_rows   = ceil(n_panels / n_cols);
@@ -306,9 +319,9 @@ series(median_idx).label       = "Median forecast";
 end
 
 function series = local_grouped_line_series(tbl, x_var, y_var, style)
-%LOCAL_GROUPED_LINE_SERIES Build one line series per model/exogenous group.
+%LOCAL_GROUPED_LINE_SERIES Build one line series per model/exogenous group in fixed configuration order.
 group_ids = tbl.Model + " / " + tbl.ExoMode;
-groups    = unique(group_ids, 'stable');
+groups    = local_configuration_order(tbl.Model, tbl.ExoMode);
 markers   = ["o", "s", "^", "d", "v", ">", "<", "p", "h"];
 
 series = repmat(local_series_template(), numel(groups), 1);
@@ -328,6 +341,18 @@ for i = 1:numel(groups)
     series(i).marker_size = style.marker_size;
     series(i).label       = groups(i);
 end
+end
+
+function labels = local_configuration_order(models, exo_modes)
+%LOCAL_CONFIGURATION_ORDER Return present model/input labels in fixed family and input order.
+model_order = ["AR"; "ARX"; "N4SID"; "SSEST"];
+exo_order   = ["None"; "S"; "I"; "Both"];
+
+[~, model_rank] = ismember(models, model_order);
+[~, exo_rank]   = ismember(exo_modes, exo_order);
+ranked = unique([model_rank, exo_rank], 'rows');
+
+labels = model_order(ranked(:, 1)) + " / " + exo_order(ranked(:, 2));
 end
 
 function series = local_i_projection_series(summary, style)

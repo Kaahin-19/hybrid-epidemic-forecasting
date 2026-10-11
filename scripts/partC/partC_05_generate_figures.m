@@ -1,14 +1,20 @@
 %PARTC_05_GENERATE_FIGURES Generate real-data adaptation thesis figures.
 %
 %   Description:
-%       Generates seven thesis-ready figures from the prepared-data, held-out
-%       forecast, and evaluation artifacts. It draws the observed-data and
-%       reconstructed-state summaries together with held-out forecast and
-%       evaluation comparisons, then exports each figure as a vector PDF.
+%       Generates the thesis-ready figures listed in canonical_names from the
+%       prepared-data, held-out forecast, and evaluation artifacts. It draws
+%       the observed-data and reconstructed-state summaries, a comprehensive
+%       fixed-lead forecast comparison of every model and strategy
+%       combination, a focused two-panel comparison of the locally selected
+%       online AR/None and ARX/I forecasts, and held-out evaluation
+%       comparisons, then exports each figure as a vector PDF. Fixed-lead
+%       figures show the forecast at one lead issued from successive weekly
+%       origins, not one continuous recursive forecast trajectory.
 %
 %   Workflow:
 %       1. Load the prepared-data, forecast, and evaluation artifacts.
-%       2. Generate the seven configured thesis figures.
+%       2. Generate the canonical thesis figures, including the comprehensive
+%          and focused fixed-lead forecast comparisons.
 %       3. Export each figure directly as a vector PDF.
 %       4. Report the saved figure paths.
 %
@@ -16,7 +22,7 @@
 %            PLOT_DISTRIBUTION.
 %
 % A. M. Kaahin 2026-08-06
-% Modified: 2026-08-23
+% Modified: 2026-10-12
 
 %% 1. Initialization
 clear; close all; clc;
@@ -33,6 +39,7 @@ canonical_names = [
     "partC_05_data_overview.pdf"
     "partC_05_sirs_proxy_states.pdf"
     "partC_05_fixed_lead_forecasts.pdf"
+    "partC_05_fixed_lead_forecasts_local_online.pdf"
     "partC_05_origin_wis_distribution.pdf"
     "partC_05_performance_by_lead_time.pdf"
     "partC_05_interval_diagnostics.pdf"
@@ -50,26 +57,33 @@ evaluation = local_load_evaluation_artifact(cfg);
 fprintf('Prepared, forecast, and evaluation artifacts loaded.\n');
 
 %% 3. Figure Generation
-fprintf('Generating figure 1/7\n');
+num_figures = numel(canonical_paths);
+
+fprintf('Generating figure 1/%d\n', num_figures);
 local_generate_data_overview(prepared, cfg, style, canonical_paths(1));
 
-fprintf('Generating figure 2/7\n');
+fprintf('Generating figure 2/%d\n', num_figures);
 local_generate_sirs_proxy_states(prepared, cfg, style, canonical_paths(2));
 
-fprintf('Generating figure 3/7\n');
-local_generate_fixed_lead_forecasts(prepared, artifacts, evaluation.online_equivalence, cfg, style, canonical_paths(3));
+fprintf('Generating figure 3/%d\n', num_figures);
+forecast_panels = local_forecast_panels(artifacts, evaluation.online_equivalence, cfg);
+local_generate_fixed_lead_forecasts(prepared, forecast_panels, 2, 6.2, cfg, style, canonical_paths(3));
 
-fprintf('Generating figure 4/7\n');
-local_generate_origin_wis_distribution(evaluation.origin_scores, style, canonical_paths(4));
+fprintf('Generating figure 4/%d\n', num_figures);
+focused_panels = local_focused_forecast_panels(artifacts);
+local_generate_fixed_lead_forecasts(prepared, focused_panels, 1, 5.0, cfg, style, canonical_paths(4));
 
-fprintf('Generating figure 5/7\n');
-local_generate_performance_by_lead_time(evaluation.summaries.horizon_summary, evaluation.online_equivalence, cfg, style, canonical_paths(5));
+fprintf('Generating figure 5/%d\n', num_figures);
+local_generate_origin_wis_distribution(evaluation.origin_scores, style, canonical_paths(5));
 
-fprintf('Generating figure 6/7\n');
-local_generate_interval_diagnostics(evaluation.summaries.interval_summary, evaluation.online_equivalence, cfg, style, canonical_paths(6));
+fprintf('Generating figure 6/%d\n', num_figures);
+local_generate_performance_by_lead_time(evaluation.summaries.horizon_summary, evaluation.online_equivalence, cfg, style, canonical_paths(6));
 
-fprintf('Generating figure 7/7\n');
-local_generate_pairwise_wis_differences(evaluation.pairwise_comparisons, style, canonical_paths(7));
+fprintf('Generating figure 7/%d\n', num_figures);
+local_generate_interval_diagnostics(evaluation.summaries.interval_summary, evaluation.online_equivalence, cfg, style, canonical_paths(7));
+
+fprintf('Generating figure 8/%d\n', num_figures);
+local_generate_pairwise_wis_differences(evaluation.pairwise_comparisons, style, canonical_paths(8));
 
 %% 4. Completion Report
 close all;
@@ -226,18 +240,15 @@ local_export_and_close(fig, output_path);
 
 end
 
-function local_generate_fixed_lead_forecasts(prepared, artifacts, equivalence, cfg, style, output_path)
-%LOCAL_GENERATE_FIXED_LEAD_FORECASTS Generate fixed-lead comparison panels.
-
-panels = local_forecast_panels(artifacts, equivalence, cfg);
+function local_generate_fixed_lead_forecasts(prepared, panels, num_columns, panel_height, cfg, style, output_path)
+%LOCAL_GENERATE_FIXED_LEAD_FORECASTS Generate one fixed-lead forecast figure from resolved display panels.
 
 lead_time = cfg.visualization.plot_lead_time;
 plot_alphas = cfg.visualization.plot_alphas;
 
 num_panels = numel(panels);
-num_columns = 2;
 num_rows = ceil(num_panels / num_columns);
-figure_height = 6.2 * num_rows + 1.8;
+figure_height = panel_height * num_rows + 1.8;
 
 held_out_mask = prepared.dates >= cfg.validation.test_start_date;
 held_out_dates = prepared.dates(held_out_mask);
@@ -282,7 +293,7 @@ for panel_index = 1:num_panels
     model_color = local_model_color(panels(panel_index).artifact.model_type, style);
     series = local_forecast_series(held_out_dates, held_out_Rt, data, model_color, style);
 
-    axis_style = local_axis_style("", "Operational effective reproduction number, R_t", style);
+    axis_style = local_axis_style("", "", style);
     axis_style.y_limits = [common_lower, common_upper];
 
     spec = struct('series', series, 'style', axis_style);
@@ -303,8 +314,25 @@ for panel_index = 1:num_panels
     end
 end
 
+ylabel(layout, "Operational effective reproduction number, R_t", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+
 local_shared_legend(legend_axes, legend_handles, legend_labels, style, 4);
 local_export_and_close(fig, output_path);
+
+end
+
+function panels = local_focused_forecast_panels(artifacts)
+%LOCAL_FOCUSED_FORECAST_PANELS Select the locally selected online forecasts as display panels.
+
+is_local_online = cellfun(@(artifact) artifact.strategy == "local_online_fit", artifacts);
+local_online = artifacts(is_local_online);
+
+panels = repmat(struct('artifact', struct(), 'title', ""), numel(local_online), 1);
+
+for panel_index = 1:numel(local_online)
+    artifact = local_online{panel_index};
+    panels(panel_index) = struct('artifact', artifact, 'title', artifact.model_type + "/" + artifact.exo_mode + " — Local online");
+end
 
 end
 
