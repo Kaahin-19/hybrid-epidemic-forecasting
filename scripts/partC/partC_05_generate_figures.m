@@ -9,7 +9,9 @@
 %       online AR/None and ARX/I forecasts, and held-out evaluation
 %       comparisons, then exports each figure as a vector PDF. Fixed-lead
 %       figures show the forecast at one lead issued from successive weekly
-%       origins, not one continuous recursive forecast trajectory.
+%       origins, not one continuous recursive forecast trajectory, and share
+%       a legend that identifies the model-specific interval and median
+%       colours.
 %
 %   Workflow:
 %       1. Load the prepared-data, forecast, and evaluation artifacts.
@@ -282,10 +284,6 @@ panel_labels = ["(a)", "(b)", "(c)", "(d)", "(e)", "(f)"];
 fig = local_new_figure([2, 2, 17.5, figure_height]);
 layout = tiledlayout(fig, num_rows, num_columns, 'Padding', 'compact', 'TileSpacing', 'compact');
 
-legend_handles = gobjects(0, 1);
-legend_labels = strings(0, 1);
-legend_axes = gobjects(1, 1);
-
 for panel_index = 1:num_panels
     ax = nexttile(layout);
 
@@ -298,7 +296,12 @@ for panel_index = 1:num_panels
 
     spec = struct('series', series, 'style', axis_style);
 
-    [handles, labels] = plot_series(ax, spec);
+    plot_series(ax, spec);
+
+    if panel_index == 1
+        [legend_handles, legend_labels] = local_forecast_legend_entries(ax, panels, axis_style, style);
+        legend_axes = ax;
+    end
 
     xlim(ax, [held_out_dates(1), held_out_dates(end)]);
     xtickformat(ax, 'MMM yyyy');
@@ -306,12 +309,6 @@ for panel_index = 1:num_panels
     title(ax, panels(panel_index).title, 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal', 'Interpreter', 'tex');
 
     local_panel_label(ax, panel_labels(panel_index), style);
-
-    if panel_index == 1
-        legend_handles = handles;
-        legend_labels = labels;
-        legend_axes = ax;
-    end
 end
 
 ylabel(layout, "Operational effective reproduction number, R_t", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
@@ -321,17 +318,65 @@ local_export_and_close(fig, output_path);
 
 end
 
+function [handles, labels] = local_forecast_legend_entries(ax, panels, axis_style, style)
+%LOCAL_FORECAST_LEGEND_ENTRIES Draw invisible model-coloured forecast series for a shared legend.
+
+empty_forecast = struct('target_dates', NaT, 'target_Rt', NaN, 'median', NaN, 'lower', NaN(1, 2), 'upper', NaN(1, 2));
+
+model_types = strings(numel(panels), 1);
+model_labels = strings(numel(panels), 1);
+
+for panel_index = 1:numel(panels)
+    model_types(panel_index) = panels(panel_index).artifact.model_type;
+    model_labels(panel_index) = model_types(panel_index) + "/" + panels(panel_index).artifact.exo_mode;
+end
+
+[model_labels, first_index] = unique(model_labels, 'stable');
+model_types = model_types(first_index);
+
+model_elements = [1, 2, 4];
+entry_series = repmat(local_series_template(), numel(model_elements) * numel(model_labels) + 1, 1);
+
+for model_index = 1:numel(model_labels)
+    series = local_forecast_series(NaT, NaN, empty_forecast, local_model_color(model_types(model_index), style), style);
+
+    for element_index = 1:numel(model_elements)
+        entry = series(model_elements(element_index));
+        entry.label = model_labels(model_index) + " " + entry.label;
+
+        entry_series((element_index - 1) * numel(model_labels) + model_index) = entry;
+    end
+end
+
+entry_series(end) = series(3);
+
+[handles, labels] = plot_series(ax, struct('series', entry_series, 'style', axis_style));
+
+end
+
 function panels = local_focused_forecast_panels(artifacts)
-%LOCAL_FOCUSED_FORECAST_PANELS Select the locally selected online forecasts as display panels.
+%LOCAL_FOCUSED_FORECAST_PANELS Select exactly the AR/None and ARX/I local-online forecasts as display panels.
 
-is_local_online = cellfun(@(artifact) artifact.strategy == "local_online_fit", artifacts);
-local_online = artifacts(is_local_online);
+identities = [
+    "AR", "None"
+    "ARX", "I"
+    ];
 
-panels = repmat(struct('artifact', struct(), 'title', ""), numel(local_online), 1);
+strategy = "local_online_fit";
 
-for panel_index = 1:numel(local_online)
-    artifact = local_online{panel_index};
-    panels(panel_index) = struct('artifact', artifact, 'title', artifact.model_type + "/" + artifact.exo_mode + " — Local online");
+panels = repmat(struct('artifact', struct(), 'title', ""), size(identities, 1), 1);
+
+for panel_index = 1:size(identities, 1)
+    model_type = identities(panel_index, 1);
+    exo_mode = identities(panel_index, 2);
+
+    matches = cellfun(@(artifact) artifact.model_type == model_type && artifact.exo_mode == exo_mode && artifact.strategy == strategy, artifacts);
+
+    if nnz(matches) ~= 1
+        error('PARTC_05:FocusedForecastArtifactCount', 'Expected exactly one %s/%s %s forecast artifact for the focused figure, but found %d.', model_type, exo_mode, strategy, nnz(matches));
+    end
+
+    panels(panel_index) = struct('artifact', artifacts{matches}, 'title', model_type + "/" + exo_mode + " — Local online");
 end
 
 end

@@ -338,7 +338,18 @@ end
 function local_figure_replicate_support(summaries, case_id, scenario_id, combo_labels, scenario_ids, scenario_names, style, figure_dir)
 %LOCAL_FIGURE_REPLICATE_SUPPORT Focused replicate WIS and execution support for selected combinations in one case and scenario.
 support = summaries.scenario_summary(summaries.scenario_summary.Case == case_id & summaries.scenario_summary.Scenario == scenario_id, :);
-[~, order] = ismember(combo_labels, support.Model + " / " + support.ExoMode);
+support_labels = support.Model + " / " + support.ExoMode;
+
+order = zeros(numel(combo_labels), 1);
+for k = 1:numel(combo_labels)
+    match = find(support_labels == combo_labels(k));
+
+    if numel(match) ~= 1
+        error('PARTB_04:FocusedSupportRowCount', 'Expected one scenario-summary row for case %s, scenario %s, and combination %s, but found %d.', case_id, scenario_id, combo_labels(k), numel(match));
+    end
+
+    order(k) = match;
+end
 support = support(order, :);
 
 observations = sortrows(summaries.replicate_summary(summaries.replicate_summary.Case == case_id & summaries.replicate_summary.Scenario == scenario_id, :), 'Replicate');
@@ -346,7 +357,14 @@ observations = sortrows(summaries.replicate_summary(summaries.replicate_summary.
 observations = observations(is_selected, :);
 obs_category = obs_category(is_selected);
 
-[~, palette_idx] = ismember(combo_labels, local_combo_labels(summaries.stress_summary));
+if any(accumarray(obs_category, 1, [numel(combo_labels), 1]) ~= support.SuccessfulForecasts)
+    error('PARTB_04:FocusedReplicateCount', 'Replicate rows for case %s and scenario %s do not match SuccessfulForecasts for the focused combinations.', case_id, scenario_id);
+end
+
+[has_palette, palette_idx] = ismember(combo_labels, local_combo_labels(summaries.stress_summary));
+if ~all(has_palette)
+    error('PARTB_04:FocusedCombinationColor', 'Focused combination(s) %s are absent from stress_summary and have no palette colour.', strjoin(combo_labels(~has_palette), ', '));
+end
 combo_colors = style.palette(mod(palette_idx - 1, size(style.palette, 1)) + 1, :);
 
 panel = struct('labels', combo_labels, 'colors', combo_colors, 'markers', repmat("o", numel(combo_labels), 1), 'obs_category', obs_category, 'obs_wis', observations.MeanWIS, 'successes', support.SuccessfulForecasts, 'attempts', support.ForecastAttempts, 'generation_shortfall', support.ReplicatesGenerated < support.ReplicatesExpected);
