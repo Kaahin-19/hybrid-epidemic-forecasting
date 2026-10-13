@@ -18,7 +18,7 @@
 %            PLOT_DISTRIBUTION.
 %
 % A. M. Kaahin 2026-08-06
-% Modified: 2026-10-12
+% Modified: 2026-10-13
 
 %% 1. Initialization
 clear; close all; clc;
@@ -705,7 +705,7 @@ series(3).marker_size = style.pairwise_marker_size;
 fig = local_new_figure([2, 2, 17.0, 10.0]);
 ax = axes('Parent', fig);
 
-axis_style = local_axis_style("Left mean WIS − right mean WIS; negative values favour the left-hand method", "", style);
+axis_style = local_axis_style("Left mean WIS − right mean WIS" + newline + "Negative values favour the left-hand method", "", style);
 axis_style.x_limits = [-axis_limit, axis_limit];
 axis_style.y_limits = [0.5, num_comparisons + 0.5];
 

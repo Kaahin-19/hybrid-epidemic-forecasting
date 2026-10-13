@@ -24,7 +24,7 @@
 %            PLOT_DISTRIBUTION, APPLY_PANEL_STYLE.
 %
 % A. M. Kaahin 2026-07-18
-% Modified: 2026-10-12
+% Modified: 2026-10-13
 
 %% 1. Initialization
 clear; close all; clc;
@@ -411,7 +411,7 @@ end
 
 function note = local_support_note(axis_label, any_shortfall, style)
 %LOCAL_SUPPORT_NOTE Axis label with the support-count definition and, when needed, the generation-shortfall marker.
-note = [axis_label; sprintf("{\\itn}/{\\itN}: successful forecasts / forecast attempts; boxes only for {\\itn} \\geq %d", style.min_box_replicates)];
+note = [axis_label; "{\itn}/{\itN} = successful forecasts / forecast attempts"; sprintf("Boxes shown only for {\\itn} \\geq %d", style.min_box_replicates)];
 if any_shortfall
     note = [note; "† fewer datasets generated than requested: generation failures, not forecast failures"];
 end
