@@ -422,6 +422,92 @@ run_matlab_script() {
     "run('${script_path}');"
 }
 
+# Prints Git provenance for the launch state. Called before --fresh so the
+# tracked Part A artifacts it deletes do not appear as working-tree changes.
+capture_git_provenance() {
+  local git_status
+  local source_changes
+
+  if ! git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    printf 'Git metadata unavailable: %s is not a readable Git work tree.\n' "$REPO_ROOT"
+    return 0
+  fi
+
+  git_status="$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null || true)"
+  source_changes="$(printf '%s\n' "$git_status" | grep -Ev '^.. (data|results)/|^$' || true)"
+
+  printf 'Commit: %s\n' "$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || printf 'unavailable')"
+  printf 'Branch: %s\n' "$(git -C "$REPO_ROOT" symbolic-ref --short -q HEAD || printf 'detached HEAD')"
+
+  if [[ -z "$git_status" ]]; then
+    printf 'Working tree: clean\n'
+  else
+    printf 'Working tree: modified\n'
+  fi
+
+  if [[ -n "$source_changes" ]]; then
+    printf 'WARNING: uncommitted changes outside data/ and results/; the run cannot be reconstructed exactly from the commit alone.\n'
+  fi
+
+  printf '\nModified and untracked files (git status --porcelain):\n%s\n' "${git_status:-(none)}"
+  printf '\nSubmodules (git submodule status; leading + = checkout differs from recorded commit, - = not initialised):\n%s\n' \
+    "$(git -C "$REPO_ROOT" submodule status --recursive 2>/dev/null || printf 'unavailable')"
+}
+
+# Writes results/partA/logs/<run_id>/run_metadata.txt once per pipeline run.
+write_run_metadata() {
+  local git_provenance="$1"
+  local metadata_file="$RUN_LOG_DIR/run_metadata.txt"
+  local matlab_root
+  local version_xml
+  local ver_output
+  local ver_exit=0
+  local i
+
+  matlab_root="$(cd "$(dirname "$(readlink -f "$MATLAB_BIN")")/.." && pwd)"
+  version_xml="$matlab_root/VersionInfo.xml"
+
+  # Run `ver` outside the repository so MATLAB does not auto-run startup.m.
+  ver_output="$(cd "$RUN_LOG_DIR" && "$MATLAB_BIN" -batch "ver" 2>&1)" || ver_exit=$?
+
+  {
+    printf '== Execution ==\n'
+    printf 'Run ID: %s\n' "$RUN_ID"
+    printf 'Started: %s\n' "$PIPELINE_STARTED_AT"
+    printf 'Repository: %s\n' "$REPO_ROOT"
+    printf 'Command: %s\n' "$(printf '%q ' "$0" "${args[@]}")"
+    printf 'Fresh (--fresh): %s\n' "$([[ "$fresh_run" -eq 1 ]] && printf 'yes' || printf 'no')"
+    printf 'Selected model/exo combinations (%d):\n' "${#combo_models[@]}"
+    for i in "${!combo_models[@]}"; do
+      printf '  %s | %s\n' "${combo_models[$i]}" "${combo_exos[$i]}"
+    done
+    printf 'Skipped invalid combinations (%d):\n' "${#skipped_combos[@]}"
+    for i in "${!skipped_combos[@]}"; do
+      printf '  %s\n' "${skipped_combos[$i]}"
+    done
+
+    printf '\n== Git provenance ==\n%s\n' "$git_provenance"
+
+    printf '\n== MATLAB environment ==\n'
+    printf 'Executable: %s\n' "$MATLAB_BIN"
+    printf 'MATLAB root: %s\n' "$matlab_root"
+    if [[ -f "$version_xml" ]]; then
+      printf 'VersionInfo.xml release: %s\n' "$(sed -n 's:.*<release>\(.*\)</release>.*:\1:p' "$version_xml")"
+      printf 'VersionInfo.xml version: %s\n' "$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "$version_xml")"
+      printf 'VersionInfo.xml update: %s\n' "$(sed -n 's:.*<description>\(.*\)</description>.*:\1:p' "$version_xml")"
+    else
+      printf 'VersionInfo.xml: unavailable (%s not found)\n' "$version_xml"
+    fi
+
+    if [[ "$ver_exit" -eq 0 ]]; then
+      printf '\nInstalled products (MATLAB ver; license number omitted):\n'
+      printf '%s\n' "$ver_output" | grep -v 'License Number' || true
+    else
+      printf '\nMATLAB ver unavailable (exit %d).\n' "$ver_exit"
+    fi
+  } > "$metadata_file"
+}
+
 models_spec=""
 exo_spec=""
 fresh_run=0
@@ -515,6 +601,8 @@ done
 
 [[ "${#combo_models[@]}" -gt 0 ]] || die "No valid Model/Exo combinations remain after filtering."
 
+GIT_PROVENANCE="$(capture_git_provenance)"
+
 cd "$REPO_ROOT"
 
 if [[ "$fresh_run" -eq 1 ]]; then
@@ -546,6 +634,9 @@ printf 'Configurations: %d\n' "${#combo_models[@]}"
 if [[ "${#skipped_combos[@]}" -gt 0 ]]; then
   printf 'Skipped invalid combinations: %d\n' "${#skipped_combos[@]}"
 fi
+
+printf 'Metadata: results/partA/logs/%s/run_metadata.txt\n' "$RUN_ID"
+write_run_metadata "$GIT_PROVENANCE"
 
 printf '\n'
 
