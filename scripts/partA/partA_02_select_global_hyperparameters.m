@@ -20,7 +20,7 @@
 %            COMPUTE_WIS.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-08-31
+% Modified: 2026-11-17
 
 %% 1. Initialization
 clear; close all; clc;
@@ -164,7 +164,7 @@ parfor idx = 1:num_candidates
                 window_aicc(w)  = fit_info.AICc;
                 completed_count = completed_count + 1;
             catch ME
-                if any(strcmp(ME.identifier, {'FORECAST_CLOSED:InvalidForecastDraw', 'EPIDEMIC:SusceptibleBelowThreshold'}))
+                if any(strcmp(ME.identifier, {'FORECAST_CLOSED:InvalidForecastDraw', 'FORECAST_OPEN:InvalidForecastDraw', 'EPIDEMIC:SusceptibleBelowThreshold'}))
                     candidate_infeasible = true;
                     fprintf('Infeasible candidate %s in scenario %s at window %d: %s\n', mat2str(params), data.scenario_id, w, ME.identifier);
                     break;
