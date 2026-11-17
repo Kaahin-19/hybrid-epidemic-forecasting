@@ -11,25 +11,3 @@ SEIR.c
 *.mexw64
 *.mexmaci64
 build/
-
-# Generated data
-data/F.mat
-data/R0a.mat
-data/R0b.mat
-data/R0c.mat
-
-# Downloaded WHO data files
-data/partC/raw/WHO-COVID-19-global-weekly-data.csv
-
-# Generated data scripts
-src/models/genData.m
-
-# Report scratch and archived exports
-report/archive/
-report/stages/
-
-# Third-party IEEE publication generator assets
-third_party/IEEE_publication_generator/*
-
-# Recovery files
-.recovery
