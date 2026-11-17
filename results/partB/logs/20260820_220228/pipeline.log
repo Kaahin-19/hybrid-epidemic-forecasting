@@ -1,0 +1,14 @@
+[2026-08-20 22:02:28] Run ID: 20260820_220228
+[2026-08-20 22:02:28] Running Part B synthetic robustness pipeline
+[2026-08-20 22:02:28] Pipeline started
+[2026-08-20 22:02:28] Starting Generating Part B robustness datasets
+[2026-08-20 22:04:05] Completed Generating Part B robustness datasets in 97s
+[2026-08-20 22:04:05] Starting Running frozen Part A-selected configurations on Part B datasets
+[2026-08-20 22:20:09] Completed Running frozen Part A-selected configurations on Part B datasets in 964s
+[2026-08-20 22:20:09] Starting Evaluating Part B robustness forecasts against latent Rt truth and Part A baselines
+[2026-08-20 22:20:18] Completed Evaluating Part B robustness forecasts against latent Rt truth and Part A baselines in 9s
+[2026-08-20 22:20:18] Starting Generating Part B robustness thesis figures
+[2026-08-20 22:20:43] Completed Generating Part B robustness thesis figures in 25s
+[2026-08-20 22:20:43] Part B robustness pipeline completed successfully in 1095s
+[2026-08-20 22:20:43] Thesis-level figures generated under: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/figures
+[2026-08-20 22:20:43] Run logs saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20260820_220228

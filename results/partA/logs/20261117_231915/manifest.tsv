@@ -1,0 +1,14 @@
+Timestamp	Step	Model	Exo	Status	LogFile	Details
+2026-11-17 23:19:15	selection	-	-	skipped	-	AR + S
+2026-11-17 23:19:15	selection	-	-	skipped	-	AR + I
+2026-11-17 23:19:15	selection	-	-	skipped	-	AR + Both
+2026-11-17 23:19:19	truth	-	-	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_231915/partA_01_generate_truth.log	Generating Part A synthetic ground truth
+2026-11-17 23:19:27	truth	-	-	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_231915/partA_01_generate_truth.log	8s
+2026-11-17 23:19:27	model_selection	AR	None	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_231915/AR_None_model_selection.log	Selecting model configuration for AR | None
+2026-11-17 23:19:55	model_selection	AR	None	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_231915/AR_None_model_selection.log	28s
+2026-11-17 23:19:55	forecast	AR	None	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_231915/AR_None_forecast.log	Running forecasts for AR | None
+2026-11-17 23:20:09	forecast	AR	None	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_231915/AR_None_forecast.log	14s
+2026-11-17 23:20:09	evaluation	-	-	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_231915/partA_04_evaluate_forecasts.log	Evaluating accumulated Part A forecast artifacts
+2026-11-17 23:20:15	evaluation	-	-	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_231915/partA_04_evaluate_forecasts.log	6s
+2026-11-17 23:20:15	figures	-	-	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_231915/partA_05_generate_figures.log	Generating Part A thesis figures
+2026-11-17 23:20:42	figures	-	-	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_231915/partA_05_generate_figures.log	27s

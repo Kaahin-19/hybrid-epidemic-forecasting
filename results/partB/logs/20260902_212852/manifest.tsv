@@ -1,0 +1,5 @@
+Timestamp	Step	Status	LogFile	Details
+2026-09-02 21:28:52	partB_01_generate_robustness_datasets	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20260902_212852/partB_01_generate_robustness_datasets.log	Generating Part B robustness datasets
+2026-09-02 21:35:44	partB_01_generate_robustness_datasets	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20260902_212852/partB_01_generate_robustness_datasets.log	412s
+2026-09-02 21:35:44	partB_02_run_forecasts	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20260902_212852/partB_02_run_forecasts.log	Running frozen Part A-selected configurations on Part B datasets
+2026-09-02 21:35:50	partB_02_run_forecasts	failed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20260902_212852/partB_02_run_forecasts.log	exit=1; elapsed=6s

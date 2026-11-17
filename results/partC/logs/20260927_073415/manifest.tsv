@@ -1,0 +1,11 @@
+Timestamp	Step	Status	LogFile	Details
+2026-09-27 07:34:15	partC_01_prepare_data	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/logs/20260927_073415/partC_01_prepare_data.log	Preparing Part C real-data input
+2026-09-27 07:34:23	partC_01_prepare_data	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/logs/20260927_073415/partC_01_prepare_data.log	8s
+2026-09-27 07:34:23	partC_02_select_local_orders	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/logs/20260927_073415/partC_02_select_local_orders.log	Selecting local Part C model orders
+2026-09-27 07:39:00	partC_02_select_local_orders	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/logs/20260927_073415/partC_02_select_local_orders.log	277s
+2026-09-27 07:39:00	partC_03_run_forecasts	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/logs/20260927_073415/partC_03_run_forecasts.log	Running Part C transfer/adaptation forecasts
+2026-09-27 07:39:58	partC_03_run_forecasts	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/logs/20260927_073415/partC_03_run_forecasts.log	58s
+2026-09-27 07:39:58	partC_04_evaluate_forecasts	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/logs/20260927_073415/partC_04_evaluate_forecasts.log	Evaluating Part C held-out forecast performance
+2026-09-27 07:40:06	partC_04_evaluate_forecasts	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/logs/20260927_073415/partC_04_evaluate_forecasts.log	8s
+2026-09-27 07:40:06	partC_05_generate_figures	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/logs/20260927_073415/partC_05_generate_figures.log	Generating Part C thesis figures
+2026-09-27 07:40:31	partC_05_generate_figures	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/logs/20260927_073415/partC_05_generate_figures.log	25s

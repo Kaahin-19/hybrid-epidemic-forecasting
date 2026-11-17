@@ -1,0 +1,35 @@
+=== Part B Robustness Dataset Generation ===
+Saving datasets to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/data/partB
+  - observation_noise / A1 / rep001 ... Saved
+  - observation_noise / A1 / rep002 ... Saved
+  - observation_noise / A2 / rep001 ... Saved
+  - observation_noise / A2 / rep002 ... Saved
+  - observation_noise / A3 / rep001 ... Saved
+  - observation_noise / A3 / rep002 ... Saved
+  - observation_noise / A4 / rep001 ... Saved
+  - observation_noise / A4 / rep002 ... Saved
+  - process_noise / A1 / rep001 ... Saved
+  - process_noise / A1 / rep002 ... Saved
+  - process_noise / A2 / rep001 ... Saved
+  - process_noise / A2 / rep002 ... Saved
+  - process_noise / A3 / rep001 ... Saved
+  - process_noise / A3 / rep002 ... Saved
+  - process_noise / A4 / rep001 ... Saved
+  - process_noise / A4 / rep002 ... Saved
+  - structural_mismatch / A1 / rep001 ... Saved
+  - structural_mismatch / A2 / rep001 ... Saved
+  - structural_mismatch / A3 / rep001 ... Saved
+  - structural_mismatch / A4 / rep001 ... Saved
+  - combined_stress / A1 / rep001 ... Saved
+  - combined_stress / A1 / rep002 ... Saved
+  - combined_stress / A2 / rep001 ... Saved
+  - combined_stress / A2 / rep002 ... Saved
+  - combined_stress / A3 / rep001 ... Saved
+  - combined_stress / A3 / rep002 ... Saved
+  - combined_stress / A4 / rep001 ... Saved
+  - combined_stress / A4 / rep002 ... Saved
+Generated 28 dataset artifacts.
+Recorded 0 domain failures.
+Generation status saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/data/partB/partB_01_generation_status.mat
+=== Part B Robustness Dataset Generation Complete ===
+

@@ -1,0 +1,10 @@
+=== Part B Forecast Generation ===
+Requested 4 model/exogenous combinations:
+  [unavailable] AR / None -> incompatible selection snapshot
+  [unavailable] ARX / S -> incompatible selection snapshot
+  [unavailable] ARX / I -> incompatible selection snapshot
+  [unavailable] ARX / Both -> incompatible selection snapshot
+{Error using partB_02_run_forecasts (line 68)
+None of the requested model/exogenous combinations have a compatible Part A
+selection artifact.
+} 

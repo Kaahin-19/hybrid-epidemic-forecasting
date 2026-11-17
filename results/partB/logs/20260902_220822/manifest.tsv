@@ -1,0 +1,9 @@
+Timestamp	Step	Status	LogFile	Details
+2026-09-02 22:08:22	partB_01_generate_robustness_datasets	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20260902_220822/partB_01_generate_robustness_datasets.log	Generating Part B robustness datasets
+2026-09-02 22:15:13	partB_01_generate_robustness_datasets	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20260902_220822/partB_01_generate_robustness_datasets.log	410s
+2026-09-02 22:15:13	partB_02_run_forecasts	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20260902_220822/partB_02_run_forecasts.log	Running frozen Part A-selected configurations on Part B datasets
+2026-09-03 01:51:36	partB_02_run_forecasts	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20260902_220822/partB_02_run_forecasts.log	12983s
+2026-09-03 01:51:36	partB_03_evaluate_forecasts	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20260902_220822/partB_03_evaluate_forecasts.log	Evaluating Part B robustness forecasts against latent Rt truth and Part A baselines
+2026-09-03 01:51:57	partB_03_evaluate_forecasts	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20260902_220822/partB_03_evaluate_forecasts.log	21s
+2026-09-03 01:51:57	partB_04_generate_figures	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20260902_220822/partB_04_generate_figures.log	Generating Part B robustness thesis figures
+2026-09-03 01:52:38	partB_04_generate_figures	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20260902_220822/partB_04_generate_figures.log	41s

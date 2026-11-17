@@ -1,0 +1,59 @@
+=== Part C Held-Out Forecast Generation ===
+Prepared-data period: 03-Mar-2020 to 14-Jun-2021
+Calibration boundary: 31-Dec-2020
+Held-out forecast origins: 22
+
+Model: AR | Exogenous mode: None
+Strategy: partA_online_fit
+Forecast configuration: 5
+Completed origins: 5/22
+Completed origins: 10/22
+Completed origins: 15/22
+Completed origins: 20/22
+Completed origins: 22/22
+Strategy: local_online_fit
+Forecast configuration: 7
+Completed origins: 5/22
+Completed origins: 10/22
+Completed origins: 15/22
+Completed origins: 20/22
+Completed origins: 22/22
+Strategy: partA_fixed_fit
+Forecast configuration: 5
+Completed origins: 5/22
+Completed origins: 10/22
+Completed origins: 15/22
+Completed origins: 20/22
+Completed origins: 22/22
+
+Model: ARX | Exogenous mode: I
+Strategy: partA_online_fit
+Forecast configuration: [4 1 1]
+Completed origins: 5/22
+Completed origins: 10/22
+Completed origins: 15/22
+Completed origins: 20/22
+Completed origins: 22/22
+Strategy: local_online_fit
+Forecast configuration: [6 1 1]
+Completed origins: 5/22
+Completed origins: 10/22
+Completed origins: 15/22
+Completed origins: 20/22
+Completed origins: 22/22
+Strategy: partA_fixed_fit
+Forecast configuration: [4 1 1]
+Completed origins: 5/22
+Completed origins: 10/22
+Completed origins: 15/22
+Completed origins: 20/22
+Completed origins: 22/22
+Saved artifact: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/forecasts/partC_03_forecast_AR_None_partA_online_fit.mat
+Saved artifact: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/forecasts/partC_03_forecast_AR_None_local_online_fit.mat
+Saved artifact: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/forecasts/partC_03_forecast_AR_None_partA_fixed_fit.mat
+Saved artifact: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/forecasts/partC_03_forecast_ARX_I_partA_online_fit.mat
+Saved artifact: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/forecasts/partC_03_forecast_ARX_I_local_online_fit.mat
+Saved artifact: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/forecasts/partC_03_forecast_ARX_I_partA_fixed_fit.mat
+
+=== Part C Held-Out Forecast Generation Complete ===
+

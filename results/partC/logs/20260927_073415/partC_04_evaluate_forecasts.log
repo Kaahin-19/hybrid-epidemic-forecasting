@@ -1,0 +1,32 @@
+=== Part C Held-Out Forecast Evaluation ===
+Loaded six held-out forecast artifacts.
+Held-out origins per artifact: 22
+Horizon rows: 1848
+Interval rows: 528
+    Model    ExoMode         Strategy         ForecastConfiguration    NumOrigins    MeanOriginWIS    MedianOriginWIS    StdOriginWIS    MinOriginWIS    MaxOriginWIS    MeanRMSE    MeanMAE    MeanError    MeanCoverage    MeanIntervalWidth
+    _____    _______    __________________    _____________________    __________    _____________    _______________    ____________    ____________    ____________    ________    _______    _________    ____________    _________________
+
+    "AR"     "None"     "partA_online_fit"          "5"                    22           0.18417           0.16524          0.068342         0.13969         0.4502        0.4291     0.36986     0.067201      0.78003             1.5407     
+    "AR"     "None"     "local_online_fit"          "7"                    22           0.12264          0.086604          0.095376        0.066561        0.44216       0.26899     0.21326     0.018309      0.79302            0.83814     
+    "AR"     "None"     "partA_fixed_fit"           "5"                    22           0.18086           0.16354          0.059105         0.13948        0.38571       0.41557     0.35294     0.067696      0.78815             1.5425     
+    "ARX"    "I"        "partA_online_fit"          "[4 1 1]"              22           0.17219           0.15815          0.073148         0.12467         0.4487       0.41617     0.35236     -0.03113      0.80519             1.4351     
+    "ARX"    "I"        "local_online_fit"          "[6 1 1]"              22           0.14071            0.1176          0.067569        0.098892        0.39018       0.31982     0.26797    -0.021319      0.80519             1.1862     
+    "ARX"    "I"        "partA_fixed_fit"           "[4 1 1]"              22           0.17938           0.16382          0.069327         0.12511        0.42536       0.42105     0.35899     0.048065      0.78003             1.4822     
+
+    Model    ExoMode    PartAConfiguration    LocalConfiguration    ConfigurationsEqual    ForecastsExactlyIdentical
+    _____    _______    __________________    __________________    ___________________    _________________________
+
+    "AR"     "None"         "5"                   "7"                      false                     false          
+    "ARX"    "I"            "[4 1 1]"             "[6 1 1]"                false                     false          
+
+Saved MAT artifact: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/evaluation/partC_04_evaluation_results.mat
+Saved CSV: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/tables/partC_04_origin_scores.csv
+Saved CSV: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/tables/partC_04_horizon_scores.csv
+Saved CSV: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/tables/partC_04_interval_scores.csv
+Saved CSV: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/tables/partC_04_strategy_summary.csv
+Saved CSV: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/tables/partC_04_horizon_summary.csv
+Saved CSV: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/tables/partC_04_interval_summary.csv
+Saved CSV: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/tables/partC_04_pairwise_comparisons.csv
+Saved CSV: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/tables/partC_04_online_equivalence.csv
+=== Part C Held-Out Forecast Evaluation Complete ===
+

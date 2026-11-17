@@ -1,0 +1,15 @@
+=== Part B Forecast Evaluation ===
+Status: 56 attempts (56 saved, 0 no_windows, 0 domain_failure, 0 pending).
+Evaluated 56 forecast artifacts: 2464 window rows, 34496 horizon rows, 9856 interval rows.
+Baseline comparison: 34496 Part B horizon rows matched to Part A; 0 undefined WIS ratios (Part A WIS == 0).
+Evaluation artifact saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/evaluation/partB_03_evaluation_results.mat
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_replicate_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_scenario_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_stress_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_horizon_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_interval_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_generation_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_execution_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_degradation_summary.csv
+=== Part B Forecast Evaluation Complete ===
+

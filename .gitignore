@@ -12,11 +12,6 @@ SEIR.c
 *.mexmaci64
 build/
 
-# Runtime outputs
-results/partA/logs/
-results/partB/logs/
-results/partC/logs/
-
 # Generated data
 data/F.mat
 data/R0a.mat

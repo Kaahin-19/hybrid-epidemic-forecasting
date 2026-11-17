@@ -1,0 +1,55 @@
+=== Part C Local Configuration Selection ===
+Calibration period: 06-Apr-2020 to 31-Dec-2020
+Calibration forecast origins: 30
+
+Model: AR | Exogenous mode: None
+Evaluating candidate 1/5: 3
+Evaluating candidate 2/5: 4
+Evaluating candidate 3/5: 5
+Evaluating candidate 4/5: 6
+Evaluating candidate 5/5: 7
+Part A baseline: 5
+Local candidate grid: [3;4;5;6;7]
+Feasible candidates: 5 | Infeasible candidates: 0
+Selected local configuration: 7
+Saved artifact: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/model_selection/partC_02_local_orders_AR_None.mat
+
+Model: ARX | Exogenous mode: I
+Evaluating candidate 1/20: [2 1 1]
+Evaluating candidate 2/20: [2 1 2]
+Evaluating candidate 3/20: [2 2 1]
+Infeasible ARX/I candidate [2 2 1] at 31-May-2020: EPIDEMIC:SusceptibleBelowThreshold
+Evaluating candidate 4/20: [2 2 2]
+Infeasible ARX/I candidate [2 2 2] at 01-Nov-2020: EPIDEMIC:SusceptibleBelowThreshold
+Evaluating candidate 5/20: [3 1 1]
+Evaluating candidate 6/20: [3 1 2]
+Evaluating candidate 7/20: [3 2 1]
+Infeasible ARX/I candidate [3 2 1] at 31-May-2020: EPIDEMIC:SusceptibleBelowThreshold
+Evaluating candidate 8/20: [3 2 2]
+Infeasible ARX/I candidate [3 2 2] at 31-May-2020: EPIDEMIC:SusceptibleBelowThreshold
+Evaluating candidate 9/20: [4 1 1]
+Evaluating candidate 10/20: [4 1 2]
+Evaluating candidate 11/20: [4 2 1]
+Infeasible ARX/I candidate [4 2 1] at 31-May-2020: EPIDEMIC:SusceptibleBelowThreshold
+Evaluating candidate 12/20: [4 2 2]
+Infeasible ARX/I candidate [4 2 2] at 07-Jun-2020: EPIDEMIC:SusceptibleBelowThreshold
+Evaluating candidate 13/20: [5 1 1]
+Evaluating candidate 14/20: [5 1 2]
+Evaluating candidate 15/20: [5 2 1]
+Infeasible ARX/I candidate [5 2 1] at 24-May-2020: EPIDEMIC:SusceptibleBelowThreshold
+Evaluating candidate 16/20: [5 2 2]
+Infeasible ARX/I candidate [5 2 2] at 07-Jun-2020: EPIDEMIC:InvalidState
+Evaluating candidate 17/20: [6 1 1]
+Evaluating candidate 18/20: [6 1 2]
+Evaluating candidate 19/20: [6 2 1]
+Infeasible ARX/I candidate [6 2 1] at 31-May-2020: EPIDEMIC:SusceptibleBelowThreshold
+Evaluating candidate 20/20: [6 2 2]
+Infeasible ARX/I candidate [6 2 2] at 25-Oct-2020: EPIDEMIC:SusceptibleBelowThreshold
+Part A baseline: [4 1 1]
+Local candidate grid: [2 1 1;2 1 2;2 2 1;2 2 2;3 1 1;3 1 2;3 2 1;3 2 2;4 1 1;4 1 2;4 2 1;4 2 2;5 1 1;5 1 2;5 2 1;5 2 2;6 1 1;6 1 2;6 2 1;6 2 2]
+Feasible candidates: 10 | Infeasible candidates: 10
+Selected local configuration: [6 1 1]
+Saved artifact: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partC/model_selection/partC_02_local_orders_ARX_I.mat
+
+=== Part C Local Configuration Selection Complete ===
+
