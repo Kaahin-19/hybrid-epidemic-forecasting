@@ -1,0 +1,24 @@
+[2026-11-17 23:33:22] Run ID: 20261117_233322
+[2026-11-17 23:33:22] Running Part A synthetic forecasting pipeline
+[2026-11-17 23:33:22] Pipeline started
+[2026-11-17 23:33:26] Starting Generating Part A synthetic ground truth
+[2026-11-17 23:33:33] Completed Generating Part A synthetic ground truth in 7s
+[2026-11-17 23:33:33] Starting Selecting model configuration for ARX | S
+[2026-11-18 00:13:06] Completed Selecting model configuration for ARX | S in 2373s
+[2026-11-18 00:13:06] Starting Running forecasts for ARX | S
+[2026-11-18 00:15:28] Completed Running forecasts for ARX | S in 142s
+[2026-11-18 00:15:28] Starting Selecting model configuration for ARX | I
+[2026-11-18 00:52:54] Completed Selecting model configuration for ARX | I in 2246s
+[2026-11-18 00:52:54] Starting Running forecasts for ARX | I
+[2026-11-18 00:55:32] Completed Running forecasts for ARX | I in 158s
+[2026-11-18 00:55:32] Starting Selecting model configuration for ARX | Both
+[2026-11-18 01:29:49] Completed Selecting model configuration for ARX | Both in 2057s
+[2026-11-18 01:29:49] Starting Running forecasts for ARX | Both
+[2026-11-18 01:32:33] Completed Running forecasts for ARX | Both in 164s
+[2026-11-18 01:32:33] Starting Evaluating accumulated Part A forecast artifacts
+[2026-11-18 01:32:41] Completed Evaluating accumulated Part A forecast artifacts in 8s
+[2026-11-18 01:32:41] Starting Generating Part A thesis figures
+[2026-11-18 01:33:34] Completed Generating Part A thesis figures in 53s
+[2026-11-18 01:33:34] Part A synthetic forecasting pipeline completed successfully in 7212s
+[2026-11-18 01:33:34] Thesis-level figures generated under: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/figures
+[2026-11-18 01:33:34] Run logs saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322

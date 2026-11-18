@@ -1,0 +1,13 @@
+=== Final Part A Forecast Generation ===
+Configuration: Model = ARX | Exogenous Mode = I
+Using selected configuration: [4 1 1]
+Processing scenario 1/4 (A1)
+Forecast artifact saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/forecasts/partA_03_forecast_A1_ARX_I.mat
+Processing scenario 2/4 (A2)
+Forecast artifact saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/forecasts/partA_03_forecast_A2_ARX_I.mat
+Processing scenario 3/4 (A3)
+Forecast artifact saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/forecasts/partA_03_forecast_A3_ARX_I.mat
+Processing scenario 4/4 (A4)
+Forecast artifact saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/forecasts/partA_03_forecast_A4_ARX_I.mat
+=== Final Part A Forecast Generation Complete ===
+

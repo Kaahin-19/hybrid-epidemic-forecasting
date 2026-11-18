@@ -1,0 +1,20 @@
+Timestamp	Step	Model	Exo	Status	LogFile	Details
+2026-11-17 23:33:22	selection	-	-	skipped	-	ARX + None
+2026-11-17 23:33:26	truth	-	-	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/partA_01_generate_truth.log	Generating Part A synthetic ground truth
+2026-11-17 23:33:33	truth	-	-	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/partA_01_generate_truth.log	7s
+2026-11-17 23:33:33	model_selection	ARX	S	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/ARX_S_model_selection.log	Selecting model configuration for ARX | S
+2026-11-18 00:13:06	model_selection	ARX	S	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/ARX_S_model_selection.log	2373s
+2026-11-18 00:13:06	forecast	ARX	S	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/ARX_S_forecast.log	Running forecasts for ARX | S
+2026-11-18 00:15:28	forecast	ARX	S	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/ARX_S_forecast.log	142s
+2026-11-18 00:15:28	model_selection	ARX	I	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/ARX_I_model_selection.log	Selecting model configuration for ARX | I
+2026-11-18 00:52:54	model_selection	ARX	I	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/ARX_I_model_selection.log	2246s
+2026-11-18 00:52:54	forecast	ARX	I	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/ARX_I_forecast.log	Running forecasts for ARX | I
+2026-11-18 00:55:32	forecast	ARX	I	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/ARX_I_forecast.log	158s
+2026-11-18 00:55:32	model_selection	ARX	Both	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/ARX_Both_model_selection.log	Selecting model configuration for ARX | Both
+2026-11-18 01:29:49	model_selection	ARX	Both	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/ARX_Both_model_selection.log	2057s
+2026-11-18 01:29:49	forecast	ARX	Both	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/ARX_Both_forecast.log	Running forecasts for ARX | Both
+2026-11-18 01:32:33	forecast	ARX	Both	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/ARX_Both_forecast.log	164s
+2026-11-18 01:32:33	evaluation	-	-	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/partA_04_evaluate_forecasts.log	Evaluating accumulated Part A forecast artifacts
+2026-11-18 01:32:41	evaluation	-	-	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/partA_04_evaluate_forecasts.log	8s
+2026-11-18 01:32:41	figures	-	-	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/partA_05_generate_figures.log	Generating Part A thesis figures
+2026-11-18 01:33:34	figures	-	-	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261117_233322/partA_05_generate_figures.log	53s
