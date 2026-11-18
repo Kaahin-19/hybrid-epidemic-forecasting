@@ -1,0 +1,18 @@
+=== Part B Forecast Evaluation ===
+Scored 16896 window-method rows (4782 matched windows).
+Evaluation artifact saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/evaluation/partB_03_evaluation_results.mat
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_window_scores.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_support_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_support_condition_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_estimation_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_replicate_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_scenario_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_condition_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_method_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_horizon_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_paired_scenario_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_paired_condition_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_degradation_scenario_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/tables/partB_03_degradation_summary.csv
+=== Part B Forecast Evaluation Complete ===
+

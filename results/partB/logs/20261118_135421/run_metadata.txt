@@ -1,0 +1,40 @@
+== Execution ==
+Run ID: 20261118_135421
+Started: 2026-11-18 13:54:21
+Repository: /home/kaahin/degree_project/hybrid-epidemic-forecasting
+Command: ./run_partB_pipeline.sh --fresh 
+Fresh (--fresh): yes
+
+== Git provenance (captured before cleanup) ==
+Commit: 9844d9ae96d0fc2125fc8bf23b10fda28e0f47e4
+Branch: dev
+Working tree: clean
+
+Modified and untracked files (git status --porcelain):
+(none)
+
+Submodules (git submodule status; leading + = checkout differs from recorded commit, - = not initialised):
+ 4e0183b0b3e6150d4d810c44e7a7151b66410f56 third_party/stenglib (heads/master)
+ f75526ca077202d6837e2088ae1fcc6ed61e2fbc third_party/urdme (v1.3.0-44-gf75526c)
+
+== MATLAB environment ==
+Executable: /home/kaahin/MATLAB/R2025b/bin/matlab
+MATLAB root: /home/kaahin/MATLAB/R2025b
+VersionInfo.xml release: R2025b
+VersionInfo.xml version: 25.2.0.3360999
+VersionInfo.xml update: Update 7
+
+Installed products (MATLAB ver; license number omitted):
+--------------------------------------------------------------------------------------------------------------------
+MATLAB Version: 25.2.0.3360999 (R2025b) Update 7
+Operating System: Linux 6.18.58.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Tue Oct 27 00:24:11 UTC 2026 x86_64
+Java Version: Java is not loaded
+--------------------------------------------------------------------------------------------------------------------
+MATLAB                                                Version 25.2        (R2025b)
+Simulink                                              Version 25.2        (R2025b)
+Control System Toolbox                                Version 25.2        (R2025b)
+Financial Toolbox                                     Version 25.2        (R2025b)
+Optimization Toolbox                                  Version 25.2        (R2025b)
+Parallel Computing Toolbox                            Version 25.2        (R2025b)
+Statistics and Machine Learning Toolbox               Version 25.2        (R2025b)
+System Identification Toolbox                         Version 25.2        (R2025b)

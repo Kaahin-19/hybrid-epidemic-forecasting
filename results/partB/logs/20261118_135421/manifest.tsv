@@ -1,0 +1,9 @@
+Timestamp	Step	Status	LogFile	Details
+2026-11-18 13:54:26	partB_01_prepare_datasets	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20261118_135421/partB_01_prepare_datasets.log	Prepare synthetic datasets and estimates
+2026-11-18 13:57:22	partB_01_prepare_datasets	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20261118_135421/partB_01_prepare_datasets.log	duration=176s
+2026-11-18 13:57:22	partB_02_run_forecasts	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20261118_135421/partB_02_run_forecasts.log	Generate infectious-population forecasts
+2026-11-18 15:07:56	partB_02_run_forecasts	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20261118_135421/partB_02_run_forecasts.log	duration=4234s
+2026-11-18 15:07:56	partB_03_evaluate_forecasts	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20261118_135421/partB_03_evaluate_forecasts.log	Evaluate forecasting performance
+2026-11-18 15:08:07	partB_03_evaluate_forecasts	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20261118_135421/partB_03_evaluate_forecasts.log	duration=11s
+2026-11-18 15:08:07	partB_04_generate_figures	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20261118_135421/partB_04_generate_figures.log	Generate scientific figures
+2026-11-18 15:08:32	partB_04_generate_figures	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20261118_135421/partB_04_generate_figures.log	duration=25s

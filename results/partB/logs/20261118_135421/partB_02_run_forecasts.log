@@ -1,0 +1,262 @@
+=== Part B Forecast Generation ===
+Using ARX / I selected configuration [4 1 1] from partA_02_global_hyperparameters_ARX_I.mat
+Forecasting 128 saved datasets (128 generation attempts).
+Dataset 1/128 (clean_baseline_A1_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 2/128 (clean_baseline_A2_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/43 | matched = 43
+Dataset 3/128 (clean_baseline_A3_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 4/128 (clean_baseline_A4_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 5/128 (observation_noise_A1_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 6/128 (observation_noise_A1_rep002)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 7/128 (observation_noise_A1_rep003)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 8/128 (observation_noise_A1_rep004)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 9/128 (observation_noise_A1_rep005)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 10/128 (observation_noise_A1_rep006)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 11/128 (observation_noise_A1_rep007)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 12/128 (observation_noise_A1_rep008)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 13/128 (observation_noise_A1_rep009)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 14/128 (observation_noise_A1_rep010)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 15/128 (observation_noise_A2_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/13 | matched = 13
+Dataset 16/128 (observation_noise_A2_rep002)
+  44 windows | ok persistence/oracle/arx = 35/44/16 | matched = 16
+Dataset 17/128 (observation_noise_A2_rep003)
+  44 windows | ok persistence/oracle/arx = 31/44/16 | matched = 16
+Dataset 18/128 (observation_noise_A2_rep004)
+  44 windows | ok persistence/oracle/arx = 29/44/14 | matched = 14
+Dataset 19/128 (observation_noise_A2_rep005)
+  44 windows | ok persistence/oracle/arx = 29/44/15 | matched = 15
+Dataset 20/128 (observation_noise_A2_rep006)
+  44 windows | ok persistence/oracle/arx = 44/44/17 | matched = 17
+Dataset 21/128 (observation_noise_A2_rep007)
+  44 windows | ok persistence/oracle/arx = 41/44/17 | matched = 17
+Dataset 22/128 (observation_noise_A2_rep008)
+  44 windows | ok persistence/oracle/arx = 44/44/15 | matched = 15
+Dataset 23/128 (observation_noise_A2_rep009)
+  44 windows | ok persistence/oracle/arx = 38/44/15 | matched = 15
+Dataset 24/128 (observation_noise_A2_rep010)
+  44 windows | ok persistence/oracle/arx = 28/44/16 | matched = 16
+Dataset 25/128 (observation_noise_A3_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 26/128 (observation_noise_A3_rep002)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 27/128 (observation_noise_A3_rep003)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 28/128 (observation_noise_A3_rep004)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 29/128 (observation_noise_A3_rep005)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 30/128 (observation_noise_A3_rep006)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 31/128 (observation_noise_A3_rep007)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 32/128 (observation_noise_A3_rep008)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 33/128 (observation_noise_A3_rep009)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 34/128 (observation_noise_A3_rep010)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 35/128 (observation_noise_A4_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 36/128 (observation_noise_A4_rep002)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 37/128 (observation_noise_A4_rep003)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 38/128 (observation_noise_A4_rep004)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 39/128 (observation_noise_A4_rep005)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 40/128 (observation_noise_A4_rep006)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 41/128 (observation_noise_A4_rep007)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 42/128 (observation_noise_A4_rep008)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 43/128 (observation_noise_A4_rep009)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 44/128 (observation_noise_A4_rep010)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 45/128 (process_noise_A1_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 46/128 (process_noise_A1_rep002)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 47/128 (process_noise_A1_rep003)
+  44 windows | ok persistence/oracle/arx = 44/44/42 | matched = 42
+Dataset 48/128 (process_noise_A1_rep004)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 49/128 (process_noise_A1_rep005)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 50/128 (process_noise_A1_rep006)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 51/128 (process_noise_A1_rep007)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 52/128 (process_noise_A1_rep008)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 53/128 (process_noise_A1_rep009)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 54/128 (process_noise_A1_rep010)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 55/128 (process_noise_A2_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/19 | matched = 19
+Dataset 56/128 (process_noise_A2_rep002)
+  44 windows | ok persistence/oracle/arx = 44/44/15 | matched = 15
+Dataset 57/128 (process_noise_A2_rep003)
+  44 windows | ok persistence/oracle/arx = 44/44/15 | matched = 15
+Dataset 58/128 (process_noise_A2_rep004)
+  44 windows | ok persistence/oracle/arx = 44/44/15 | matched = 15
+Dataset 59/128 (process_noise_A2_rep005)
+  44 windows | ok persistence/oracle/arx = 44/44/16 | matched = 16
+Dataset 60/128 (process_noise_A2_rep006)
+  44 windows | ok persistence/oracle/arx = 44/44/14 | matched = 14
+Dataset 61/128 (process_noise_A2_rep007)
+  44 windows | ok persistence/oracle/arx = 44/44/14 | matched = 14
+Dataset 62/128 (process_noise_A2_rep008)
+  44 windows | ok persistence/oracle/arx = 44/44/17 | matched = 17
+Dataset 63/128 (process_noise_A2_rep009)
+  44 windows | ok persistence/oracle/arx = 44/44/16 | matched = 16
+Dataset 64/128 (process_noise_A2_rep010)
+  44 windows | ok persistence/oracle/arx = 44/44/16 | matched = 16
+Dataset 65/128 (process_noise_A3_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 66/128 (process_noise_A3_rep002)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 67/128 (process_noise_A3_rep003)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 68/128 (process_noise_A3_rep004)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 69/128 (process_noise_A3_rep005)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 70/128 (process_noise_A3_rep006)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 71/128 (process_noise_A3_rep007)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 72/128 (process_noise_A3_rep008)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 73/128 (process_noise_A3_rep009)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 74/128 (process_noise_A3_rep010)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 75/128 (process_noise_A4_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/43 | matched = 43
+Dataset 76/128 (process_noise_A4_rep002)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 77/128 (process_noise_A4_rep003)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 78/128 (process_noise_A4_rep004)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 79/128 (process_noise_A4_rep005)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 80/128 (process_noise_A4_rep006)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 81/128 (process_noise_A4_rep007)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 82/128 (process_noise_A4_rep008)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 83/128 (process_noise_A4_rep009)
+  44 windows | ok persistence/oracle/arx = 44/44/41 | matched = 41
+Dataset 84/128 (process_noise_A4_rep010)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 85/128 (structural_mismatch_A1_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 86/128 (structural_mismatch_A2_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 87/128 (structural_mismatch_A3_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 88/128 (structural_mismatch_A4_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 89/128 (combined_stress_A1_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 90/128 (combined_stress_A1_rep002)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 91/128 (combined_stress_A1_rep003)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 92/128 (combined_stress_A1_rep004)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 93/128 (combined_stress_A1_rep005)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 94/128 (combined_stress_A1_rep006)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 95/128 (combined_stress_A1_rep007)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 96/128 (combined_stress_A1_rep008)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 97/128 (combined_stress_A1_rep009)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 98/128 (combined_stress_A1_rep010)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 99/128 (combined_stress_A2_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/16 | matched = 16
+Dataset 100/128 (combined_stress_A2_rep002)
+  44 windows | ok persistence/oracle/arx = 44/44/18 | matched = 18
+Dataset 101/128 (combined_stress_A2_rep003)
+  44 windows | ok persistence/oracle/arx = 44/44/19 | matched = 19
+Dataset 102/128 (combined_stress_A2_rep004)
+  44 windows | ok persistence/oracle/arx = 43/44/15 | matched = 15
+Dataset 103/128 (combined_stress_A2_rep005)
+  44 windows | ok persistence/oracle/arx = 44/44/14 | matched = 14
+Dataset 104/128 (combined_stress_A2_rep006)
+  44 windows | ok persistence/oracle/arx = 44/44/16 | matched = 16
+Dataset 105/128 (combined_stress_A2_rep007)
+  44 windows | ok persistence/oracle/arx = 44/44/17 | matched = 17
+Dataset 106/128 (combined_stress_A2_rep008)
+  44 windows | ok persistence/oracle/arx = 44/44/17 | matched = 17
+Dataset 107/128 (combined_stress_A2_rep009)
+  44 windows | ok persistence/oracle/arx = 32/44/16 | matched = 16
+Dataset 108/128 (combined_stress_A2_rep010)
+  44 windows | ok persistence/oracle/arx = 41/44/18 | matched = 18
+Dataset 109/128 (combined_stress_A3_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 110/128 (combined_stress_A3_rep002)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 111/128 (combined_stress_A3_rep003)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 112/128 (combined_stress_A3_rep004)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 113/128 (combined_stress_A3_rep005)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 114/128 (combined_stress_A3_rep006)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 115/128 (combined_stress_A3_rep007)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 116/128 (combined_stress_A3_rep008)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 117/128 (combined_stress_A3_rep009)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 118/128 (combined_stress_A3_rep010)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 119/128 (combined_stress_A4_rep001)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 120/128 (combined_stress_A4_rep002)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 121/128 (combined_stress_A4_rep003)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 122/128 (combined_stress_A4_rep004)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 123/128 (combined_stress_A4_rep005)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 124/128 (combined_stress_A4_rep006)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 125/128 (combined_stress_A4_rep007)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 126/128 (combined_stress_A4_rep008)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 127/128 (combined_stress_A4_rep009)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Dataset 128/128 (combined_stress_A4_rep010)
+  44 windows | ok persistence/oracle/arx = 44/44/44 | matched = 44
+Saved forecast status to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/forecasts/partB_02_forecast_status.mat
+=== Part B Forecast Generation Complete ===
+

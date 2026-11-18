@@ -1,0 +1,14 @@
+[2026-11-18 13:54:21] Run ID: 20261118_135421
+[2026-11-18 13:54:21] Running Part B infectious-population forecasting pipeline
+[2026-11-18 13:54:21] Pipeline started
+[2026-11-18 13:54:26] Starting [1/4] Prepare synthetic datasets and estimates
+[2026-11-18 13:57:22] Completed [1/4] Prepare synthetic datasets and estimates in 176s
+[2026-11-18 13:57:22] Starting [2/4] Generate infectious-population forecasts
+[2026-11-18 15:07:56] Completed [2/4] Generate infectious-population forecasts in 4234s
+[2026-11-18 15:07:56] Starting [3/4] Evaluate forecasting performance
+[2026-11-18 15:08:07] Completed [3/4] Evaluate forecasting performance in 11s
+[2026-11-18 15:08:07] Starting [4/4] Generate scientific figures
+[2026-11-18 15:08:32] Completed [4/4] Generate scientific figures in 25s
+[2026-11-18 15:08:32] Part B pipeline completed successfully in 4451s
+[2026-11-18 15:08:32] Figures: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/figures
+[2026-11-18 15:08:32] Run logs: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20261118_135421
