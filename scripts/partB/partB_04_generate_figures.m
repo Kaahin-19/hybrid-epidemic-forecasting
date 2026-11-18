@@ -1,21 +1,16 @@
 %PARTB_04_GENERATE_FIGURES Generate Part B infectious-population forecasting figures.
 %
 %   Description:
-%       Generates five thesis figures from the current Part B artifacts:
-%           1. Infectious-population trajectories at a representative
-%              origin: synthetic truth, the estimated history, and the
-%              persistence, oracle, and ARX forecasts.
-%           2. Matched-window MAE by forecast horizon per condition.
-%           3. Condition-level MAE and RMSE per method.
-%           4. Paired window-level MAE improvement of ARX over persistence.
-%           5. Execution support: status shares of all intended windows.
-%       Aggregates withheld for incomplete scenario coverage are marked and
-%       never drawn as zero; methods without a valid forecast are not drawn.
+%       Generates the Part B thesis figures: infectious-population
+%       trajectories at a representative origin, matched-window MAE by
+%       horizon, condition-level MAE and RMSE, the paired MAE improvement of
+%       ARX over persistence, and execution support. Withheld aggregates are
+%       marked and never drawn as zero.
 %
 %   Workflow:
-%       1. Initialize figure paths, identity, and shared styling.
+%       1. Initialize figure paths and shared styling.
 %       2. Load and validate the evaluation artifact.
-%       3. Generate the five figures.
+%       3. Generate the figures.
 %
 %   See also PARTB_CONFIG, PARTB_03_EVALUATE_FORECASTS, PLOT_SERIES,
 %            PLOT_DISTRIBUTION, APPLY_PANEL_STYLE.
@@ -31,7 +26,7 @@ fprintf('=== Part B Figure Generation ===\n');
 cfg        = partB_config();
 pb         = cfg.partB;
 figure_dir = pb.output.fig_dir;
-identity   = local_identity(cfg);
+snapshot   = pb.snapshot;
 style      = local_style();
 
 if ~exist(figure_dir, 'dir'), mkdir(figure_dir); end
@@ -43,14 +38,14 @@ if ~exist(evaluation_artifact, 'file')
 end
 
 evaluation = load(evaluation_artifact);
-local_require_identity(evaluation.identity, identity, 'evaluation artifact');
+local_require_snapshot(evaluation.snapshot, snapshot, 'Evaluation artifact');
 summaries = evaluation.summaries;
 
 case_ids    = [pb.robustness_cases.case_id]';
 case_labels = [pb.robustness_cases.case_name]';
 
 %% 3. Figures
-local_figure_trajectories(cfg, identity, style, figure_dir);
+local_figure_trajectories(cfg, snapshot, style, figure_dir);
 local_figure_horizon(summaries.horizon_summary, summaries.condition_summary, case_ids, case_labels, pb.method_ids, style, figure_dir);
 local_figure_conditions(summaries.condition_summary, case_ids, case_labels, pb.method_ids, style, figure_dir);
 local_figure_improvement(evaluation.paired_windows, summaries.paired_condition_summary, case_ids, case_labels, style, figure_dir);
@@ -60,20 +55,14 @@ fprintf('Figures saved to: %s\n', figure_dir);
 fprintf('=== Part B Figure Generation Complete ===\n\n');
 
 %% 4. Local Functions
-function identity = local_identity(cfg)
-%LOCAL_IDENTITY Experiment, configuration, and source identity shared by all Part B artifacts.
-identity = struct('experiment_id', cfg.partB.experiment_id, 'protocol_version', cfg.partB.protocol_version, 'config_id', cfg.partB.config_id, 'source_id', cfg.partB.provenance.source_id);
-end
-
-function local_require_identity(found, expected, label)
-%LOCAL_REQUIRE_IDENTITY Reject inputs produced under a different protocol, configuration, or source.
+function local_require_snapshot(found, expected, label)
+%LOCAL_REQUIRE_SNAPSHOT Reject an input produced under a different Part B configuration.
 if ~isequal(found, expected)
-    error('PARTB_04:IncompatibleArtifact', ['%s was produced under protocol %s, config_id %s, source_id %s; the current run expects protocol %s, ' ...
-        'config_id %s, source_id %s. Rerun with ./run_partB_pipeline.sh --fresh.'], label, found.protocol_version, found.config_id, found.source_id, expected.protocol_version, expected.config_id, expected.source_id);
+    error('PARTB_04:IncompatibleArtifact', '%s was produced under a different Part B configuration. Rerun with ./run_partB_pipeline.sh --fresh.', label);
 end
 end
 
-function local_figure_trajectories(cfg, identity, style, figure_dir)
+function local_figure_trajectories(cfg, snapshot, style, figure_dir)
 %LOCAL_FIGURE_TRAJECTORIES Truth, estimated history, and three forecasts at a representative origin.
 vis       = cfg.partB.visualization;
 scenarios = cfg.scenarios;
@@ -105,8 +94,8 @@ for r = 1:n_rows
 
         dataset  = load(dataset_path);
         forecast = load(forecast_path);
-        local_require_identity(dataset.identity, identity, dataset_id + " dataset");
-        local_require_identity(forecast.identity, identity, dataset_id + " forecast");
+        local_require_snapshot(dataset.snapshot, snapshot, dataset_id + " dataset");
+        local_require_snapshot(forecast.snapshot, snapshot, dataset_id + " forecast");
 
         win = forecast.windows([forecast.windows.window_day] == vis.trajectory_origin_day);
         if isempty(win)

@@ -9,10 +9,7 @@ function [next_state, stepper, step_incidence] = sirs_step(stepper, current_stat
 %       Advances the prepared URDME SIRS model by one effective-Rt-driven
 %       one-day interval. The function updates the current state, Rt-derived
 %       transmission rate, execution seed, and URDME solve flags before
-%       returning the next SIRS state. For a stepper prepared with
-%       track_incidence = true, the infection-event counter starts each
-%       step at zero, so step_incidence is the number of entries into I
-%       during the step.
+%       returning the next SIRS state.
 %
 %   Inputs:
 %       stepper       - Reusable SIRS stepper returned by sirs_init.
@@ -22,8 +19,8 @@ function [next_state, stepper, step_incidence] = sirs_step(stepper, current_stat
 %   Outputs:
 %       next_state - Advanced [S, I, R] state.
 %       stepper    - Updated stepper with incremented call count.
-%       step_incidence - Entries into I during the step (scalar) for an
-%                        incidence-tracking stepper; empty otherwise.
+%       step_incidence - Entries into I during the step for a stepper
+%                        built with track_incidence; empty otherwise.
 %
 %   See also PARTA_01_GENERATE_TRUTH, PARTA_03_RUN_FORECASTS,
 %            PARTB_01_PREPARE_DATASETS, PARTC_03_RUN_FORECASTS,

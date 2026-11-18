@@ -6,19 +6,12 @@ REPO_ROOT="$SCRIPT_DIR"
 MATLAB_BIN="${MATLAB_BIN:-/home/kaahin/MATLAB/R2025b/bin/matlab}"
 LOG_ROOT="$REPO_ROOT/results/partB/logs"
 SELECTION_ARTIFACT="$REPO_ROOT/results/partA/model_selection/partA_02_global_hyperparameters_ARX_I.mat"
-STAGE_SCRIPTS=(
-  "partB_01_prepare_datasets"
-  "partB_02_run_forecasts"
-  "partB_03_evaluate_forecasts"
-  "partB_04_generate_figures"
-)
 RUN_ID=""
 RUN_LOG_DIR=""
 PIPELINE_LOG=""
 MANIFEST_FILE=""
 PIPELINE_STARTED_AT=""
 PIPELINE_STARTED_EPOCH=""
-PREFLIGHT_OUTPUT=""
 
 show_help() {
   cat <<'EOF'
@@ -30,31 +23,24 @@ Usage:
 Description:
   Runs the Part B infectious-population forecasting pipeline:
     1. scripts/partB/partB_01_prepare_datasets.m
-         synthetic truth, daily I-entry observations, and causal SIRS-inversion
-         estimates for five conditions (clean baseline, observation noise,
-         process noise, structural mismatch, combined stress)
     2. scripts/partB/partB_02_run_forecasts.m
-         persistence, oracle, and Part A-selected ARX/I Rt drivers propagated
-         through the same SIRS model from the same estimated state
     3. scripts/partB/partB_03_evaluate_forecasts.m
-         infectious-population MAE/RMSE, paired comparisons, degradation,
-         and execution support
     4. scripts/partB/partB_04_generate_figures.m
 
-  Before any artifact is touched, a MATLAB preflight validates the
-  environment and configuration and prints the configuration identity.
-  Git provenance is captured before --fresh cleanup. Each invocation then
-  creates results/partB/logs/<run_id>/ containing run_metadata.txt,
-  manifest.tsv, pipeline.log, and one MATLAB log per stage.
+  The stages generate synthetic truth, observations, and historical
+  estimates; forecast I with persistence, oracle, and Part A-selected ARX/I
+  Rt drivers; evaluate the forecasts against the synthetic truth; and
+  generate the Part B figures.
+
+  Each invocation creates a timestamped run folder under:
+    results/partB/logs/<run_id>/
+  containing run metadata, a pipeline log, per-stage MATLAB logs, and a
+  manifest file.
 
 Options:
-  --fresh     Delete all generated Part B artifacts (data/partB and
-              results/partB, including earlier logs) before execution.
-              Part A, Part C, source, and configuration files are never touched.
+  --fresh     Delete data/partB and results/partB before execution.
+              Part A and Part C artifacts are never touched.
   --help, -h  Show this help message.
-
-Without --fresh, Stage 1 rejects existing Part B artifacts that were not
-produced under the current protocol, configuration, and source identity.
 EOF
 }
 
@@ -91,43 +77,6 @@ format_duration() {
   fi
 }
 
-validate_repository() {
-  local stage
-
-  [[ -n "$REPO_ROOT" && "$REPO_ROOT" != "/" ]] || die "Unsafe repository root: '$REPO_ROOT'."
-  [[ -f "$REPO_ROOT/startup.m" && -d "$REPO_ROOT/scripts" && -f "$REPO_ROOT/config/partB_config.m" ]] || die "Run this script from the repository root: $REPO_ROOT"
-
-  for stage in "${STAGE_SCRIPTS[@]}"; do
-    [[ -f "$REPO_ROOT/scripts/partB/${stage}.m" ]] || die "Missing Part B stage script: scripts/partB/${stage}.m"
-  done
-
-  [[ -n "$(ls -A "$REPO_ROOT/third_party/urdme" 2>/dev/null)" ]] || die "third_party/urdme is empty; initialise submodules (git submodule update --init)."
-  [[ -f "$SELECTION_ARTIFACT" ]] || die "Missing Part A ARX/I selection artifact: ${SELECTION_ARTIFACT#"$REPO_ROOT"/}"
-  [[ -x "$MATLAB_BIN" ]] || die "MATLAB binary not found or not executable: $MATLAB_BIN"
-}
-
-# Runs MATLAB once from a temporary directory: product list, path setup via the
-# repository startup, configuration construction, dependency resolution, and the
-# configuration identity. Any failure aborts before artifacts are touched.
-run_matlab_preflight() {
-  local preflight_dir
-  local matlab_root_escaped
-  local matlab_code
-  local exit_code=0
-
-  preflight_dir="$(mktemp -d)"
-  matlab_root_escaped="${REPO_ROOT//\'/\'\'}"
-  matlab_code="ver; fprintf('\n== PARTB_PREFLIGHT ==\n'); run('${matlab_root_escaped}/startup.m'); addpath(genpath('${matlab_root_escaped}/third_party')); cfg = partB_config(); required = {'urdme', 'forecast_closed', 'estimate_sirs_history_from_incidence', 'sirs_step', 'seirs_step', 'compute_point_error'}; for i = 1:numel(required), if isempty(which(required{i})), error('PARTB_PREFLIGHT:MissingDependency', 'Unresolved dependency: %s', required{i}); end, end; products = ver; names = string({products.Name}); if ~any(names == \"System Identification Toolbox\") || ~any(names == \"Statistics and Machine Learning Toolbox\"), error('PARTB_PREFLIGHT:MissingToolbox', 'System Identification and Statistics and Machine Learning toolboxes are required.'); end; fprintf('protocol_version: %s\nconfig_id: %s\nsource_id: %s\ngit_head: %s\ngit_source_dirty: %d\n', cfg.partB.protocol_version, cfg.partB.config_id, cfg.partB.provenance.source_id, cfg.partB.provenance.git_head, cfg.partB.provenance.git_source_dirty); fprintf('== PARTB_CONFIG_JSON ==\n%s\n', jsonencode(cfg.partB.snapshot, 'PrettyPrint', true));"
-
-  PREFLIGHT_OUTPUT="$(cd "$preflight_dir" && "$MATLAB_BIN" -batch "$matlab_code" 2>&1)" || exit_code=$?
-  rm -rf -- "$preflight_dir"
-
-  if [[ "$exit_code" -ne 0 ]]; then
-    printf '%s\n' "$PREFLIGHT_OUTPUT" | tail -n 30 >&2
-    die "MATLAB preflight failed (exit ${exit_code}); no artifacts were changed."
-  fi
-}
-
 # Prints Git provenance for the launch state. Called before --fresh so the
 # tracked Part B artifacts it deletes do not appear as working-tree changes.
 capture_git_provenance() {
@@ -152,7 +101,7 @@ capture_git_provenance() {
   fi
 
   if [[ -n "$source_changes" ]]; then
-    printf 'WARNING: uncommitted changes outside data/ and results/; the run cannot be reconstructed exactly from the commit alone (see source_id).\n'
+    printf 'WARNING: uncommitted changes outside data/ and results/; the run cannot be reconstructed exactly from the commit alone.\n'
   fi
 
   printf '\nModified and untracked files (git status --porcelain):\n%s\n' "${git_status:-(none)}"
@@ -181,11 +130,6 @@ remove_partB_contents() {
   printf 'Clearing generated Part B artifacts (data/partB, results/partB)...\n'
 
   for target in "$REPO_ROOT/data/partB" "$REPO_ROOT/results/partB"; do
-    case "$target" in
-      "$REPO_ROOT/data/partB"|"$REPO_ROOT/results/partB") ;;
-      *) die "Refusing cleanup of unexpected path: $target" ;;
-    esac
-
     [[ -e "$target" || -L "$target" ]] || continue
     [[ ! -L "$target" ]] || die "Refusing cleanup: $target is a symbolic link."
 
@@ -229,9 +173,14 @@ write_run_metadata() {
   local metadata_file="$RUN_LOG_DIR/run_metadata.txt"
   local matlab_root
   local version_xml
+  local ver_output
+  local ver_exit=0
 
   matlab_root="$(cd "$(dirname "$(readlink -f "$MATLAB_BIN")")/.." && pwd)"
   version_xml="$matlab_root/VersionInfo.xml"
+
+  # Run `ver` outside the repository so MATLAB does not auto-run startup.m.
+  ver_output="$(cd "$RUN_LOG_DIR" && "$MATLAB_BIN" -batch "ver" 2>&1)" || ver_exit=$?
 
   {
     printf '== Execution ==\n'
@@ -240,9 +189,6 @@ write_run_metadata() {
     printf 'Repository: %s\n' "$REPO_ROOT"
     printf 'Command: %s\n' "$(printf '%q ' "$0" "${args[@]}")"
     printf 'Fresh (--fresh): %s\n' "$([[ "$fresh_run" -eq 1 ]] && printf 'yes' || printf 'no')"
-    printf 'Stages: %s\n' "${STAGE_SCRIPTS[*]}"
-    printf 'Configuration file sha256: %s\n' "$(sha256sum "$REPO_ROOT/config/partB_config.m" | cut -d' ' -f1)"
-    printf 'Outputs: data/partB, results/partB/{forecasts,evaluation,tables,figures}, results/partB/logs/%s\n' "$RUN_ID"
 
     printf '\n== Git provenance (captured before cleanup) ==\n%s\n' "$git_provenance"
 
@@ -257,11 +203,12 @@ write_run_metadata() {
       printf 'VersionInfo.xml: unavailable (%s not found)\n' "$version_xml"
     fi
 
-    printf '\nInstalled products (MATLAB ver; license number omitted):\n'
-    printf '%s\n' "$PREFLIGHT_OUTPUT" | sed '/== PARTB_PREFLIGHT ==/,$d' | grep -v 'License Number' || true
-
-    printf '\n== Part B configuration identity (MATLAB preflight) ==\n'
-    printf '%s\n' "$PREFLIGHT_OUTPUT" | sed -n '/== PARTB_PREFLIGHT ==/,$p' | sed '1d'
+    if [[ "$ver_exit" -eq 0 ]]; then
+      printf '\nInstalled products (MATLAB ver; license number omitted):\n'
+      printf '%s\n' "$ver_output" | grep -v 'License Number' || true
+    else
+      printf '\nMATLAB ver unavailable (exit %d).\n' "$ver_exit"
+    fi
   } > "$metadata_file"
 }
 
@@ -376,14 +323,16 @@ while [[ "$#" -gt 0 ]]; do
   shift
 done
 
-validate_repository
-cd "$REPO_ROOT"
+if [[ ! -f "$REPO_ROOT/startup.m" ]] || [[ ! -d "$REPO_ROOT/scripts" ]]; then
+  die "Run this script from the repository root: $REPO_ROOT"
+fi
 
-printf 'Part B infectious-population forecasting pipeline\n'
-printf 'Running MATLAB preflight...\n'
-run_matlab_preflight
+[[ -x "$MATLAB_BIN" ]] || die "MATLAB binary not found or not executable: $MATLAB_BIN"
+[[ -f "$SELECTION_ARTIFACT" ]] || die "Missing Part A ARX/I selection artifact: ${SELECTION_ARTIFACT#"$REPO_ROOT"/}"
 
 GIT_PROVENANCE="$(capture_git_provenance)"
+
+cd "$REPO_ROOT"
 
 if [[ "$fresh_run" -eq 1 ]]; then
   remove_partB_contents
@@ -397,18 +346,14 @@ PIPELINE_STARTED_AT="$(timestamp_now)"
 PIPELINE_STARTED_EPOCH="$(date +%s)"
 
 log_status "Run ID: ${RUN_ID}"
-log_status "Fresh: $([[ "$fresh_run" -eq 1 ]] && printf 'yes' || printf 'no')"
+log_status "Running Part B infectious-population forecasting pipeline"
 log_status "Pipeline started"
 
-write_run_metadata "$GIT_PROVENANCE"
-
+printf 'Part B infectious-population forecasting pipeline\n'
 printf 'Run: %s\n' "$RUN_ID"
 printf 'Started: %s\n' "$PIPELINE_STARTED_AT"
-printf '%s\n' "$PREFLIGHT_OUTPUT" | grep -E '^(config_id|source_id):' || true
-if printf '%s\n' "$GIT_PROVENANCE" | grep -q '^WARNING:'; then
-  printf 'WARNING: uncommitted source changes; see run_metadata.txt.\n'
-fi
 printf 'Metadata: results/partB/logs/%s/run_metadata.txt\n\n' "$RUN_ID"
+write_run_metadata "$GIT_PROVENANCE"
 
 run_matlab_script 1 "partB_01_prepare_datasets" "Prepare synthetic datasets and estimates"
 run_matlab_script 2 "partB_02_run_forecasts" "Generate infectious-population forecasts"

@@ -1,36 +1,20 @@
 %PARTB_03_EVALUATE_FORECASTS Evaluate infectious-population forecasts against synthetic truth.
 %
 %   Description:
-%       Scores the persistence, oracle, and ARX infectious-population
-%       forecasts against the latent synthetic I_true(T+h) with
-%       COMPUTE_POINT_ERROR. Method comparisons use the matched set: forecast
-%       windows (condition, scenario, replicate, origin) in which all three
-%       methods produced a valid forecast, so every method is scored on
-%       identical cases.
-%
-%       Aggregation hierarchy (equal weights at every level):
-%           horizon -> window (mean over h)
-%           window -> replicate (mean over matched windows)
-%           replicate -> scenario (mean over replicates)
-%           scenario -> condition (mean over scenarios)
-%           condition -> method (mean over conditions)
-%       MAE is averaged directly. RMSE is the square root of the
-%       correspondingly averaged mean squared error. A condition-level
-%       aggregate is withheld (NaN, Complete = false) when any scenario has
-%       no matched window; method-level aggregates are withheld when any
-%       condition is incomplete.
-%
-%       Paired comparison: DeltaMAE = MAE_persistence - MAE_ARX per matched
-%       window (positive values favour ARX), excess error of each method
-%       over the oracle, and the share of windows in which ARX beats
-%       persistence. Robustness degradation compares each condition with the
-%       clean baseline at scenario level (each condition on its own matched
-%       set; supports are reported). Execution support counts every intended
-%       window by status for every condition, scenario, replicate, and
-%       method. Rt-driver errors are retained as a secondary diagnostic.
+%       Scores the persistence, oracle, and ARX forecasts of I(T+h) against
+%       the latent I_true with COMPUTE_POINT_ERROR. Method comparisons use
+%       the matched set, the windows in which all three methods produced a
+%       valid forecast. Errors are aggregated with equal weights through
+%       horizon -> window -> replicate -> scenario -> condition -> method;
+%       RMSE is the square root of the averaged MSE. Condition aggregates are
+%       withheld when any scenario has no matched window. Paired comparisons
+%       (DeltaMAE = MAE_persistence - MAE_ARX, excess over the oracle, ARX win
+%       share), degradation relative to the clean baseline, execution
+%       support for every intended window, and Rt-driver errors are also
+%       reported.
 %
 %   Workflow:
-%       1. Initialize configuration, identity, and output paths.
+%       1. Initialize evaluation paths and configuration.
 %       2. Load and validate the generation and forecast statuses.
 %       3. Score every saved forecast artifact.
 %       4. Build support, accuracy, paired, and degradation summaries.
@@ -46,14 +30,14 @@
 %% 1. Initialization
 clear; close all; clc;
 
-fprintf('=== Part B Infectious-Population Forecast Evaluation ===\n');
+fprintf('=== Part B Forecast Evaluation ===\n');
 
 cfg            = partB_config();
 pb             = cfg.partB;
 forecast_dir   = pb.output.forecast_dir;
 evaluation_dir = pb.output.evaluation_dir;
 table_dir      = pb.output.table_dir;
-identity       = local_identity(cfg);
+snapshot       = pb.snapshot;
 method_ids     = pb.method_ids;
 num_origins    = numel(cfg.forecast.min_window:cfg.forecast.step_size:(cfg.time.T_end - cfg.forecast.horizon));
 
@@ -62,7 +46,7 @@ if ~exist(table_dir, 'dir'), mkdir(table_dir); end
 
 %% 2. Load and Validate Statuses
 generation = load(fullfile(pb.output.data_dir, 'partB_01_generation_status.mat'));
-local_require_identity(generation.identity, identity, 'generation status');
+local_require_snapshot(generation.snapshot, snapshot, 'Generation status');
 
 status_path = fullfile(forecast_dir, 'partB_02_forecast_status.mat');
 if ~exist(status_path, 'file')
@@ -70,19 +54,16 @@ if ~exist(status_path, 'file')
 end
 
 status = load(status_path);
-local_require_identity(status.identity, identity, 'forecast status');
+local_require_snapshot(status.snapshot, snapshot, 'Forecast status');
 
 if ~status.run_completed
     error('PARTB_03:ForecastIncomplete', 'Part B forecasting did not complete (run_completed is false).');
 end
 
 forecast_status = status.forecast_status;
-if any([forecast_status.status] == "pending")
-    error('PARTB_03:PendingForecasts', 'Forecast status contains pending datasets although run_completed is true.');
-end
 
 %% 3. Score Saved Forecast Artifacts
-[window_scores, horizon_scores] = local_score_all(forecast_status, forecast_dir, identity, method_ids);
+[window_scores, horizon_scores] = local_score_all(forecast_status, forecast_dir, snapshot, method_ids);
 fprintf('Scored %d window-method rows (%d matched windows).\n', height(window_scores), sum(window_scores.Matched) / numel(method_ids));
 
 %% 4. Summaries
@@ -101,11 +82,8 @@ summaries.horizon_summary    = local_horizon_summary(horizon_scores, summaries.c
 [summaries.degradation_scenario_summary, summaries.degradation_summary] = local_degradation_summary(summaries.scenario_summary, summaries.paired_scenario_summary, numel(cfg.scenarios));
 
 %% 5. Save Evaluation Artifact
-evaluation_metadata = struct('num_origins_per_dataset', num_origins, 'num_datasets_attempted', numel(forecast_status), 'num_forecast_artifacts', sum([forecast_status.status] == "saved"), 'source_forecasts', [forecast_status([forecast_status.status] == "saved").output_filename]', 'matched_definition', "all three methods ok in the same window", 'weighting', "equal weights: horizon->window->replicate->scenario->condition->method");
-
 evaluation_artifact = fullfile(evaluation_dir, 'partB_03_evaluation_results.mat');
-snapshot = pb.snapshot;
-save(evaluation_artifact, 'identity', 'snapshot', 'window_scores', 'horizon_scores', 'paired_windows', 'summaries', 'evaluation_metadata');
+save(evaluation_artifact, 'snapshot', 'window_scores', 'horizon_scores', 'paired_windows', 'summaries');
 fprintf('Evaluation artifact saved to: %s\n', evaluation_artifact);
 
 %% 6. Save Summary Tables
@@ -123,23 +101,17 @@ local_write_table(table_dir, 'partB_03_paired_condition_summary.csv', summaries.
 local_write_table(table_dir, 'partB_03_degradation_scenario_summary.csv', summaries.degradation_scenario_summary);
 local_write_table(table_dir, 'partB_03_degradation_summary.csv', summaries.degradation_summary);
 
-fprintf('=== Part B Infectious-Population Forecast Evaluation Complete ===\n\n');
+fprintf('=== Part B Forecast Evaluation Complete ===\n\n');
 
 %% 7. Local Functions
-function identity = local_identity(cfg)
-%LOCAL_IDENTITY Experiment, configuration, and source identity shared by all Part B artifacts.
-identity = struct('experiment_id', cfg.partB.experiment_id, 'protocol_version', cfg.partB.protocol_version, 'config_id', cfg.partB.config_id, 'source_id', cfg.partB.provenance.source_id);
-end
-
-function local_require_identity(found, expected, label)
-%LOCAL_REQUIRE_IDENTITY Reject inputs produced under a different protocol, configuration, or source.
+function local_require_snapshot(found, expected, label)
+%LOCAL_REQUIRE_SNAPSHOT Reject an input produced under a different Part B configuration.
 if ~isequal(found, expected)
-    error('PARTB_03:IncompatibleArtifact', ['%s was produced under protocol %s, config_id %s, source_id %s; the current run expects protocol %s, ' ...
-        'config_id %s, source_id %s. Rerun with ./run_partB_pipeline.sh --fresh.'], label, found.protocol_version, found.config_id, found.source_id, expected.protocol_version, expected.config_id, expected.source_id);
+    error('PARTB_03:IncompatibleArtifact', '%s was produced under a different Part B configuration. Rerun with ./run_partB_pipeline.sh --fresh.', label);
 end
 end
 
-function [window_scores, horizon_scores] = local_score_all(forecast_status, forecast_dir, identity, method_ids)
+function [window_scores, horizon_scores] = local_score_all(forecast_status, forecast_dir, snapshot, method_ids)
 %LOCAL_SCORE_ALL Window- and horizon-level infectious-population errors for every saved artifact.
 saved = forecast_status([forecast_status.status] == "saved");
 window_parts  = cell(numel(saved), 1);
@@ -147,7 +119,7 @@ horizon_parts = cell(numel(saved), 1);
 
 for i = 1:numel(saved)
     artifact = load(fullfile(forecast_dir, saved(i).output_filename));
-    local_require_identity(artifact.identity, identity, saved(i).output_filename);
+    local_require_snapshot(artifact.snapshot, snapshot, saved(i).output_filename);
     [window_parts{i}, horizon_parts{i}] = local_score_artifact(artifact, method_ids);
 end
 

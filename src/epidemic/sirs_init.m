@@ -13,19 +13,14 @@ function stepper = sirs_init(model_params, sim_options, track_incidence)
 %       model structure is fixed and only the current state and effective Rt
 %       change at each step.
 %
-%       When track_incidence is true, the model gains a counter species C
-%       that receives one unit per S-to-I infection event, so a one-day
-%       step also reports the number of entries into I during that day
-%       (the solver-integrated infection flux under uds, the exact event
-%       count under ssa). The counter variant is compiled under its own
-%       model name. The default call is unchanged.
+%       With track_incidence true, a counter species C records the S-to-I
+%       infection events, so each step also returns the entries into I.
 %
 %   Inputs:
 %       model_params - Structure with gamma, xi, pop_size, and SIRS stepping
 %                      guard parameters.
 %       sim_options  - Structure with solver and seed fields.
-%       track_incidence - Optional logical; true adds the infection-event
-%                         counter (default false).
+%       track_incidence - Optional; true adds the counter (default false).
 %
 %   Outputs:
 %       stepper - Reusable SIRS stepper structure.
@@ -105,7 +100,6 @@ stepper.umod_template = umod;
 stepper.model_params  = model_params;
 stepper.seed          = sim_options.seed;
 stepper.call_count    = 0;
-stepper.track_incidence = track_incidence;
 end
 
 %% 5. Local Functions

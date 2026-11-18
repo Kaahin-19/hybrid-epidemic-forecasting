@@ -1,85 +1,60 @@
 function estimate = estimate_sirs_history_from_incidence(incidence, initial_state, stepper, settings)
 
-%ESTIMATE_SIRS_HISTORY_FROM_INCIDENCE Causal SIRS state and Rt estimates from daily I-entries.
+%ESTIMATE_SIRS_HISTORY_FROM_INCIDENCE Causal SIRS state and Rt estimates from daily entries into I.
 %
 %   Syntax:
 %       estimate = estimate_sirs_history_from_incidence(incidence,
 %           initial_state, stepper, settings)
 %
 %   Description:
-%       Inverts the project SIRS stepper day by day. incidence(k+1) is the
-%       observed number of entries into the infectious compartment during
-%       [t_k, t_{k+1}]. Given the estimated state X_k at t_k, the estimate
-%       Rt(k) is the effective reproduction number that, applied by
-%       SIRS_STEP over [t_k, t_{k+1}], produces exactly the observed number
-%       of entries into I. The next state X_{k+1} is the state returned by
-%       that same accepted step, so the estimated history is reproduced
-%       exactly by the forecasting stepper. Rt(k) is therefore an interval
-%       driver: it belongs to [t_k, t_{k+1}] and becomes available at index
-%       k + 1. Every estimate uses only observations up to its availability
-%       index.
+%       Inverts the SIRS stepper day by day from a known initial state and
+%       known SIRS parameters. incidence(k+1) is the observed number of
+%       entries into I during [t_k, t_{k+1}]. Rt(k) is the value for which
+%       SIRS_STEP applied to the estimated state X_k reproduces incidence(k+1),
+%       and X_{k+1} is the state returned by that same step. Rt(k) therefore
+%       drives [t_k, t_{k+1}] and becomes available at index k+1.
 %
-%       Inversion: the daily entry count f(R) is increasing in R. A
-%       fixed-point iteration R <- R * y / f(R), started from the flux
-%       guess y / (gamma * I_k), targets |f - y| <= rel_tol * y. If the
-%       iteration leaves the admissible domain or does not reach the
-%       acceptance criterion |f - y| <= max(rel_tol * y, abs_tol), the root
-%       is bracketed by geometric expansion in log R and refined with
-%       FZERO. The acceptance tolerances correspond to the accuracy with
-%       which the stepper itself computes f. Days that are not accepted are
-%       recorded as inversion failures; no Rt value is forced.
+%       The entry count f(R) is increasing in R. A fixed-point iteration
+%       R <- R * y / f(R), started from y / (gamma * I_k), is followed when
+%       needed by FZERO on log R inside a geometrically expanded bracket. A
+%       day is accepted when |f - y| <= max(rel_tol * y, abs_tol), the
+%       accuracy to which the uds stepper computes f.
 %
-%       Zero observations: y = 0 is an observation, not proof of zero
-%       transmission. Rt is not identifiable as a positive value from such
-%       a day and is stored as NaN. By reconstruction convention the zero
-%       entry flux is taken at face value, so the state continues with the
-%       exact SIRS solution for beta = 0 over the day:
-%           I_{k+1} = I_k exp(-gamma)
-%           R_{k+1} = R_k exp(-xi) + gamma I_k (exp(-xi) - exp(-gamma)) / (gamma - xi)
-%           S_{k+1} = N - I_{k+1} - R_{k+1}.
-%       This is exact for noise-free deterministic SIRS data and an explicit
-%       convention otherwise.
+%       A zero observation is not proof of zero transmission: Rt is not
+%       identifiable and is stored as NaN. By reconstruction convention the
+%       state continues with the exact SIRS solution for beta = 0, which is
+%       exact only for noise-free deterministic data.
 %
-%       A genuine failure (inversion not accepted, invalid observation,
-%       non-finite or non-conserving state, or an EPIDEMIC domain error)
-%       stops the recursion. Earlier estimates are kept; later entries are
-%       NaN and are reported as not estimated.
+%       The first genuine failure (inversion not accepted, invalid
+%       observation, invalid state, or an EPIDEMIC domain error) stops the
+%       recursion; earlier estimates are kept and later entries are NaN.
 %
 %   Inputs:
-%       incidence     - (K+1)-by-1 observed I-entries; incidence(1) is unused.
+%       incidence     - (K+1)-by-1 observed entries into I; incidence(1) is
+%                       unused.
 %       initial_state - 3-by-1 known state [S; I; R_removed] at t_1.
-%       stepper       - SIRS stepper from SIRS_INIT with track_incidence true.
+%       stepper       - SIRS stepper from SIRS_INIT with track_incidence.
 %       settings      - Structure with rel_tol, abs_tol,
 %                       max_fixed_point_iterations, max_bracket_expansions,
 %                       and conservation_tolerance.
 %
 %   Outputs:
-%       estimate - Structure with (K+1)-by-1 fields:
-%           S, I, R_removed - State estimates at t_k (NaN after a failure).
-%           Rt              - Interval-driver estimates (NaN if unavailable).
-%           Rt_available_idx - Index at which Rt(k) becomes available (k+1).
-%           state_valid_mask, rt_valid_mask - Logical validity masks.
-%           reason          - Per-day estimation outcome.
-%           inversion_method, inversion_evaluations, inversion_residual -
-%                             Per-day inversion diagnostics.
-%       and scalar fields failure_idx (NaN if none), failure_id, and
-%       failure_message.
+%       estimate - Structure with (K+1)-by-1 fields S, I, R_removed, Rt,
+%                  state_valid_mask, rt_valid_mask, reason (per-day
+%                  outcome), inversion_method, inversion_evaluations, and
+%                  inversion_residual, plus failure_idx (NaN if none),
+%                  failure_id, and failure_message.
 %
-%   See also PARTB_01_PREPARE_DATASETS, PARTB_02_RUN_FORECASTS, SIRS_INIT,
-%            SIRS_STEP.
+%   See also PARTB_01_PREPARE_DATASETS, SIRS_INIT, SIRS_STEP.
 %
 % A. M. Kaahin 2026-11-18
 
-%% 1. Boundary Contract
-if ~stepper.track_incidence
-    error('ESTIMATION:StepperWithoutIncidence', 'The estimation stepper must be prepared with track_incidence = true.');
-end
-
-params    = stepper.model_params;
-num_time  = numel(incidence);
-pop_size  = params.pop_size;
-gamma     = params.gamma;
-xi        = params.xi;
+%% 1. Model Parameters
+params   = stepper.model_params;
+num_time = numel(incidence);
+pop_size = params.pop_size;
+gamma    = params.gamma;
+xi       = params.xi;
 
 if gamma == xi
     error('ESTIMATION:DegenerateRates', 'The zero-flux closed form requires gamma ~= xi.');
@@ -91,7 +66,6 @@ estimate.S                     = NaN(num_time, 1);
 estimate.I                     = NaN(num_time, 1);
 estimate.R_removed             = NaN(num_time, 1);
 estimate.Rt                    = NaN(num_time, 1);
-estimate.Rt_available_idx      = (2:num_time + 1)';
 estimate.reason                = repmat("not_estimated_after_failure", num_time, 1);
 estimate.inversion_method      = repmat("not_attempted", num_time, 1);
 estimate.inversion_evaluations = zeros(num_time, 1);
@@ -117,6 +91,7 @@ for k = 1:(num_time - 1)
     end
 
     if y == 0
+        % Rt is unidentifiable from a zero count; the state follows the beta = 0 convention.
         next_state = local_zero_flux_step(state, gamma, xi, pop_size);
         estimate.reason(k)           = "unidentifiable_zero_incidence";
         estimate.inversion_method(k) = "zero_incidence";
@@ -170,8 +145,7 @@ accept_tol = max(settings.rel_tol * y, settings.abs_tol);
 info = struct('method', "fixed_point", 'evaluations', 0, 'residual', NaN, 'accepted', false);
 
 R = y / (gamma * state(2));
-next_state = NaN(3, 1);
-best = struct('R', NaN, 'state', NaN(3, 1), 'residual', Inf);
+best =struct('R', NaN, 'state', NaN(3, 1), 'residual', Inf);
 
 for iteration = 1:settings.max_fixed_point_iterations
     if ~isfinite(R) || R <= 0
@@ -218,14 +192,14 @@ end
 
 log_lo = log(R0);
 log_hi = log(R0);
-[f_lo, ~] = local_entries(stepper, state, exp(log_lo));
+f_lo = local_entries(stepper, state, exp(log_lo));
 f_hi = f_lo;
 info.evaluations = info.evaluations + 1;
 
 expansions = 0;
 while f_lo > y && expansions < settings.max_bracket_expansions
     log_lo = log_lo - log(2);
-    [f_lo, ~] = local_entries(stepper, state, exp(log_lo));
+    f_lo = local_entries(stepper, state, exp(log_lo));
     info.evaluations = info.evaluations + 1;
     expansions = expansions + 1;
 end
@@ -233,7 +207,7 @@ end
 expansions = 0;
 while f_hi < y && expansions < settings.max_bracket_expansions
     log_hi = log_hi + log(2);
-    [f_hi, ~] = local_entries(stepper, state, exp(log_hi));
+    f_hi = local_entries(stepper, state, exp(log_hi));
     info.evaluations = info.evaluations + 1;
     expansions = expansions + 1;
 end
@@ -277,6 +251,7 @@ end
 
 function next_state = local_zero_flux_step(state, gamma, xi, pop_size)
 %LOCAL_ZERO_FLUX_STEP Exact one-day SIRS solution with zero infection flux.
+% I' = -gamma I and R' = gamma I - xi R integrated over one day; S = N - I - R.
 I_next = state(2) * exp(-gamma);
 R_next = state(3) * exp(-xi) + gamma * state(2) * (exp(-xi) - exp(-gamma)) / (gamma - xi);
 next_state = [pop_size - I_next - R_next; I_next; R_next];

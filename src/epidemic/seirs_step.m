@@ -9,10 +9,7 @@ function [next_state, stepper, step_incidence] = seirs_step(stepper, current_sta
 %       Advances the prepared URDME SEIRS model by one effective-Rt-driven
 %       one-day interval. The function preserves the project Rt convention
 %       by deriving beta from the current susceptible state and recovery
-%       rate before executing the four-compartment URDME model. For a
-%       stepper prepared with track_incidence = true, the onset-event
-%       counter starts each step at zero, so step_incidence is the number
-%       of entries into I (E-to-I transitions) during the step.
+%       rate before executing the four-compartment URDME model.
 %
 %   Inputs:
 %       stepper       - Reusable SEIRS stepper returned by seirs_init.
@@ -22,8 +19,8 @@ function [next_state, stepper, step_incidence] = seirs_step(stepper, current_sta
 %   Outputs:
 %       next_state - Advanced [S; E; I; R] state, 4-by-1.
 %       stepper    - Updated stepper with incremented call count.
-%       step_incidence - Entries into I during the step (scalar) for an
-%                        incidence-tracking stepper; empty otherwise.
+%       step_incidence - Entries into I during the step for a stepper
+%                        built with track_incidence; empty otherwise.
 %
 %   See also PARTB_01_PREPARE_DATASETS, SEIRS_INIT.
 %

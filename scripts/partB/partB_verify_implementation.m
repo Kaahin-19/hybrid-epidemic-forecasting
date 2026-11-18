@@ -294,37 +294,30 @@ status_original = load(status_path);
 
 dataset_path = fullfile(pb.output.data_dir, saved(1).output_filename);
 tampered = datasets{1};
-tampered.identity.config_id = "tampered";
+tampered.snapshot.truth_seed = -1;
 save(dataset_path, '-struct', 'tampered');
 [ok, id] = local_expect_error(repo_root, 'partB_02_run_forecasts', 'PARTB_02:IncompatibleArtifact');
-compat = compat && ok; details(end + 1) = "dataset config_id -> " + id;
+compat = compat && ok; details(end + 1) = "dataset snapshot -> " + id;
 restored = datasets{1};
 save(dataset_path, '-struct', 'restored');
 save(status_path, '-struct', 'status_original');
 
 status_tampered = status_original;
-status_tampered.identity.protocol_version = "tampered";
+status_tampered.snapshot.estimation.rel_tol = 1;
 save(status_path, '-struct', 'status_tampered');
 [ok, id] = local_expect_error(repo_root, 'partB_03_evaluate_forecasts', 'PARTB_03:IncompatibleArtifact');
-compat = compat && ok; details(end + 1) = "forecast-status protocol_version -> " + id;
+compat = compat && ok; details(end + 1) = "forecast-status snapshot -> " + id;
 save(status_path, '-struct', 'status_original');
 
 evaluation_path = fullfile(pb.output.evaluation_dir, 'partB_03_evaluation_results.mat');
 evaluation_tampered = evaluation;
-evaluation_tampered.identity.source_id = "tampered";
+evaluation_tampered.snapshot.method_ids = "tampered";
 save(evaluation_path, '-struct', 'evaluation_tampered');
 [ok, id] = local_expect_error(repo_root, 'partB_04_generate_figures', 'PARTB_04:IncompatibleArtifact');
-compat = compat && ok; details(end + 1) = "evaluation source_id -> " + id;
+compat = compat && ok; details(end + 1) = "evaluation snapshot -> " + id;
 save(evaluation_path, '-struct', 'evaluation');
 
-generation_path = fullfile(pb.output.data_dir, 'partB_01_generation_status.mat');
-generation_tampered = rmfield(generation, 'identity');
-save(generation_path, '-struct', 'generation_tampered');
-[ok, id] = local_expect_error(repo_root, 'partB_01_prepare_datasets', 'PARTB_01:StaleArtifacts');
-compat = compat && ok; details(end + 1) = "legacy status without identity -> " + id;
-save(generation_path, '-struct', 'generation');
-
-checks = local_add(checks, "T12", "Incompatible or stale artifacts are rejected at every stage", compat, strjoin(details, '; '));
+checks = local_add(checks, "T12", "Artifacts from a different configuration snapshot are rejected by every consuming stage", compat, strjoin(details, '; '));
 
 %% 15. Part A and Part C Integrity
 protected = 'config/partA_config.m scripts/partA data/partA results/partA config/partC_config.m scripts/partC data/partC results/partC';
