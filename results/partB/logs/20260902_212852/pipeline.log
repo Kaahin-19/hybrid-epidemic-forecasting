@@ -1,7 +1,0 @@
-[2026-09-02 21:28:52] Run ID: 20260902_212852
-[2026-09-02 21:28:52] Running Part B synthetic robustness pipeline
-[2026-09-02 21:28:52] Pipeline started
-[2026-09-02 21:28:52] Starting Generating Part B robustness datasets
-[2026-09-02 21:35:44] Completed Generating Part B robustness datasets in 412s
-[2026-09-02 21:35:44] Starting Running frozen Part A-selected configurations on Part B datasets
-[2026-09-02 21:35:50] Failed Running frozen Part A-selected configurations on Part B datasets after 6s (exit 1). Log: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partB/logs/20260902_212852/partB_02_run_forecasts.log

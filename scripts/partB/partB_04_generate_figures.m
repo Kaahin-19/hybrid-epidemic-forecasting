@@ -1,537 +1,349 @@
-%PARTB_04_GENERATE_FIGURES Generate robustness thesis figures.
+%PARTB_04_GENERATE_FIGURES Generate Part B infectious-population forecasting figures.
 %
 %   Description:
-%       Generates thesis figures from the saved robustness evaluation
-%       summaries, including stress-case WIS, degradation relative to
-%       matched synthetic baselines, horizon-wise performance,
-%       replicate-level distributions, interval calibration, and
-%       forecast-execution outcomes. The figures distinguish incomplete
-%       coverage and unavailable forecasts from valid scores and include
-%       a focused comparison of replicate support under process noise.
+%       Generates five thesis figures from the current Part B artifacts:
+%           1. Infectious-population trajectories at a representative
+%              origin: synthetic truth, the estimated history, and the
+%              persistence, oracle, and ARX forecasts.
+%           2. Matched-window MAE by forecast horizon per condition.
+%           3. Condition-level MAE and RMSE per method.
+%           4. Paired window-level MAE improvement of ARX over persistence.
+%           5. Execution support: status shares of all intended windows.
+%       Aggregates withheld for incomplete scenario coverage are marked and
+%       never drawn as zero; methods without a valid forecast are not drawn.
 %
 %   Workflow:
-%       1. Initialize figure paths and shared styling.
-%       2. Load and validate the Part B evaluation summaries.
-%       3. Prepare the plotted combinations, scenario labels, and shared
-%          replicate-WIS axis limits.
-%       4. Generate the robustness overview with incomplete-coverage
-%          annotations.
-%       5. Generate the forecast-execution outcome figure.
-%       6. Generate horizon, replicate, and calibration figures by combination.
-%       7. Generate the focused replicate-support figure.
+%       1. Initialize figure paths, identity, and shared styling.
+%       2. Load and validate the evaluation artifact.
+%       3. Generate the five figures.
 %
 %   See also PARTB_CONFIG, PARTB_03_EVALUATE_FORECASTS, PLOT_SERIES,
 %            PLOT_DISTRIBUTION, APPLY_PANEL_STYLE.
 %
 % A. M. Kaahin 2026-07-18
-% Modified: 2026-10-13
+% Modified: 2026-11-18
 
 %% 1. Initialization
 clear; close all; clc;
 
 fprintf('=== Part B Figure Generation ===\n');
 
-cfg            = partB_config();
-evaluation_dir = cfg.partB.output.evaluation_dir;
-figure_dir     = cfg.partB.output.fig_dir;
+cfg        = partB_config();
+pb         = cfg.partB;
+figure_dir = pb.output.fig_dir;
+identity   = local_identity(cfg);
+style      = local_style();
 
 if ~exist(figure_dir, 'dir'), mkdir(figure_dir); end
 
-style = local_style();
-
 %% 2. Load and Validate Evaluation Artifact
-evaluation_artifact = fullfile(evaluation_dir, 'partB_03_evaluation_results.mat');
+evaluation_artifact = fullfile(pb.output.evaluation_dir, 'partB_03_evaluation_results.mat');
 if ~exist(evaluation_artifact, 'file')
     error('PARTB_04:MissingEvaluationArtifact', 'Missing Part B evaluation artifact: %s. Run partB_03 first.', evaluation_artifact);
 end
 
 evaluation = load(evaluation_artifact);
-summaries  = local_validate_evaluation(evaluation);
+local_require_identity(evaluation.identity, identity, 'evaluation artifact');
+summaries = evaluation.summaries;
 
-%% 3. Plot Preparation
-combos = local_combinations(summaries.stress_summary);
-fprintf('Found %d model/exogenous combination(s).\n', numel(combos));
+case_ids    = [pb.robustness_cases.case_id]';
+case_labels = [pb.robustness_cases.case_name]';
 
-scenario_ids       = [cfg.scenarios.id]';
-scenario_names     = [cfg.scenarios.name]';
-replicate_y_limits = local_log_limits(summaries.replicate_summary.MeanWIS);
+%% 3. Figures
+local_figure_trajectories(cfg, identity, style, figure_dir);
+local_figure_horizon(summaries.horizon_summary, summaries.condition_summary, case_ids, case_labels, pb.method_ids, style, figure_dir);
+local_figure_conditions(summaries.condition_summary, case_ids, case_labels, pb.method_ids, style, figure_dir);
+local_figure_improvement(evaluation.paired_windows, summaries.paired_condition_summary, case_ids, case_labels, style, figure_dir);
+local_figure_support(summaries.support_condition, case_ids, case_labels, pb.method_ids, style, figure_dir);
 
-%% 4. Robustness Overview
-local_figure_overview(summaries, style, figure_dir);
-
-%% 5. Forecast Execution Outcomes
-local_figure_execution(summaries.execution_summary, combos, style, figure_dir);
-
-%% 6. Per-Combination Figures
-for c = 1:numel(combos)
-    combo = combos(c);
-    fprintf('Drawing per-combination figures for %s...\n', combo.label);
-
-    local_figure_horizon(summaries, combo, style, figure_dir);
-    local_figure_replicates(summaries, combo, scenario_ids, scenario_names, replicate_y_limits, style, figure_dir);
-    local_figure_calibration(summaries.interval_summary, summaries.stress_summary, combo, style, figure_dir);
-end
-
-%% 7. Focused Replicate Support
-focus_case     = "process_noise";
-focus_scenario = "A2";
-focus_labels   = ["ARX / S"; "ARX / I"; "ARX / Both"];
-
-fprintf('Drawing focused replicate-support figure...\n');
-local_figure_replicate_support(summaries, focus_case, focus_scenario, focus_labels, scenario_ids, scenario_names, style, figure_dir);
-
-fprintf('Figures saved under %s\n', figure_dir);
+fprintf('Figures saved to: %s\n', figure_dir);
 fprintf('=== Part B Figure Generation Complete ===\n\n');
 
-%% 8. Local Functions
-function summaries = local_validate_evaluation(evaluation)
-%LOCAL_VALIDATE_EVALUATION Require the evaluation artifact and summary schemas before plotting.
-required_top = {'window_scores', 'horizon_scores', 'interval_scores', 'summaries', 'availability_report', 'evaluation_snapshot'};
-if ~all(isfield(evaluation, required_top))
-    error('PARTB_04:InvalidEvaluationArtifact', 'Evaluation artifact is missing one or more required variables.');
+%% 4. Local Functions
+function identity = local_identity(cfg)
+%LOCAL_IDENTITY Experiment, configuration, and source identity shared by all Part B artifacts.
+identity = struct('experiment_id', cfg.partB.experiment_id, 'protocol_version', cfg.partB.protocol_version, 'config_id', cfg.partB.config_id, 'source_id', cfg.partB.provenance.source_id);
 end
 
-summaries        = evaluation.summaries;
-required_summary = {'replicate_summary', 'scenario_summary', 'stress_summary', 'horizon_summary', 'interval_summary', 'execution_summary', 'degradation_scenario_summary', 'degradation_summary'};
-if ~all(isfield(summaries, required_summary))
-    error('PARTB_04:InvalidSummaries', 'summaries is missing one or more required summary tables.');
-end
-
-local_require_vars(summaries.replicate_summary, {'Case', 'Scenario', 'Replicate', 'Model', 'ExoMode', 'MeanWIS', 'NumWindows', 'NumHorizonRows'}, 'replicate_summary');
-local_require_vars(summaries.scenario_summary, {'Case', 'Scenario', 'Model', 'ExoMode', 'ReplicatesExpected', 'ReplicatesGenerated', 'GenerationDomainFailures', 'ForecastAttempts', 'SuccessfulForecasts', 'ForecastDomainFailures', 'ForecastSuccessRate', 'HasValidScore'}, 'scenario_summary');
-local_require_vars(summaries.stress_summary, {'Case', 'Model', 'ExoMode', 'NumScenariosExpected', 'NumScenariosWithScores', 'CompleteScenarioCoverage', 'ForecastAttempts', 'SuccessfulForecasts', 'ForecastDomainFailures', 'ForecastSuccessRate', 'MeanWIS', 'MeanMAE', 'MeanRMSE', 'MeanCoverage', 'MeanIntervalWidth'}, 'stress_summary');
-local_require_vars(summaries.horizon_summary, {'Case', 'Model', 'ExoMode', 'HorizonIdx', 'NumScenariosExpected', 'NumScenariosWithScores', 'CompleteScenarioCoverage', 'MeanWIS', 'MeanAbsoluteError', 'MeanSquaredError', 'RMSE', 'MeanCoverage', 'MeanIntervalWidth'}, 'horizon_summary');
-local_require_vars(summaries.interval_summary, {'Case', 'Model', 'ExoMode', 'Alpha', 'NominalCoverage', 'NumScenariosExpected', 'NumScenariosWithScores', 'CompleteScenarioCoverage', 'MeanCoverage', 'MeanIntervalWidth', 'CoverageError'}, 'interval_summary');
-local_require_vars(summaries.execution_summary, {'Case', 'Model', 'ExoMode', 'Attempts', 'Saved', 'NoWindows', 'DomainFailures', 'Pending', 'SuccessRate'}, 'execution_summary');
-local_require_vars(summaries.degradation_summary, {'Case', 'Model', 'ExoMode', 'NumScenariosExpected', 'NumScenariosWithScores', 'CompleteScenarioCoverage', 'PartA_MeanWIS', 'PartB_MeanWIS', 'MeanWISDifference', 'MeanWISRatio', 'RelativeWISIncrease'}, 'degradation_summary');
-
-local_require_finite(summaries.replicate_summary, {'MeanWIS', 'NumWindows', 'NumHorizonRows'}, 'replicate_summary');
-local_require_finite(summaries.horizon_summary, {'HorizonIdx', 'MeanWIS', 'MeanAbsoluteError', 'MeanSquaredError', 'RMSE', 'MeanCoverage', 'MeanIntervalWidth'}, 'horizon_summary');
-local_require_finite(summaries.interval_summary, {'Alpha', 'NominalCoverage', 'MeanCoverage', 'MeanIntervalWidth', 'CoverageError'}, 'interval_summary');
-
-exec = summaries.execution_summary;
-if any(exec.Attempts <= 0) || any(exec.Saved < 0) || any(exec.NoWindows < 0) || any(exec.DomainFailures < 0) || any(exec.Pending ~= 0)
-    error('PARTB_04:InvalidExecutionCounts', 'Execution counts violate the required non-negativity or zero-pending constraints.');
-end
-if any(exec.Saved + exec.NoWindows + exec.DomainFailures + exec.Pending ~= exec.Attempts)
-    error('PARTB_04:InconsistentExecutionCounts', 'Execution outcome counts do not sum to the number of attempts.');
-end
-
-stress = summaries.stress_summary;
-stress_metrics = {'MeanWIS', 'MeanMAE', 'MeanRMSE', 'MeanCoverage', 'MeanIntervalWidth'};
-local_validate_coverage_metrics(stress, stress_metrics, 'stress_summary');
-local_validate_coverage_metrics(summaries.degradation_summary, {'PartA_MeanWIS', 'PartB_MeanWIS', 'MeanWISDifference', 'MeanWISRatio', 'RelativeWISIncrease'}, 'degradation_summary');
-end
-
-function local_require_vars(tbl, names, tbl_name)
-%LOCAL_REQUIRE_VARS Fail fast when a summary table lacks a required variable.
-missing = names(~ismember(names, tbl.Properties.VariableNames));
-if ~isempty(missing)
-    error('PARTB_04:MissingVariable', 'Summary table %s is missing required variable(s): %s.', tbl_name, strjoin(missing, ', '));
+function local_require_identity(found, expected, label)
+%LOCAL_REQUIRE_IDENTITY Reject inputs produced under a different protocol, configuration, or source.
+if ~isequal(found, expected)
+    error('PARTB_04:IncompatibleArtifact', ['%s was produced under protocol %s, config_id %s, source_id %s; the current run expects protocol %s, ' ...
+        'config_id %s, source_id %s. Rerun with ./run_partB_pipeline.sh --fresh.'], label, found.protocol_version, found.config_id, found.source_id, expected.protocol_version, expected.config_id, expected.source_id);
 end
 end
 
-function local_require_finite(tbl, names, tbl_name)
-%LOCAL_REQUIRE_FINITE Fail fast on non-finite values where metrics must be defined.
-for i = 1:numel(names)
-    if any(~isfinite(tbl.(names{i})))
-        error('PARTB_04:NonFiniteMetric', 'Summary table %s has non-finite values in %s.', tbl_name, names{i});
+function local_figure_trajectories(cfg, identity, style, figure_dir)
+%LOCAL_FIGURE_TRAJECTORIES Truth, estimated history, and three forecasts at a representative origin.
+vis       = cfg.partB.visualization;
+scenarios = cfg.scenarios;
+n_rows    = numel(vis.trajectory_cases);
+n_cols    = numel(scenarios);
+method_labels = ["Persistence forecast", "Oracle forecast", "ARX/I forecast"];
+
+fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 4.6 * n_rows + 1.5], 'Color', 'w');
+tl  = tiledlayout(fig, n_rows, n_cols, 'Padding', 'compact', 'TileSpacing', 'compact');
+legend_handles = [];
+legend_labels  = strings(0, 1);
+
+for r = 1:n_rows
+    case_id  = vis.trajectory_cases(r);
+    case_def = cfg.partB.robustness_cases([cfg.partB.robustness_cases.case_id] == case_id);
+
+    for c = 1:n_cols
+        ax = nexttile(tl);
+        dataset_id    = case_id + "_" + scenarios(c).id + "_" + vis.trajectory_replicate;
+        dataset_path  = fullfile(cfg.partB.output.data_dir, "partB_01_dataset_" + dataset_id + ".mat");
+        forecast_path = fullfile(cfg.partB.output.forecast_dir, "partB_02_forecast_" + dataset_id + ".mat");
+        title(ax, case_def.case_name + " | " + scenarios(c).id, 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal', 'Interpreter', 'tex');
+
+        if exist(dataset_path, 'file') ~= 2 || exist(forecast_path, 'file') ~= 2
+            text(ax, 0.5, 0.5, 'Dataset unavailable', 'Units', 'normalized', 'HorizontalAlignment', 'center', 'FontName', style.font_name, 'FontSize', style.tick_font_size);
+            apply_panel_style(ax, struct('font_name', style.font_name));
+            continue;
+        end
+
+        dataset  = load(dataset_path);
+        forecast = load(forecast_path);
+        local_require_identity(dataset.identity, identity, dataset_id + " dataset");
+        local_require_identity(forecast.identity, identity, dataset_id + " forecast");
+
+        win = forecast.windows([forecast.windows.window_day] == vis.trajectory_origin_day);
+        if isempty(win)
+            error('PARTB_04:TrajectoryOriginUnavailable', 'Origin day %d is not on the forecast grid.', vis.trajectory_origin_day);
+        end
+
+        iT       = win.window_day_idx;
+        history  = (max(1, iT - vis.history_days):iT)';
+        future   = (iT:iT + numel(win.truth_I))';
+        series   = repmat(local_series_template(), 0, 1);
+
+        s = local_series_template();
+        s.x = dataset.tspan([history; future(2:end)]); s.y = dataset.I_true([history; future(2:end)]); s.color = [0, 0, 0]; s.line_width = style.truth_line_width; s.label = "Synthetic truth {\itI}";
+        series(end + 1, 1) = s;
+
+        s = local_series_template();
+        s.x = dataset.tspan(history); s.y = dataset.I_estimated(history); s.color = [0.45, 0.45, 0.45]; s.line_style = "--"; s.line_width = style.line_width; s.label = "Estimated history {\itI}";
+        series(end + 1, 1) = s;
+
+        unavailable = strings(0, 1);
+        for m = 1:3
+            if win.status(m) ~= "ok"
+                unavailable(end + 1, 1) = forecast.method_ids(m) + ": " + strrep(win.status(m), "_", " ");
+                continue;
+            end
+            s = local_series_template();
+            s.x = dataset.tspan(future); s.y = [win.X_hat_T(2); win.I_pred(:, m)]; s.color = style.method_colors(m, :); s.line_width = style.line_width; s.label = method_labels(m);
+            series(end + 1, 1) = s;
+        end
+
+        [h, labels] = plot_series(ax, struct('series', series, 'style', struct('x_label', "Day", 'y_label', "Infectious population", 'grid', true, 'font_name', style.font_name, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size)));
+        xline(ax, dataset.tspan(iT), ':', 'Color', [0.3, 0.3, 0.3], 'HandleVisibility', 'off');
+
+        if ~isempty(unavailable)
+            text(ax, 0.02, 0.04, strjoin(unavailable, newline), 'Units', 'normalized', 'VerticalAlignment', 'bottom', 'FontName', style.font_name, 'FontSize', style.tick_font_size - 1, 'Color', style.unavailable_color, 'Interpreter', 'none');
+        end
+
+        if numel(labels) > numel(legend_labels)
+            legend_handles = h;
+            legend_labels  = labels;
+        end
     end
 end
+
+if ~isempty(legend_handles)
+    lg = legend(legend_handles, legend_labels, 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.legend_font_size, 'Box', 'off', 'Orientation', 'horizontal', 'NumColumns', 3);
+    lg.Layout.Tile = 'north';
 end
 
-function local_validate_coverage_metrics(tbl, metric_names, tbl_name)
-%LOCAL_VALIDATE_COVERAGE_METRICS Require complete metrics and unavailable incomplete aggregates.
-complete = tbl.CompleteScenarioCoverage;
-if any(tbl.NumScenariosWithScores > tbl.NumScenariosExpected) || any(complete ~= (tbl.NumScenariosWithScores == tbl.NumScenariosExpected))
-    error('PARTB_04:InvalidScenarioCoverage', 'Summary table %s has inconsistent scenario coverage.', tbl_name);
-end
-for i = 1:numel(metric_names)
-    values = tbl.(metric_names{i});
-    if any(~isfinite(values(complete))) || any(~isnan(values(~complete)))
-        error('PARTB_04:InvalidCoverageMetric', 'Summary table %s has invalid complete or incomplete values in %s.', tbl_name, metric_names{i});
-    end
-end
-end
-
-function combos = local_combinations(stress_summary)
-%LOCAL_COMBINATIONS Derive model/exogenous combinations present in the evaluation.
-pairs = sortrows(unique(stress_summary(:, {'Model', 'ExoMode'}), 'rows'), {'Model', 'ExoMode'});
-combos = repmat(struct('model', "", 'exo', "", 'label', "", 'token', ""), height(pairs), 1);
-for i = 1:height(pairs)
-    combos(i).model = string(pairs.Model(i));
-    combos(i).exo   = string(pairs.ExoMode(i));
-    combos(i).label = combos(i).model + " / " + combos(i).exo;
-    combos(i).token = local_safe_token(combos(i).model) + "_" + local_safe_token(combos(i).exo);
-end
-end
-
-function local_figure_overview(summaries, style, figure_dir)
-%LOCAL_FIGURE_OVERVIEW Two-panel mean-WIS and WIS-degradation overview across stress cases.
-stress  = summaries.stress_summary;
-degrade = summaries.degradation_summary;
-
-[case_ids, case_labels] = local_case_system(unique(stress.Case), style);
-combo_labels = local_combo_labels(stress);
-
-fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 8.5], 'Color', 'w');
-tl  = tiledlayout(fig, 1, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
-
-wis_matrix = local_case_combo_matrix(stress, case_ids, combo_labels, 'MeanWIS');
-
-ax = nexttile(tl);
-h = local_grouped_bars(ax, wis_matrix, style);
-local_style_bar_axis(ax, (1:numel(case_ids))', case_labels, "Mean WIS", style);
-complete_matrix = local_case_combo_matrix(stress, case_ids, combo_labels, 'CompleteScenarioCoverage');
-local_mark_incomplete(ax, h, complete_matrix, style);
-local_apply_legend(ax, h, combo_labels, style, numel(combo_labels));
-local_panel_label(ax, "(a)", style);
-
-ratio_matrix = local_case_combo_matrix(degrade, case_ids, combo_labels, 'MeanWISRatio');
-
-ax = nexttile(tl);
-h = local_grouped_bars(ax, ratio_matrix, style);
-local_style_bar_axis(ax, (1:numel(case_ids))', case_labels, "Mean WIS ratio (Part B / Part A)", style);
-local_mark_incomplete(ax, h, complete_matrix, style);
-yline(ax, 1, '--', 'Color', [0, 0, 0], 'LineWidth', 1.0, 'Label', 'Part A baseline', 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.legend_font_size, 'LabelHorizontalAlignment', 'left');
-local_apply_legend(ax, h, combo_labels, style, numel(combo_labels));
-local_panel_label(ax, "(b)", style);
-
-exportgraphics(fig, fullfile(figure_dir, 'partB_04_robustness_overview.pdf'), 'ContentType', 'vector');
+exportgraphics(fig, fullfile(figure_dir, 'partB_04_infectious_trajectories.pdf'), 'ContentType', 'vector');
 close(fig);
 end
 
-function local_figure_execution(execution_summary, combos, style, figure_dir)
-%LOCAL_FIGURE_EXECUTION Per-combination stacked shares of Script 2 forecast outcomes.
-outcome_colors = [0.000, 0.620, 0.451; 0.835, 0.369, 0.000; 0.600, 0.600, 0.600];
-outcome_labels = ["Saved", "Domain failure", "No valid windows"];
+function local_figure_horizon(horizon_summary, condition_summary, case_ids, case_labels, method_ids, style, figure_dir)
+%LOCAL_FIGURE_HORIZON Matched-window infectious-population MAE by horizon, one panel per condition.
+method_labels = local_method_labels(method_ids);
+fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 10.5], 'Color', 'w');
+tl  = tiledlayout(fig, 2, 3, 'Padding', 'compact', 'TileSpacing', 'compact');
+legend_handles = [];
 
-fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 8.5], 'Color', 'w');
-tl  = tiledlayout(fig, 1, numel(combos), 'Padding', 'compact', 'TileSpacing', 'compact');
+for i = 1:numel(case_ids)
+    ax = nexttile(tl);
+    complete = all(condition_summary.Complete(condition_summary.Case == case_ids(i)));
+    series = repmat(local_series_template(), 0, 1);
 
-for c = 1:numel(combos)
-    combo = combos(c);
-    rows  = execution_summary(execution_summary.Model == combo.model & execution_summary.ExoMode == combo.exo, :);
-    [case_ids, case_labels] = local_case_system(unique(rows.Case), style);
-
-    shares   = zeros(numel(case_ids), 3);
-    attempts = zeros(numel(case_ids), 1);
-    for i = 1:numel(case_ids)
-        r = rows(rows.Case == case_ids(i), :);
-
-        if height(r) ~= 1
-            error('PARTB_04:ExecutionRowCount', 'Expected one execution-summary row for case %s and combination %s, but found %d.', case_ids(i), combo.label, height(r));
-        end
-
-        attempts(i) = r.Attempts;
-        shares(i, :) = [r.Saved, r.DomainFailures, r.NoWindows] / r.Attempts;
+    for m = 1:numel(method_ids)
+        rows = sortrows(horizon_summary(horizon_summary.Case == case_ids(i) & horizon_summary.Method == method_ids(m), :), 'HorizonIdx');
+        s = local_series_template();
+        s.x = rows.HorizonIdx; s.y = rows.MAE; s.color = style.method_colors(m, :); s.line_width = style.line_width; s.marker = "o"; s.marker_size = style.marker_size; s.label = method_labels(m);
+        series(end + 1, 1) = s;
     end
 
-    if any(abs(sum(shares, 2) - 1) > 1e-9)
-        error('PARTB_04:ExecutionSharesUnnormalized', 'Execution outcome shares do not sum to one for %s.', combo.label);
+    [h, ~] = plot_series(ax, struct('series', series, 'style', struct('x_label', "Forecast horizon {\ith} (days)", 'y_label', "MAE of {\itI} (persons)", 'grid', true, 'font_name', style.font_name, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size)));
+    ylim(ax, [0, Inf]);
+    title(ax, case_labels(i), 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal', 'Interpreter', 'tex');
+
+    if ~complete
+        text(ax, 0.5, 0.5, 'Withheld: incomplete scenario coverage', 'Units', 'normalized', 'HorizontalAlignment', 'center', 'FontName', style.font_name, 'FontSize', style.tick_font_size, 'Color', style.unavailable_color);
+    elseif isempty(legend_handles)
+        legend_handles = h;
+    end
+end
+
+if ~isempty(legend_handles)
+    lg = legend(legend_handles, method_labels, 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.legend_font_size, 'Box', 'off', 'Orientation', 'horizontal');
+    lg.Layout.Tile = 'north';
+end
+
+exportgraphics(fig, fullfile(figure_dir, 'partB_04_mae_by_horizon.pdf'), 'ContentType', 'vector');
+close(fig);
+end
+
+function local_figure_conditions(condition_summary, case_ids, case_labels, method_ids, style, figure_dir)
+%LOCAL_FIGURE_CONDITIONS Condition-level MAE and RMSE per method with incomplete-coverage markers.
+method_labels = local_method_labels(method_ids);
+fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 8.5], 'Color', 'w');
+tl  = tiledlayout(fig, 1, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
+metrics = ["MAE", "RMSE"];
+y_labels = ["MAE of {\itI} (persons)", "RMSE of {\itI} (persons)"];
+
+complete_matrix = local_case_method_matrix(condition_summary, case_ids, method_ids, 'Complete');
+
+for k = 1:2
+    ax = nexttile(tl);
+    matrix = local_case_method_matrix(condition_summary, case_ids, method_ids, metrics(k));
+    h = local_grouped_bars(ax, matrix, style);
+    local_style_bar_axis(ax, (1:numel(case_ids))', case_labels, y_labels(k), style);
+    if any(isfinite(matrix), 'all')
+        ylim(ax, [0, 1.15 * max(matrix(isfinite(matrix)))]);
+    end
+    local_mark_incomplete(ax, h, complete_matrix, style);
+    local_apply_legend(ax, h, method_labels, style, numel(method_ids));
+    local_panel_label(ax, "(" + char('a' + k - 1) + ")", style);
+end
+
+exportgraphics(fig, fullfile(figure_dir, 'partB_04_condition_comparison.pdf'), 'ContentType', 'vector');
+close(fig);
+end
+
+function local_figure_improvement(paired_windows, paired_condition, case_ids, case_labels, style, figure_dir)
+%LOCAL_FIGURE_IMPROVEMENT Distribution of paired window-level MAE improvement of ARX over persistence.
+fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 9.0], 'Color', 'w');
+ax  = axes(fig);
+
+present = ismember(case_ids, unique(paired_windows.Case));
+x_labels = strings(height(paired_windows), 1);
+for i = 1:numel(case_ids)
+    x_labels(paired_windows.Case == case_ids(i)) = case_labels(i);
+end
+
+plot_distribution(ax, struct('x', categorical(x_labels, case_labels(present)), 'y', paired_windows.DeltaMAE, 'group', [], 'style', struct('y_label', "{\Delta}MAE = MAE_{persistence} - MAE_{ARX} (persons)", 'grid', true, 'font_name', style.font_name, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size)));
+yline(ax, 0, '--', 'Color', [0, 0, 0], 'LineWidth', 1.0, 'HandleVisibility', 'off');
+
+drawnow;
+y_limits = ylim(ax);
+y_limits(2) = y_limits(2) + 0.18 * diff(y_limits);
+ylim(ax, y_limits);
+present_ids = case_ids(present);
+for i = 1:numel(present_ids)
+    row = paired_condition(paired_condition.Case == present_ids(i), :);
+    n   = sum(paired_windows.Case == present_ids(i));
+    share = mean(paired_windows.ArxBetter(paired_windows.Case == present_ids(i)));
+    text(ax, i, y_limits(2), [sprintf('{\\itn} = %d', n), sprintf('ARX better: %.0f%%', 100 * share) + string(local_incomplete_tag(row.Complete))], 'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', 'FontName', style.font_name, 'FontSize', style.tick_font_size - 1, 'Interpreter', 'tex');
+end
+text(ax, 0.01, 0.02, 'Positive values: ARX more accurate than persistence (matched windows)', 'Units', 'normalized', 'VerticalAlignment', 'bottom', 'FontName', style.font_name, 'FontSize', style.tick_font_size - 1);
+
+exportgraphics(fig, fullfile(figure_dir, 'partB_04_arx_improvement.pdf'), 'ContentType', 'vector');
+close(fig);
+end
+
+function tag = local_incomplete_tag(complete)
+%LOCAL_INCOMPLETE_TAG Annotation suffix for conditions with incomplete scenario coverage.
+if complete
+    tag = "";
+else
+    tag = " (incomplete)";
+end
+end
+
+function local_figure_support(support_condition, case_ids, case_labels, method_ids, style, figure_dir)
+%LOCAL_FIGURE_SUPPORT Stacked status shares of all intended forecast windows per condition and method.
+status_vars   = {'Ok', 'EstimationUnavailable', 'InsufficientHistory', 'DomainFailure', 'ForecastFailure', 'DatasetUnavailable'};
+status_labels = ["Valid forecast", "Estimation unavailable", "Insufficient history", "Domain failure", "Forecast failure", "Dataset unavailable"];
+status_colors = [0.000, 0.620, 0.451; 0.600, 0.600, 0.600; 0.800, 0.475, 0.655; 0.835, 0.369, 0.000; 0.902, 0.624, 0.000; 0.250, 0.250, 0.250];
+method_labels = local_method_labels(method_ids);
+
+fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 8.5], 'Color', 'w');
+tl  = tiledlayout(fig, 1, numel(method_ids), 'Padding', 'compact', 'TileSpacing', 'compact');
+
+for m = 1:numel(method_ids)
+    shares   = zeros(numel(case_ids), numel(status_vars));
+    intended = zeros(numel(case_ids), 1);
+    matched  = zeros(numel(case_ids), 1);
+    for i = 1:numel(case_ids)
+        row = support_condition(support_condition.Case == case_ids(i) & support_condition.Method == method_ids(m), :);
+        intended(i) = row.IntendedWindows;
+        matched(i)  = row.Matched;
+        for j = 1:numel(status_vars)
+            shares(i, j) = row.(status_vars{j}) / row.IntendedWindows;
+        end
     end
 
     ax = nexttile(tl);
     b  = bar(ax, (1:numel(case_ids))', shares, 'stacked');
-    for j = 1:3
-        b(j).FaceColor = outcome_colors(j, :);
+    for j = 1:numel(b)
+        b(j).FaceColor = status_colors(j, :);
+        b(j).EdgeColor = 'none';
     end
     for i = 1:numel(case_ids)
-        text(ax, i, 1.02, sprintf('{\\itN} = %d', attempts(i)), 'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', 'FontName', style.font_name, 'FontSize', style.tick_font_size, 'Interpreter', 'tex');
+        text(ax, i, 1.02, sprintf('{\\itN} = %d', intended(i)), 'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', 'FontName', style.font_name, 'FontSize', style.tick_font_size - 1, 'Interpreter', 'tex');
     end
 
-    local_style_bar_axis(ax, (1:numel(case_ids))', case_labels, "Share of Script 2 attempts", style);
-    ylim(ax, [0, 1]);
-    title(ax, combo.label, 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal', 'Interpreter', 'tex');
-    if c == numel(combos)
-        local_apply_legend(ax, b, outcome_labels, style, 3);
+    local_style_bar_axis(ax, (1:numel(case_ids))', case_labels, "Share of intended forecast windows", style);
+    ax.XTickLabelRotation = 35;
+    ylim(ax, [0, 1.12]);
+    title(ax, method_labels(m), 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal', 'Interpreter', 'tex');
+
+    if m == numel(method_ids)
+        lg = legend(b, status_labels, 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.legend_font_size, 'Box', 'off', 'Orientation', 'horizontal', 'NumColumns', 3);
+        lg.Layout.Tile = 'north';
     end
 end
 
-exportgraphics(fig, fullfile(figure_dir, 'partB_04_execution_outcomes.pdf'), 'ContentType', 'vector');
+exportgraphics(fig, fullfile(figure_dir, 'partB_04_execution_support.pdf'), 'ContentType', 'vector');
 close(fig);
 end
 
-function local_figure_horizon(summaries, combo, style, figure_dir)
-%LOCAL_FIGURE_HORIZON Horizon-wise mean WIS, one line per stress case.
-horizon = summaries.horizon_summary(summaries.horizon_summary.Model == combo.model & summaries.horizon_summary.ExoMode == combo.exo, :);
-stress  = summaries.stress_summary;
+function labels = local_method_labels(method_ids)
+%LOCAL_METHOD_LABELS Display labels for the forecast methods.
+labels = strings(numel(method_ids), 1);
+for m = 1:numel(method_ids)
+    switch method_ids(m)
+        case "persistence"; labels(m) = "Persistence";
+        case "oracle";      labels(m) = "Oracle";
+        case "arx";         labels(m) = "ARX/I";
+    end
+end
+end
 
-[case_ids, case_labels, case_colors, case_markers] = local_case_system(unique(horizon.Case), style);
-
-series = repmat(local_series_template(), numel(case_ids), 1);
+function matrix = local_case_method_matrix(tbl, case_ids, method_ids, value_var)
+%LOCAL_CASE_METHOD_MATRIX Case-by-method value matrix with NaN for absent rows.
+matrix = NaN(numel(case_ids), numel(method_ids));
 for i = 1:numel(case_ids)
-    rows = sortrows(horizon(horizon.Case == case_ids(i), :), 'HorizonIdx');
-    [n_scen, n_expected] = local_scenario_support(stress, case_ids(i), combo);
-
-    series(i).type        = "line";
-    series(i).x           = rows.HorizonIdx;
-    series(i).y           = rows.MeanWIS;
-    series(i).color       = case_colors(i, :);
-    series(i).line_width  = style.line_width;
-    series(i).marker      = case_markers(i);
-    series(i).marker_size = style.marker_size;
-    series(i).label       = case_labels(i) + " (" + string(n_scen) + "/" + string(n_expected) + " scenarios)";
-end
-
-fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 16.0, 9.0], 'Color', 'w');
-ax  = axes('Parent', fig);
-
-spec = struct('series', series, 'style', struct('x_label', "Forecast horizon, {\it h} (days)", 'y_label', "Mean WIS", 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
-[h, labels] = plot_series(ax, spec);
-xticks(ax, unique(horizon.HorizonIdx));
-local_apply_legend(ax, h, labels, style, min(numel(labels), 2));
-
-exportgraphics(fig, fullfile(figure_dir, char("partB_04_mean_wis_by_horizon_" + combo.token + ".pdf")), 'ContentType', 'vector');
-close(fig);
-end
-
-function local_figure_replicates(summaries, combo, scenario_ids, scenario_names, y_limits, style, figure_dir)
-%LOCAL_FIGURE_REPLICATES Log-scale replicate WIS by stress case with execution support, one panel per scenario.
-support_rows = summaries.scenario_summary(summaries.scenario_summary.Model == combo.model & summaries.scenario_summary.ExoMode == combo.exo, :);
-replicate_rows = summaries.replicate_summary(summaries.replicate_summary.Model == combo.model & summaries.replicate_summary.ExoMode == combo.exo, :);
-scenarios = sort(unique(support_rows.Scenario));
-
-n_panels = numel(scenarios);
-n_cols   = ceil(sqrt(n_panels));
-n_rows   = ceil(n_panels / n_cols);
-
-fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 12.0], 'Color', 'w');
-tl  = tiledlayout(fig, n_rows, n_cols, 'Padding', 'compact', 'TileSpacing', 'compact');
-
-any_shortfall = false;
-for s = 1:n_panels
-    support = support_rows(support_rows.Scenario == scenarios(s), :);
-    [case_ids, case_labels, case_colors, case_markers] = local_case_system(support.Case, style);
-    [~, order] = ismember(case_ids, support.Case);
-    support = support(order, :);
-
-    observations = sortrows(replicate_rows(replicate_rows.Scenario == scenarios(s), :), 'Replicate');
-    [~, obs_category] = ismember(observations.Case, case_ids);
-
-    panel = struct('labels', case_labels, 'colors', case_colors, 'markers', case_markers, 'obs_category', obs_category, 'obs_wis', observations.MeanWIS, 'successes', support.SuccessfulForecasts, 'attempts', support.ForecastAttempts, 'generation_shortfall', support.ReplicatesGenerated < support.ReplicatesExpected);
-    any_shortfall = any_shortfall || any(panel.generation_shortfall);
-
-    ax = nexttile(tl);
-    local_replicate_panel(ax, panel, y_limits, style);
-    title(ax, scenario_names(scenario_ids == scenarios(s)), 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal', 'Interpreter', 'tex');
-end
-
-xlabel(tl, local_support_note("Stress case", any_shortfall, style), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
-ylabel(tl, "Replicate mean WIS (log scale)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
-
-exportgraphics(fig, fullfile(figure_dir, char("partB_04_replicate_wis_distribution_" + combo.token + ".pdf")), 'ContentType', 'vector');
-close(fig);
-end
-
-function local_figure_replicate_support(summaries, case_id, scenario_id, combo_labels, scenario_ids, scenario_names, style, figure_dir)
-%LOCAL_FIGURE_REPLICATE_SUPPORT Focused replicate WIS and execution support for selected combinations in one case and scenario.
-support = summaries.scenario_summary(summaries.scenario_summary.Case == case_id & summaries.scenario_summary.Scenario == scenario_id, :);
-support_labels = support.Model + " / " + support.ExoMode;
-
-order = zeros(numel(combo_labels), 1);
-for k = 1:numel(combo_labels)
-    match = find(support_labels == combo_labels(k));
-
-    if numel(match) ~= 1
-        error('PARTB_04:FocusedSupportRowCount', 'Expected one scenario-summary row for case %s, scenario %s, and combination %s, but found %d.', case_id, scenario_id, combo_labels(k), numel(match));
-    end
-
-    order(k) = match;
-end
-support = support(order, :);
-
-observations = sortrows(summaries.replicate_summary(summaries.replicate_summary.Case == case_id & summaries.replicate_summary.Scenario == scenario_id, :), 'Replicate');
-[is_selected, obs_category] = ismember(observations.Model + " / " + observations.ExoMode, combo_labels);
-observations = observations(is_selected, :);
-obs_category = obs_category(is_selected);
-
-if any(accumarray(obs_category, 1, [numel(combo_labels), 1]) ~= support.SuccessfulForecasts)
-    error('PARTB_04:FocusedReplicateCount', 'Replicate rows for case %s and scenario %s do not match SuccessfulForecasts for the focused combinations.', case_id, scenario_id);
-end
-
-[has_palette, palette_idx] = ismember(combo_labels, local_combo_labels(summaries.stress_summary));
-if ~all(has_palette)
-    error('PARTB_04:FocusedCombinationColor', 'Focused combination(s) %s are absent from stress_summary and have no palette colour.', strjoin(combo_labels(~has_palette), ', '));
-end
-combo_colors = style.palette(mod(palette_idx - 1, size(style.palette, 1)) + 1, :);
-
-panel = struct('labels', combo_labels, 'colors', combo_colors, 'markers', repmat("o", numel(combo_labels), 1), 'obs_category', obs_category, 'obs_wis', observations.MeanWIS, 'successes', support.SuccessfulForecasts, 'attempts', support.ForecastAttempts, 'generation_shortfall', support.ReplicatesGenerated < support.ReplicatesExpected);
-
-[~, case_label] = local_case_system(case_id, style);
-
-fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 12.0, 8.5], 'Color', 'w');
-tl  = tiledlayout(fig, 1, 1, 'Padding', 'compact', 'TileSpacing', 'compact');
-
-ax = nexttile(tl);
-local_replicate_panel(ax, panel, local_log_limits(observations.MeanWIS), style);
-title(ax, case_label + " — " + scenario_names(scenario_ids == scenario_id), 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal', 'Interpreter', 'tex');
-
-xlabel(tl, local_support_note("Model / exogenous mode", any(panel.generation_shortfall), style), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
-ylabel(tl, "Replicate mean WIS (log scale)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
-
-exportgraphics(fig, fullfile(figure_dir, char("partB_04_replicate_support_" + local_safe_token(case_id) + "_" + local_safe_token(scenario_id) + ".pdf")), 'ContentType', 'vector');
-close(fig);
-end
-
-function local_replicate_panel(ax, panel, y_limits, style)
-%LOCAL_REPLICATE_PANEL Draw replicate distributions and execution-support annotations.
-num_categories = numel(panel.labels);
-axis_style = struct('y_limits', y_limits, 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name);
-
-boxed = panel.successes(panel.obs_category) >= style.min_box_replicates;
-if any(boxed)
-    dist_spec = struct('x', categorical(panel.labels(panel.obs_category(boxed)), panel.labels), 'y', panel.obs_wis(boxed), 'group', [], 'style', axis_style);
-    h = plot_distribution(ax, dist_spec);
-    set(h, 'BoxFaceColor', style.box_color, 'BoxEdgeColor', style.box_color, 'MarkerStyle', 'none');
-else
-    apply_panel_style(ax, axis_style);
-    set(ax, 'XTick', 1:num_categories);
-    xlim(ax, [0.5, num_categories + 0.5]);
-end
-set(ax, 'YScale', 'log', 'YMinorGrid', 'off');
-
-hold(ax, 'on');
-for k = 1:num_categories
-    if panel.successes(k) == 0
-        text(ax, k, sqrt(y_limits(1) * y_limits(2)), "No valid forecasts", 'Rotation', 90, 'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', 'FontName', style.font_name, 'FontSize', style.tick_font_size, 'Color', style.unavailable_color, 'Interpreter', 'tex');
-    else
-        values = panel.obs_wis(panel.obs_category == k);
-        n = numel(values);
-        offsets = 0.3 * ((1:n)' - (n + 1) / 2) / max(n - 1, 1);
-        plot(ax, k + offsets, values, 'LineStyle', 'none', 'Marker', panel.markers(k), 'MarkerSize', style.marker_size, 'MarkerEdgeColor', panel.colors(k, :), 'MarkerFaceColor', 'w', 'LineWidth', 0.9);
-    end
-end
-hold(ax, 'off');
-
-count_labels = compose("%d/%d", panel.successes, panel.attempts);
-count_labels(panel.generation_shortfall) = count_labels(panel.generation_shortfall) + "†";
-xticklabels(ax, panel.labels + "\newline" + count_labels);
-end
-
-function note = local_support_note(axis_label, any_shortfall, style)
-%LOCAL_SUPPORT_NOTE Axis label with the support-count definition and, when needed, the generation-shortfall marker.
-note = [axis_label; "{\itn}/{\itN} = successful forecasts / forecast attempts"; sprintf("Boxes shown only for {\\itn} \\geq %d", style.min_box_replicates)];
-if any_shortfall
-    note = [note; "† fewer datasets generated than requested: generation failures, not forecast failures"];
-end
-end
-
-function limits = local_log_limits(values)
-%LOCAL_LOG_LIMITS Whole-decade logarithmic axis limits enclosing all positive values.
-limits = 10 .^ [floor(log10(min(values))), ceil(log10(max(values)))];
-end
-
-function local_figure_calibration(interval_summary, stress_summary, combo, style, figure_dir)
-%LOCAL_FIGURE_CALIBRATION Nominal-versus-empirical interval coverage, one line per stress case.
-interval = interval_summary(interval_summary.Model == combo.model & interval_summary.ExoMode == combo.exo, :);
-[case_ids, case_labels, case_colors, case_markers] = local_case_system(unique(interval.Case), style);
-
-series = repmat(local_series_template(), numel(case_ids) + 1, 1);
-
-reference = local_series_template();
-reference.type       = "reference";
-reference.x          = [0; 1];
-reference.y          = [0; 1];
-reference.color      = [0, 0, 0];
-reference.line_style = "--";
-reference.line_width = 1.0;
-reference.label      = "Nominal = empirical";
-series(1) = reference;
-
-for i = 1:numel(case_ids)
-    rows = sortrows(interval(interval.Case == case_ids(i), :), 'NominalCoverage');
-    [n_scen, n_expected] = local_scenario_support(stress_summary, case_ids(i), combo);
-
-    series(i + 1).type        = "line";
-    series(i + 1).x           = rows.NominalCoverage;
-    series(i + 1).y           = rows.MeanCoverage;
-    series(i + 1).color       = case_colors(i, :);
-    series(i + 1).line_width  = style.line_width;
-    series(i + 1).marker      = case_markers(i);
-    series(i + 1).marker_size = style.marker_size;
-    series(i + 1).label       = case_labels(i) + " (" + string(n_scen) + "/" + string(n_expected) + " scenarios)";
-end
-
-fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 16.0, 10.0], 'Color', 'w');
-ax  = axes('Parent', fig);
-
-spec = struct('series', series, 'style', struct('x_label', "Nominal coverage", 'y_label', "Empirical coverage", 'x_limits', [0, 1], 'y_limits', [0, 1], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
-[h, labels] = plot_series(ax, spec);
-local_apply_legend(ax, h, labels, style, min(numel(labels), 3));
-
-exportgraphics(fig, fullfile(figure_dir, char("partB_04_interval_calibration_" + combo.token + ".pdf")), 'ContentType', 'vector');
-close(fig);
-end
-
-function [ordered_ids, labels, colors, markers] = local_case_system(present_ids, style)
-%LOCAL_CASE_SYSTEM Stable stress-case display order, labels, colors, and markers.
-catalog  = ["observation_noise", "process_noise", "structural_mismatch", "combined_stress"];
-readable = ["Noisy Rt input", "Process noise", "Structural mismatch", "Combined stress"];
-markers_all = ["o", "s", "^", "d", "v", ">", "<", "p", "h"];
-
-present_ids = string(present_ids(:));
-[is_known, catalog_pos] = ismember(present_ids, catalog);
-known = sortrows([catalog_pos(is_known), find(is_known)], 1);
-extra = sort(present_ids(~is_known));
-ordered_ids = [present_ids(known(:, 2)); extra];
-
-labels  = strings(numel(ordered_ids), 1);
-colors  = zeros(numel(ordered_ids), 3);
-markers = strings(numel(ordered_ids), 1);
-for i = 1:numel(ordered_ids)
-    k = find(catalog == ordered_ids(i), 1);
-    if isempty(k)
-        k = numel(catalog) + find(extra == ordered_ids(i), 1);
-        labels(i) = local_prettify(ordered_ids(i));
-    else
-        labels(i) = readable(k);
-    end
-    colors(i, :) = style.palette(mod(k - 1, size(style.palette, 1)) + 1, :);
-    markers(i)   = markers_all(mod(k - 1, numel(markers_all)) + 1);
-end
-end
-
-function labels = local_combo_labels(tbl)
-%LOCAL_COMBO_LABELS Sorted unique "Model / ExoMode" labels present in a table.
-pairs = sortrows(unique(tbl(:, {'Model', 'ExoMode'}), 'rows'), {'Model', 'ExoMode'});
-labels = string(pairs.Model) + " / " + string(pairs.ExoMode);
-end
-
-function matrix = local_case_combo_matrix(tbl, case_ids, combo_labels, value_var)
-%LOCAL_CASE_COMBO_MATRIX Case-by-combination value matrix with NaN for absent rows.
-combo_ids = string(tbl.Model) + " / " + string(tbl.ExoMode);
-matrix    = nan(numel(case_ids), numel(combo_labels));
-for i = 1:numel(case_ids)
-    for j = 1:numel(combo_labels)
-        row = tbl(tbl.Case == case_ids(i) & combo_ids == combo_labels(j), :);
-
+    for j = 1:numel(method_ids)
+        row = tbl(tbl.Case == case_ids(i) & tbl.Method == method_ids(j), :);
         if height(row) == 1
-            matrix(i, j) = row.(value_var);
-        elseif height(row) > 1
-            error('PARTB_04:DuplicateSummaryRows', 'Found multiple rows for case %s and combination %s.', case_ids(i), combo_labels(j));
+            matrix(i, j) = double(row.(value_var));
         end
     end
 end
 end
 
-function [n_scen, n_expected] = local_scenario_support(stress_summary, case_id, combo)
-%LOCAL_SCENARIO_SUPPORT Represented and expected scenario counts for one combination.
-row = stress_summary(stress_summary.Case == case_id & stress_summary.Model == combo.model & stress_summary.ExoMode == combo.exo, :);
-
-if height(row) ~= 1
-    error('PARTB_04:StressRowCount', 'Expected one stress-summary row for case %s and combination %s, but found %d.', case_id, combo.label, height(row));
-end
-
-n_scen     = row.NumScenariosWithScores;
-n_expected = row.NumScenariosExpected;
-end
-
 function h = local_grouped_bars(ax, matrix, style)
-%LOCAL_GROUPED_BARS Grouped categorical bars colored by combination.
+%LOCAL_GROUPED_BARS Grouped categorical bars colored by method.
 h = bar(ax, (1:size(matrix, 1))', matrix);
 for j = 1:numel(h)
-    h(j).FaceColor = style.palette(mod(j - 1, size(style.palette, 1)) + 1, :);
+    h(j).FaceColor = style.method_colors(j, :);
     h(j).EdgeColor = 'none';
 end
 end
@@ -545,11 +357,11 @@ y_marker = y_limits(1) + 0.04 * (y_limits(2) - y_limits(1));
 for j = 1:numel(bars)
     incomplete = complete_matrix(:, j) == 0;
     if any(incomplete)
-        plot(ax, bars(j).XEndPoints(incomplete), repmat(y_marker, sum(incomplete), 1), 'x', 'Color', [0.835, 0.369, 0.000], 'LineWidth', 1.2, 'MarkerSize', 6, 'HandleVisibility', 'off');
+        plot(ax, bars(j).XEndPoints(incomplete), repmat(y_marker, sum(incomplete), 1), 'x', 'Color', style.unavailable_color, 'LineWidth', 1.2, 'MarkerSize', 6, 'HandleVisibility', 'off');
     end
 end
 if any(complete_matrix == 0, 'all')
-    text(ax, 0.99, 0.98, '{\times} incomplete coverage', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'top', 'FontName', style.font_name, 'FontSize', style.tick_font_size, 'Color', [0.835, 0.369, 0.000], 'Interpreter', 'tex');
+    text(ax, 0.99, 0.98, '{\times} withheld: incomplete coverage', 'Units', 'normalized', 'HorizontalAlignment', 'right', 'VerticalAlignment', 'top', 'FontName', style.font_name, 'FontSize', style.tick_font_size, 'Color', style.unavailable_color, 'Interpreter', 'tex');
 end
 hold(ax, 'off');
 end
@@ -567,34 +379,25 @@ series = struct('type', "line", 'x', [], 'y', [], 'lower', [], 'upper', [], 'col
 end
 
 function style = local_style()
-%LOCAL_STYLE Return robustness figure style constants using the shared palette.
+%LOCAL_STYLE Return figure style constants using the shared palette.
 style = struct();
-style.font_name          = "Arial";
-style.axis_font_size     = 9;
-style.tick_font_size     = 8;
-style.legend_font_size   = 8;
-style.panel_font_size    = 9;
-style.line_width         = 1.2;
-style.truth_line_width   = 1.3;
-style.marker_size        = 3.5;
-style.min_box_replicates = 5;
-style.box_color          = [0.45, 0.45, 0.45];
-style.unavailable_color  = [0.835, 0.369, 0.000];
-style.palette            = [
+style.font_name         = "Arial";
+style.axis_font_size    = 9;
+style.tick_font_size    = 8;
+style.legend_font_size  = 8;
+style.panel_font_size   = 9;
+style.line_width        = 1.2;
+style.truth_line_width  = 1.3;
+style.marker_size       = 3.5;
+style.unavailable_color = [0.835, 0.369, 0.000];
+style.method_colors     = [
     0.902, 0.624, 0.000;
-    0.337, 0.706, 0.914;
-    0.000, 0.620, 0.451;
     0.000, 0.447, 0.698;
-    0.835, 0.369, 0.000;
-    0.800, 0.475, 0.655];
+    0.000, 0.620, 0.451];
 end
 
 function local_apply_legend(ax, handles, labels, style, num_columns)
 %LOCAL_APPLY_LEGEND Attach a horizontal legend above an axes.
-if isempty(handles)
-    return;
-end
-
 lg = legend(ax, handles, labels);
 lg.Interpreter = 'tex';
 lg.FontName    = style.font_name;
@@ -608,19 +411,4 @@ end
 function local_panel_label(ax, label_text, style)
 %LOCAL_PANEL_LABEL Place a bold panel label in the top-left corner.
 text(ax, 0.04, 0.94, label_text, 'Units', 'normalized', 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'bold', 'Interpreter', 'tex', 'HorizontalAlignment', 'left', 'VerticalAlignment', 'top');
-end
-
-function label = local_prettify(case_id)
-%LOCAL_PRETTIFY Human-readable label for a stress case not in the known catalog.
-label = regexprep(string(case_id), '_+', ' ');
-label = strtrim(label);
-if strlength(label) > 0
-    label = upper(extractBefore(label, 2)) + extractAfter(label, 1);
-end
-end
-
-function token = local_safe_token(value)
-%LOCAL_SAFE_TOKEN Convert a value into a filename-safe token.
-token = string(regexprep(string(value), '[^A-Za-z0-9]+', '_'));
-token = regexprep(token, '^_+|_+$', '');
 end

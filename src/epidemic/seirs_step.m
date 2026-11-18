@@ -1,15 +1,18 @@
-function [next_state, stepper] = seirs_step(stepper, current_state, Rt_next)
+function [next_state, stepper, step_incidence] = seirs_step(stepper, current_state, Rt_next)
 
 %SEIRS_STEP Advance one reusable SEIRS stepper by one day.
 %
 %   Syntax:
-%       [next_state, stepper] = seirs_step(stepper, current_state, Rt_next)
+%       [next_state, stepper, step_incidence] = seirs_step(stepper, current_state, Rt_next)
 %
 %   Description:
 %       Advances the prepared URDME SEIRS model by one effective-Rt-driven
 %       one-day interval. The function preserves the project Rt convention
 %       by deriving beta from the current susceptible state and recovery
-%       rate before executing the four-compartment URDME model.
+%       rate before executing the four-compartment URDME model. For a
+%       stepper prepared with track_incidence = true, the onset-event
+%       counter starts each step at zero, so step_incidence is the number
+%       of entries into I (E-to-I transitions) during the step.
 %
 %   Inputs:
 %       stepper       - Reusable SEIRS stepper returned by seirs_init.
@@ -19,11 +22,13 @@ function [next_state, stepper] = seirs_step(stepper, current_state, Rt_next)
 %   Outputs:
 %       next_state - Advanced [S; E; I; R] state, 4-by-1.
 %       stepper    - Updated stepper with incremented call count.
+%       step_incidence - Entries into I during the step (scalar) for an
+%                        incidence-tracking stepper; empty otherwise.
 %
-%   See also PARTB_01_GENERATE_ROBUSTNESS_DATASETS, SEIRS_INIT.
+%   See also PARTB_01_PREPARE_DATASETS, SEIRS_INIT.
 %
 % A. M. Kaahin 2026-08-20
-% Modified: 2026-08-23
+% Modified: 2026-11-18
 
 %% 1. Prepare Inputs
 params = stepper.model_params;
@@ -60,7 +65,8 @@ umod.U       = [];
 %% 4. Advance State
 umod = urdme(umod);
 
-next_state = umod.U(1:4, end);
+next_state     = umod.U(1:4, end);
+step_incidence = umod.U(5:end, end);
 
 if any(~isfinite(next_state))
     error('EPIDEMIC:InvalidState', 'URDME produced a non-finite SEIRS state.');

@@ -1,9 +1,10 @@
-function stepper = sirs_init(model_params, sim_options)
+function stepper = sirs_init(model_params, sim_options, track_incidence)
 
 %SIRS_INIT Prepare a reusable one-day URDME SIRS stepper.
 %
 %   Syntax:
 %       stepper = sirs_init(model_params, sim_options)
+%       stepper = sirs_init(model_params, sim_options, track_incidence)
 %
 %   Description:
 %       Builds and prepares the URDME SIRS model once for repeated one-day
@@ -12,21 +13,34 @@ function stepper = sirs_init(model_params, sim_options)
 %       model structure is fixed and only the current state and effective Rt
 %       change at each step.
 %
+%       When track_incidence is true, the model gains a counter species C
+%       that receives one unit per S-to-I infection event, so a one-day
+%       step also reports the number of entries into I during that day
+%       (the solver-integrated infection flux under uds, the exact event
+%       count under ssa). The counter variant is compiled under its own
+%       model name. The default call is unchanged.
+%
 %   Inputs:
 %       model_params - Structure with gamma, xi, pop_size, and SIRS stepping
 %                      guard parameters.
 %       sim_options  - Structure with solver and seed fields.
+%       track_incidence - Optional logical; true adds the infection-event
+%                         counter (default false).
 %
 %   Outputs:
 %       stepper - Reusable SIRS stepper structure.
 %
-%   See also PARTA_01_GENERATE_TRUTH, PARTB_01_GENERATE_ROBUSTNESS_DATASETS,
+%   See also PARTA_01_GENERATE_TRUTH, PARTB_01_PREPARE_DATASETS,
 %            PARTC_02_SELECT_LOCAL_ORDERS, SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-09-26
+% Modified: 2026-11-18
 
 %% 1. Prepare Inputs
+if nargin < 3
+    track_incidence = false;
+end
+
 sim_options.solver = char(sim_options.solver);
 
 epidemic_dir = fileparts(mfilename('fullpath'));
@@ -39,9 +53,15 @@ workdir_cleanup  = onCleanup(@() cd(original_workdir));
 cd(build_dir);
 
 %% 2. Model Definition
-model_name = 'SIRS';
-species    = {'S', 'I', 'R'};
-reactions  = {'S > beta*S*I/vol > I', 'I > gammaI*I > R', 'R > deltaR*R > S'};
+if track_incidence
+    model_name = 'SIRSinc';
+    species    = {'S', 'I', 'R', 'C'};
+    reactions  = {'S > beta*S*I/vol > I+C', 'I > gammaI*I > R', 'R > deltaR*R > S'};
+else
+    model_name = 'SIRS';
+    species    = {'S', 'I', 'R'};
+    reactions  = {'S > beta*S*I/vol > I', 'I > gammaI*I > R', 'R > deltaR*R > S'};
+end
 
 rates.beta   = 'ldata_time';
 rates.gammaI = 'gdata';
@@ -53,7 +73,7 @@ num_species     = size(umod.N, 1);
 umod.D          = sparse(num_species, num_species);
 umod.sd         = 1;
 umod.tspan      = [0, 1];
-umod.u0         = [model_params.pop_size - 1; 1; 0];
+umod.u0         = [model_params.pop_size - 1; 1; zeros(num_species - 2, 1)];
 
 gdata       = [model_params.gamma; model_params.xi];
 beta_driver = repmat(model_params.gamma, 1, numel(umod.tspan));
@@ -85,6 +105,7 @@ stepper.umod_template = umod;
 stepper.model_params  = model_params;
 stepper.seed          = sim_options.seed;
 stepper.call_count    = 0;
+stepper.track_incidence = track_incidence;
 end
 
 %% 5. Local Functions

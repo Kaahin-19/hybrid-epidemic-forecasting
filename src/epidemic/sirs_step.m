@@ -1,15 +1,18 @@
-function [next_state, stepper] = sirs_step(stepper, current_state, Rt_next)
+function [next_state, stepper, step_incidence] = sirs_step(stepper, current_state, Rt_next)
 
 %SIRS_STEP Advance one reusable SIRS stepper by one day.
 %
 %   Syntax:
-%       [next_state, stepper] = sirs_step(stepper, current_state, Rt_next)
+%       [next_state, stepper, step_incidence] = sirs_step(stepper, current_state, Rt_next)
 %
 %   Description:
 %       Advances the prepared URDME SIRS model by one effective-Rt-driven
 %       one-day interval. The function updates the current state, Rt-derived
 %       transmission rate, execution seed, and URDME solve flags before
-%       returning the next SIRS state.
+%       returning the next SIRS state. For a stepper prepared with
+%       track_incidence = true, the infection-event counter starts each
+%       step at zero, so step_incidence is the number of entries into I
+%       during the step.
 %
 %   Inputs:
 %       stepper       - Reusable SIRS stepper returned by sirs_init.
@@ -19,13 +22,15 @@ function [next_state, stepper] = sirs_step(stepper, current_state, Rt_next)
 %   Outputs:
 %       next_state - Advanced [S, I, R] state.
 %       stepper    - Updated stepper with incremented call count.
+%       step_incidence - Entries into I during the step (scalar) for an
+%                        incidence-tracking stepper; empty otherwise.
 %
 %   See also PARTA_01_GENERATE_TRUTH, PARTA_03_RUN_FORECASTS,
-%            PARTB_01_GENERATE_ROBUSTNESS_DATASETS, PARTC_03_RUN_FORECASTS,
+%            PARTB_01_PREPARE_DATASETS, PARTC_03_RUN_FORECASTS,
 %            FORECAST_CLOSED, SIRS_INIT.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-08-23
+% Modified: 2026-11-18
 
 %% 1. Prepare Inputs
 params = stepper.model_params;
@@ -62,7 +67,8 @@ umod.U       = [];
 %% 4. Advance State
 umod = urdme(umod);
 
-next_state = umod.U(1:3, end);
+next_state     = umod.U(1:3, end);
+step_incidence = umod.U(4:end, end);
 
 if any(~isfinite(next_state))
     error('EPIDEMIC:InvalidState', 'URDME produced a non-finite SIRS state.');

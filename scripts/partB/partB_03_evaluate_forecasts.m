@@ -1,500 +1,403 @@
-%PARTB_03_EVALUATE_FORECASTS Evaluate synthetic robustness forecasts.
+%PARTB_03_EVALUATE_FORECASTS Evaluate infectious-population forecasts against synthetic truth.
 %
 %   Description:
-%       Scores every successfully saved robustness forecast artifact against
-%       its latent Rt_true windows and aggregates conditional forecast metrics
-%       through the replicate -> scenario -> stress-case hierarchy with equal
-%       scenario weighting. It combines those metrics with dataset-generation
-%       and forecast-execution support, reports explicit scenario coverage,
-%       withholds complete stress-level metrics when scenario coverage is
-%       incomplete, and compares valid Part B forecasts with their matched
-%       Part A synthetic baselines.
+%       Scores the persistence, oracle, and ARX infectious-population
+%       forecasts against the latent synthetic I_true(T+h) with
+%       COMPUTE_POINT_ERROR. Method comparisons use the matched set: forecast
+%       windows (condition, scenario, replicate, origin) in which all three
+%       methods produced a valid forecast, so every method is scored on
+%       identical cases.
+%
+%       Aggregation hierarchy (equal weights at every level):
+%           horizon -> window (mean over h)
+%           window -> replicate (mean over matched windows)
+%           replicate -> scenario (mean over replicates)
+%           scenario -> condition (mean over scenarios)
+%           condition -> method (mean over conditions)
+%       MAE is averaged directly. RMSE is the square root of the
+%       correspondingly averaged mean squared error. A condition-level
+%       aggregate is withheld (NaN, Complete = false) when any scenario has
+%       no matched window; method-level aggregates are withheld when any
+%       condition is incomplete.
+%
+%       Paired comparison: DeltaMAE = MAE_persistence - MAE_ARX per matched
+%       window (positive values favour ARX), excess error of each method
+%       over the oracle, and the share of windows in which ARX beats
+%       persistence. Robustness degradation compares each condition with the
+%       clean baseline at scenario level (each condition on its own matched
+%       set; supports are reported). Execution support counts every intended
+%       window by status for every condition, scenario, replicate, and
+%       method. Rt-driver errors are retained as a secondary diagnostic.
 %
 %   Workflow:
-%       1. Initialize evaluation paths and configuration.
-%       2. Load and validate the Script 2 forecast-execution status.
-%       3. Load the matching Part A baseline evaluation.
-%       4. Score each saved Part B forecast artifact.
-%       5. Build conditional forecast, scenario-coverage, execution, and
-%          degradation summaries.
-%       6. Save the evaluation artifact.
-%       7. Export the compact summary tables.
+%       1. Initialize configuration, identity, and output paths.
+%       2. Load and validate the generation and forecast statuses.
+%       3. Score every saved forecast artifact.
+%       4. Build support, accuracy, paired, and degradation summaries.
+%       5. Save the evaluation artifact.
+%       6. Export the summary tables.
 %
 %   See also PARTB_CONFIG, PARTB_02_RUN_FORECASTS,
-%            PARTB_04_GENERATE_FIGURES, COMPUTE_WIS, COMPUTE_POINT_ERROR,
-%            COMPUTE_INTERVAL_DIAGNOSTICS.
+%            PARTB_04_GENERATE_FIGURES, COMPUTE_POINT_ERROR.
 %
 % A. M. Kaahin 2026-07-18
-% Modified: 2026-09-26
+% Modified: 2026-11-18
 
 %% 1. Initialization
 clear; close all; clc;
 
-fprintf('=== Part B Forecast Evaluation ===\n');
+fprintf('=== Part B Infectious-Population Forecast Evaluation ===\n');
 
 cfg            = partB_config();
-forecast_dir   = cfg.partB.output.forecast_dir;
-evaluation_dir = cfg.partB.output.evaluation_dir;
-table_dir      = cfg.partB.output.table_dir;
-horizon        = cfg.forecast.horizon;
+pb             = cfg.partB;
+forecast_dir   = pb.output.forecast_dir;
+evaluation_dir = pb.output.evaluation_dir;
+table_dir      = pb.output.table_dir;
+identity       = local_identity(cfg);
+method_ids     = pb.method_ids;
+num_origins    = numel(cfg.forecast.min_window:cfg.forecast.step_size:(cfg.time.T_end - cfg.forecast.horizon));
 
 if ~exist(evaluation_dir, 'dir'), mkdir(evaluation_dir); end
 if ~exist(table_dir, 'dir'), mkdir(table_dir); end
 
-%% 2. Load and Validate Script 2 Status
+%% 2. Load and Validate Statuses
+generation = load(fullfile(pb.output.data_dir, 'partB_01_generation_status.mat'));
+local_require_identity(generation.identity, identity, 'generation status');
+
 status_path = fullfile(forecast_dir, 'partB_02_forecast_status.mat');
 if ~exist(status_path, 'file')
     error('PARTB_03:MissingForecastStatus', 'Missing Part B forecast status: %s. Run partB_02 first.', status_path);
 end
 
 status = load(status_path);
-if ~isfield(status, 'run_completed') || ~status.run_completed
-    error('PARTB_03:ForecastIncomplete', 'Part B forecasting did not complete (run_completed is not true).');
+local_require_identity(status.identity, identity, 'forecast status');
+
+if ~status.run_completed
+    error('PARTB_03:ForecastIncomplete', 'Part B forecasting did not complete (run_completed is false).');
 end
 
-forecast_status     = status.forecast_status;
-availability_report = status.availability_report;
-status_values       = string({forecast_status.status});
-
-if any(status_values == "pending")
-    error('PARTB_03:PendingForecasts', '%d forecast attempts remain "pending" while run_completed is true.', sum(status_values == "pending"));
+forecast_status = status.forecast_status;
+if any([forecast_status.status] == "pending")
+    error('PARTB_03:PendingForecasts', 'Forecast status contains pending datasets although run_completed is true.');
 end
 
-saved = forecast_status(status_values == "saved");
-if isempty(saved)
-    error('PARTB_03:NoSavedForecasts', 'No Part B forecast-status entries are marked "saved".');
-end
+%% 3. Score Saved Forecast Artifacts
+[window_scores, horizon_scores] = local_score_all(forecast_status, forecast_dir, identity, method_ids);
+fprintf('Scored %d window-method rows (%d matched windows).\n', height(window_scores), sum(window_scores.Matched) / numel(method_ids));
 
-status_counts = struct('attempts', numel(forecast_status), 'saved', sum(status_values == "saved"), 'no_windows', sum(status_values == "no_windows"), 'domain_failure', sum(status_values == "domain_failure"), 'pending', sum(status_values == "pending"));
-fprintf('Status: %d attempts (%d saved, %d no_windows, %d domain_failure, %d pending).\n', status_counts.attempts, status_counts.saved, status_counts.no_windows, status_counts.domain_failure, status_counts.pending);
-generation = load(fullfile(cfg.partB.output.data_dir, 'partB_01_generation_status.mat'));
-
-%% 3. Load Part A Baseline
-partA_eval_path = fullfile(cfg.output.score_dir, 'partA_04_evaluation_results.mat');
-if ~exist(partA_eval_path, 'file')
-    error('PARTB_03:MissingPartABaseline', 'Missing Part A evaluation artifact: %s. Run partA_04 first.', partA_eval_path);
-end
-
-partA = load(partA_eval_path);
-if ~all(isfield(partA, {'window_scores', 'horizon_scores', 'summaries'}))
-    error('PARTB_03:InvalidPartABaseline', 'Part A evaluation artifact must contain window_scores, horizon_scores, and summaries.');
-end
-
-%% 4. Score Saved Forecast Artifacts
-[window_scores, horizon_scores, interval_scores] = local_score_all(saved, forecast_dir, horizon);
-
-fprintf('Evaluated %d forecast artifacts: %d window rows, %d horizon rows, %d interval rows.\n', numel(saved), height(window_scores), height(horizon_scores), height(interval_scores));
-
-%% 5. Summaries
+%% 4. Summaries
 summaries = struct();
-summaries.replicate_summary = local_replicate_summary(horizon_scores, horizon);
-summaries.scenario_summary  = local_scenario_summary(summaries.replicate_summary, generation.generation_status, forecast_status, cfg);
-summaries.stress_summary    = local_stress_summary(summaries.scenario_summary);
-summaries.horizon_summary   = local_horizon_summary(horizon_scores, summaries.stress_summary);
-summaries.interval_summary  = local_interval_summary(interval_scores, summaries.stress_summary);
-summaries.generation_summary = local_generation_summary(generation.generation_status);
-summaries.execution_summary = local_execution_summary(forecast_status);
+summaries.support_summary    = local_support_summary(window_scores, forecast_status, method_ids, num_origins);
+summaries.support_condition  = local_aggregate(summaries.support_summary, {'Case', 'Method'}, {'IntendedWindows', @sum, 'IntendedWindows'; 'Ok', @sum, 'Ok'; 'Matched', @sum, 'Matched'; 'EstimationUnavailable', @sum, 'EstimationUnavailable'; 'InsufficientHistory', @sum, 'InsufficientHistory'; 'DomainFailure', @sum, 'DomainFailure'; 'ForecastFailure', @sum, 'ForecastFailure'; 'DatasetUnavailable', @sum, 'DatasetUnavailable'});
+summaries.estimation_summary = local_estimation_summary(generation.generation_status);
 
-[summaries.degradation_scenario_summary, summaries.degradation_summary, num_undefined_ratios] = local_degradation_summary(horizon_scores, partA.horizon_scores, summaries.stress_summary);
+summaries.replicate_summary  = local_replicate_summary(window_scores);
+summaries.scenario_summary   = local_scenario_summary(summaries.replicate_summary, cfg, method_ids);
+summaries.condition_summary  = local_condition_summary(summaries.scenario_summary, numel(cfg.scenarios));
+summaries.method_summary     = local_method_summary(summaries.condition_summary, numel(pb.robustness_cases));
+summaries.horizon_summary    = local_horizon_summary(horizon_scores, summaries.condition_summary);
 
-fprintf('Baseline comparison: %d Part B horizon rows matched to Part A; %d undefined WIS ratios (Part A WIS == 0).\n', height(horizon_scores), num_undefined_ratios);
+[paired_windows, summaries.paired_scenario_summary, summaries.paired_condition_summary] = local_paired_summary(window_scores, cfg);
+[summaries.degradation_scenario_summary, summaries.degradation_summary] = local_degradation_summary(summaries.scenario_summary, summaries.paired_scenario_summary, numel(cfg.scenarios));
 
-%% 6. Save Evaluation Artifact
-evaluation_snapshot = local_evaluation_snapshot(cfg, partA_eval_path, status_counts);
+%% 5. Save Evaluation Artifact
+evaluation_metadata = struct('num_origins_per_dataset', num_origins, 'num_datasets_attempted', numel(forecast_status), 'num_forecast_artifacts', sum([forecast_status.status] == "saved"), 'source_forecasts', [forecast_status([forecast_status.status] == "saved").output_filename]', 'matched_definition', "all three methods ok in the same window", 'weighting', "equal weights: horizon->window->replicate->scenario->condition->method");
 
 evaluation_artifact = fullfile(evaluation_dir, 'partB_03_evaluation_results.mat');
-save(evaluation_artifact, 'window_scores', 'horizon_scores', 'interval_scores', 'summaries', 'availability_report', 'evaluation_snapshot');
+snapshot = pb.snapshot;
+save(evaluation_artifact, 'identity', 'snapshot', 'window_scores', 'horizon_scores', 'paired_windows', 'summaries', 'evaluation_metadata');
 fprintf('Evaluation artifact saved to: %s\n', evaluation_artifact);
 
-%% 7. Save Summary Tables
+%% 6. Save Summary Tables
+local_write_table(table_dir, 'partB_03_window_scores.csv', window_scores);
+local_write_table(table_dir, 'partB_03_support_summary.csv', summaries.support_summary);
+local_write_table(table_dir, 'partB_03_support_condition_summary.csv', summaries.support_condition);
+local_write_table(table_dir, 'partB_03_estimation_summary.csv', summaries.estimation_summary);
 local_write_table(table_dir, 'partB_03_replicate_summary.csv', summaries.replicate_summary);
 local_write_table(table_dir, 'partB_03_scenario_summary.csv', summaries.scenario_summary);
-local_write_table(table_dir, 'partB_03_stress_summary.csv', summaries.stress_summary);
+local_write_table(table_dir, 'partB_03_condition_summary.csv', summaries.condition_summary);
+local_write_table(table_dir, 'partB_03_method_summary.csv', summaries.method_summary);
 local_write_table(table_dir, 'partB_03_horizon_summary.csv', summaries.horizon_summary);
-local_write_table(table_dir, 'partB_03_interval_summary.csv', summaries.interval_summary);
-local_write_table(table_dir, 'partB_03_generation_summary.csv', summaries.generation_summary);
-local_write_table(table_dir, 'partB_03_execution_summary.csv', summaries.execution_summary);
+local_write_table(table_dir, 'partB_03_paired_scenario_summary.csv', summaries.paired_scenario_summary);
+local_write_table(table_dir, 'partB_03_paired_condition_summary.csv', summaries.paired_condition_summary);
 local_write_table(table_dir, 'partB_03_degradation_scenario_summary.csv', summaries.degradation_scenario_summary);
 local_write_table(table_dir, 'partB_03_degradation_summary.csv', summaries.degradation_summary);
 
-fprintf('=== Part B Forecast Evaluation Complete ===\n\n');
+fprintf('=== Part B Infectious-Population Forecast Evaluation Complete ===\n\n');
 
-%% 8. Local Functions
-function [window_scores, horizon_scores, interval_scores] = local_score_all(saved, forecast_dir, horizon)
-%LOCAL_SCORE_ALL Score every saved forecast artifact into raw score tables.
-num_saved = numel(saved);
-window_blocks   = cell(num_saved, 1);
-horizon_blocks  = cell(num_saved, 1);
-interval_blocks = cell(num_saved, 1);
+%% 7. Local Functions
+function identity = local_identity(cfg)
+%LOCAL_IDENTITY Experiment, configuration, and source identity shared by all Part B artifacts.
+identity = struct('experiment_id', cfg.partB.experiment_id, 'protocol_version', cfg.partB.protocol_version, 'config_id', cfg.partB.config_id, 'source_id', cfg.partB.provenance.source_id);
+end
 
-for i = 1:num_saved
-    entry         = saved(i);
-    artifact_path = fullfile(forecast_dir, char(entry.output_filename));
+function local_require_identity(found, expected, label)
+%LOCAL_REQUIRE_IDENTITY Reject inputs produced under a different protocol, configuration, or source.
+if ~isequal(found, expected)
+    error('PARTB_03:IncompatibleArtifact', ['%s was produced under protocol %s, config_id %s, source_id %s; the current run expects protocol %s, ' ...
+        'config_id %s, source_id %s. Rerun with ./run_partB_pipeline.sh --fresh.'], label, found.protocol_version, found.config_id, found.source_id, expected.protocol_version, expected.config_id, expected.source_id);
+end
+end
 
-    if ~exist(artifact_path, 'file')
-        error('PARTB_03:MissingForecastArtifact', 'Status marks %s as "saved" but the forecast artifact is missing: %s.', entry.output_filename, artifact_path);
+function [window_scores, horizon_scores] = local_score_all(forecast_status, forecast_dir, identity, method_ids)
+%LOCAL_SCORE_ALL Window- and horizon-level infectious-population errors for every saved artifact.
+saved = forecast_status([forecast_status.status] == "saved");
+window_parts  = cell(numel(saved), 1);
+horizon_parts = cell(numel(saved), 1);
+
+for i = 1:numel(saved)
+    artifact = load(fullfile(forecast_dir, saved(i).output_filename));
+    local_require_identity(artifact.identity, identity, saved(i).output_filename);
+    [window_parts{i}, horizon_parts{i}] = local_score_artifact(artifact, method_ids);
+end
+
+window_scores  = vertcat(window_parts{:});
+horizon_scores = vertcat(horizon_parts{:});
+end
+
+function [window_tbl, horizon_tbl] = local_score_artifact(artifact, method_ids)
+%LOCAL_SCORE_ARTIFACT Score one forecast artifact; failed methods keep their status with NaN metrics.
+windows     = artifact.windows;
+num_methods = numel(method_ids);
+num_rows    = numel(windows) * num_methods;
+H           = numel(windows(1).truth_I);
+
+WindowDay = zeros(num_rows, 1);
+Method    = strings(num_rows, 1);
+Status    = strings(num_rows, 1);
+ErrorId   = strings(num_rows, 1);
+Matched   = false(num_rows, 1);
+MAE       = NaN(num_rows, 1);
+MSE       = NaN(num_rows, 1);
+RMSE      = NaN(num_rows, 1);
+RtDriverMAE = NaN(num_rows, 1);
+
+h_rows = cell(num_rows, 1);
+row = 0;
+
+for w = 1:numel(windows)
+    win = windows(w);
+    matched = all(win.status == "ok");
+
+    for m = 1:num_methods
+        row = row + 1;
+        WindowDay(row) = win.window_day;
+        Method(row)    = method_ids(m);
+        Status(row)    = win.status(m);
+        ErrorId(row)   = win.error_id(m);
+        Matched(row)   = matched;
+
+        if win.status(m) ~= "ok"
+            continue;
+        end
+
+        point_error = compute_point_error(win.truth_I, win.I_pred(:, m));
+        rt_error    = abs(win.drivers(:, m) - win.truth_Rt_drivers);
+
+        MAE(row)         = point_error.mae;
+        MSE(row)         = mean(point_error.squared_error);
+        RMSE(row)        = point_error.rmse;
+        RtDriverMAE(row) = mean(rt_error);
+
+        h_rows{row} = table(repmat(win.window_day, H, 1), repmat(method_ids(m), H, 1), (1:H)', repmat(matched, H, 1), win.truth_I, win.I_pred(:, m), point_error.error, point_error.absolute_error, point_error.squared_error, rt_error, ...
+            'VariableNames', {'WindowDay', 'Method', 'HorizonIdx', 'Matched', 'TruthI', 'PredI', 'Error', 'AbsoluteError', 'SquaredError', 'RtDriverAbsError'});
     end
-
-    artifact = load(artifact_path);
-    local_validate_artifact(artifact);
-    local_check_identity(artifact, entry);
-
-    [window_blocks{i}, horizon_blocks{i}, interval_blocks{i}] = local_score_artifact(artifact, horizon);
 end
 
-window_scores   = vertcat(window_blocks{:});
-horizon_scores  = vertcat(horizon_blocks{:});
-interval_scores = vertcat(interval_blocks{:});
+identity_columns = @(n) table(repmat(artifact.case_id, n, 1), repmat(artifact.scenario_id, n, 1), repmat(artifact.replicate_id, n, 1), 'VariableNames', {'Case', 'Scenario', 'Replicate'});
+
+window_tbl  = [identity_columns(num_rows), table(WindowDay, Method, Status, ErrorId, Matched, MAE, MSE, RMSE, RtDriverMAE)];
+horizon_tbl = vertcat(h_rows{:});
+horizon_tbl = [identity_columns(height(horizon_tbl)), horizon_tbl];
 end
 
-function local_validate_artifact(artifact)
-%LOCAL_VALIDATE_ARTIFACT Fail fast if required forecast-artifact fields are absent.
-required = {'case_id', 'scenario_id', 'replicate_id', 'model_type', 'exo_mode', 'selected_configuration', 'wis_alphas', 'results'};
-if ~all(isfield(artifact, required))
-    error('PARTB_03:InvalidForecastArtifact', 'Forecast artifact is missing one or more required fields.');
-end
-
-result_fields = {'window_day', 'window_day_idx', 'time_horizon', 'truth_Rt_window', 'forecast_median', 'forecast_lower', 'forecast_upper'};
-if ~all(isfield(artifact.results, result_fields))
-    error('PARTB_03:InvalidForecastResult', 'A results entry is missing one or more required fields.');
-end
-end
-
-function local_check_identity(artifact, entry)
-%LOCAL_CHECK_IDENTITY Fail fast if artifact identity disagrees with the status entry.
-matches = string(artifact.case_id) == string(entry.case_id) && string(artifact.scenario_id) == string(entry.scenario_id) && string(artifact.replicate_id) == string(entry.replicate_id) && string(artifact.model_type) == string(entry.model_type) && string(artifact.exo_mode) == string(entry.exo_mode);
-if ~matches
-    error('PARTB_03:IdentityMismatch', 'Forecast artifact identity disagrees with the Script 2 status entry for %s.', entry.output_filename);
-end
-end
-
-function [window_tbl, horizon_tbl, interval_tbl] = local_score_artifact(artifact, horizon)
-%LOCAL_SCORE_ARTIFACT Score one robustness forecast artifact against latent truth windows.
-case_id      = string(artifact.case_id);
-scenario_id  = string(artifact.scenario_id);
-replicate_id = string(artifact.replicate_id);
-model_type   = string(artifact.model_type);
-exo_mode     = string(artifact.exo_mode);
-alphas       = artifact.wis_alphas(:);
-K            = numel(alphas);
-results      = artifact.results;
-
-num_windows   = numel(results);
-window_rows   = cell(num_windows, 1);
-horizon_rows  = cell(num_windows, 1);
-interval_rows = cell(num_windows, 1);
-
-for w = 1:num_windows
-    result = results(w);
-
-    truth_Rt = result.truth_Rt_window(:);
-    pred_Rt  = result.forecast_median(:);
-    lower_Rt = result.forecast_lower;
-    upper_Rt = result.forecast_upper;
-    H        = numel(truth_Rt);
-
-    local_validate_scoring(truth_Rt, pred_Rt, lower_Rt, upper_Rt, result.time_horizon, H, K, horizon);
-
-    wis      = compute_wis(truth_Rt, pred_Rt, lower_Rt, upper_Rt, alphas);
-    point    = compute_point_error(truth_Rt, pred_Rt);
-    interval = compute_interval_diagnostics(truth_Rt, lower_Rt, upper_Rt, alphas);
-
-    horizon_idx  = (1:H)';
-    forecast_day = result.time_horizon(:);
-    window_day   = result.window_day;
-    window_idx   = result.window_day_idx;
-
-    window_rows{w} = table(case_id, scenario_id, replicate_id, model_type, exo_mode, window_day, window_idx, mean(wis), point.rmse, point.mae, mean(interval.coverage_mean), mean(interval.width_mean), 'VariableNames', {'Case', 'Scenario', 'Replicate', 'Model', 'ExoMode', 'WindowDay', 'WindowDayIdx', 'WindowWIS', 'WindowRMSE', 'WindowMAE', 'MeanCoverage', 'MeanIntervalWidth'});
-
-    horizon_rows{w} = table(repmat(case_id, H, 1), repmat(scenario_id, H, 1), repmat(replicate_id, H, 1), repmat(model_type, H, 1), repmat(exo_mode, H, 1), repmat(window_day, H, 1), repmat(window_idx, H, 1), horizon_idx, forecast_day, truth_Rt, pred_Rt, point.error, point.absolute_error, point.squared_error, wis, interval.coverage_mean, interval.width_mean, 'VariableNames', {'Case', 'Scenario', 'Replicate', 'Model', 'ExoMode', 'WindowDay', 'WindowDayIdx', 'HorizonIdx', 'ForecastDay', 'Truth_Rt', 'Median_Forecast', 'Error', 'AbsoluteError', 'SquaredError', 'WIS', 'MeanCoverage', 'MeanIntervalWidth'});
-
-    interval_rows{w} = table(repmat(case_id, K, 1), repmat(scenario_id, K, 1), repmat(replicate_id, K, 1), repmat(model_type, K, 1), repmat(exo_mode, K, 1), repmat(window_day, K, 1), repmat(window_idx, K, 1), alphas, 1 - alphas, mean(interval.coverage, 1)', mean(interval.interval_width, 1)', 'VariableNames', {'Case', 'Scenario', 'Replicate', 'Model', 'ExoMode', 'WindowDay', 'WindowDayIdx', 'Alpha', 'NominalCoverage', 'Coverage', 'IntervalWidth'});
-end
-
-window_tbl   = vertcat(window_rows{:});
-horizon_tbl  = vertcat(horizon_rows{:});
-interval_tbl = vertcat(interval_rows{:});
-end
-
-function local_validate_scoring(truth, pred, lower, upper, time_horizon, H, K, horizon)
-%LOCAL_VALIDATE_SCORING Fail fast on malformed score inputs for one window.
-if numel(pred) ~= H || numel(time_horizon) ~= H
-    error('PARTB_03:DimensionMismatch', 'Truth, median, and time-horizon lengths disagree.');
-end
-if H ~= horizon
-    error('PARTB_03:HorizonMismatch', 'Saved horizon length %d differs from configured horizon %d.', H, horizon);
-end
-if ~isequal(size(lower), [H, K]) || ~isequal(size(upper), [H, K])
-    error('PARTB_03:IntervalShape', 'Interval-bound dimensions disagree with truth length or wis_alphas count.');
-end
-if ~all(isfinite(truth)) || ~all(isfinite(pred)) || ~all(isfinite(lower(:))) || ~all(isfinite(upper(:)))
-    error('PARTB_03:NonFiniteScoreInput', 'Score inputs contain non-finite values.');
-end
-if ~all(pred > 0)
-    error('PARTB_03:NonPositiveMedian', 'Forecast medians must be positive.');
-end
-if any(lower(:) > upper(:))
-    error('PARTB_03:LowerAboveUpper', 'A lower interval bound exceeds its upper bound.');
-end
-end
-
-function replicate_summary = local_replicate_summary(horizon_scores, horizon)
-%LOCAL_REPLICATE_SUMMARY Aggregate horizon rows to one row per replicate.
-keys = {'Case', 'Scenario', 'Replicate', 'Model', 'ExoMode'};
-replicate_summary = local_aggregate(horizon_scores, keys, { ...
-    'MeanWIS',           @mean,              'WIS'; ...
-    'MAE',               @mean,              'AbsoluteError'; ...
-    'RMSE',              @(x) sqrt(mean(x)), 'SquaredError'; ...
-    'MeanCoverage',      @mean,              'MeanCoverage'; ...
-    'MeanIntervalWidth', @mean,              'MeanIntervalWidth'; ...
-    'NumHorizonRows',    @numel,             'WIS'});
-replicate_summary.NumWindows = replicate_summary.NumHorizonRows / horizon;
-replicate_summary = movevars(replicate_summary, 'NumWindows', 'Before', 'NumHorizonRows');
-end
-
-function scenario_summary = local_scenario_summary(replicate_summary, generation_status, forecast_status, cfg)
-%LOCAL_SCENARIO_SUMMARY Combine scenario execution support with conditional forecast metrics.
-keys = {'Case', 'Scenario', 'Model', 'ExoMode'};
-conditional = local_aggregate(replicate_summary, keys, { ...
-    'NumScoredReplicates', @numel,           'MeanWIS'; ...
-    'MeanWIS',           @mean,              'MeanWIS'; ...
-    'StdWIS',            @local_sample_std,  'MeanWIS'; ...
-    'MedianWIS',         @median,            'MeanWIS'; ...
-    'MeanMAE',           @mean,              'MAE'; ...
-    'MeanRMSE',          @mean,              'RMSE'; ...
-    'MeanCoverage',      @mean,              'MeanCoverage'; ...
-    'MeanIntervalWidth', @mean,              'MeanIntervalWidth'});
-
-case_ids     = string({cfg.partB.robustness_cases.case_id})';
-scenario_ids = string({cfg.scenarios.id})';
-combo_table  = unique(table(string({forecast_status.model_type})', string({forecast_status.exo_mode})', 'VariableNames', {'Model', 'ExoMode'}), 'rows');
-num_rows     = numel(case_ids) * numel(scenario_ids) * height(combo_table);
-
-Case                     = strings(num_rows, 1);
-Scenario                 = strings(num_rows, 1);
-Model                    = strings(num_rows, 1);
-ExoMode                  = strings(num_rows, 1);
-ReplicatesExpected       = zeros(num_rows, 1);
-ReplicatesGenerated      = zeros(num_rows, 1);
-GenerationDomainFailures = zeros(num_rows, 1);
-ForecastAttempts         = zeros(num_rows, 1);
-SuccessfulForecasts      = zeros(num_rows, 1);
-NoValidWindows           = zeros(num_rows, 1);
-ForecastDomainFailures   = zeros(num_rows, 1);
-
-generation_case     = string({generation_status.case_id})';
-generation_scenario = string({generation_status.scenario_id})';
-generation_outcome  = string({generation_status.status})';
-forecast_case       = string({forecast_status.case_id})';
-forecast_scenario   = string({forecast_status.scenario_id})';
-forecast_model      = string({forecast_status.model_type})';
-forecast_exo        = string({forecast_status.exo_mode})';
-forecast_outcome    = string({forecast_status.status})';
+function support = local_support_summary(window_scores, forecast_status, method_ids, num_origins)
+%LOCAL_SUPPORT_SUMMARY Status counts of every intended window per condition, scenario, replicate, and method.
+num_rows = numel(forecast_status) * numel(method_ids);
+Case = strings(num_rows, 1); Scenario = strings(num_rows, 1); Replicate = strings(num_rows, 1); Method = strings(num_rows, 1); DatasetStatus = strings(num_rows, 1);
+IntendedWindows = zeros(num_rows, 1); Ok = zeros(num_rows, 1); Matched = zeros(num_rows, 1); EstimationUnavailable = zeros(num_rows, 1);
+InsufficientHistory = zeros(num_rows, 1); DomainFailure = zeros(num_rows, 1); ForecastFailure = zeros(num_rows, 1); DatasetUnavailable = zeros(num_rows, 1);
 
 row = 0;
-for ci = 1:numel(case_ids)
-    for si = 1:numel(scenario_ids)
-        generation_mask = generation_case == case_ids(ci) & generation_scenario == scenario_ids(si);
+for i = 1:numel(forecast_status)
+    entry = forecast_status(i);
+    mask_dataset = window_scores.Case == entry.case_id & window_scores.Scenario == entry.scenario_id & window_scores.Replicate == entry.replicate_id;
 
-        for mi = 1:height(combo_table)
-            row = row + 1;
-            forecast_mask = forecast_case == case_ids(ci) & forecast_scenario == scenario_ids(si) & forecast_model == combo_table.Model(mi) & forecast_exo == combo_table.ExoMode(mi);
+    for m = 1:numel(method_ids)
+        row = row + 1;
+        rows = window_scores(mask_dataset & window_scores.Method == method_ids(m), :);
 
-            Case(row)                     = case_ids(ci);
-            Scenario(row)                 = scenario_ids(si);
-            Model(row)                    = combo_table.Model(mi);
-            ExoMode(row)                  = combo_table.ExoMode(mi);
-            ReplicatesExpected(row)       = sum(generation_mask);
-            ReplicatesGenerated(row)      = sum(generation_outcome(generation_mask) == "saved");
-            GenerationDomainFailures(row) = sum(generation_outcome(generation_mask) == "domain_failure");
-            ForecastAttempts(row)         = sum(forecast_mask);
-            SuccessfulForecasts(row)      = sum(forecast_outcome(forecast_mask) == "saved");
-            NoValidWindows(row)           = sum(forecast_outcome(forecast_mask) == "no_windows");
-            ForecastDomainFailures(row)   = sum(forecast_outcome(forecast_mask) == "domain_failure");
+        Case(row) = entry.case_id; Scenario(row) = entry.scenario_id; Replicate(row) = entry.replicate_id; Method(row) = method_ids(m);
+        DatasetStatus(row)   = entry.status;
+        IntendedWindows(row) = num_origins;
+
+        if entry.status ~= "saved"
+            DatasetUnavailable(row) = num_origins;
+            continue;
         end
+
+        Ok(row)                    = sum(rows.Status == "ok");
+        Matched(row)               = sum(rows.Matched);
+        EstimationUnavailable(row) = sum(rows.Status == "estimation_unavailable");
+        InsufficientHistory(row)   = sum(rows.Status == "insufficient_history");
+        DomainFailure(row)         = sum(rows.Status == "domain_failure");
+        ForecastFailure(row)       = sum(rows.Status == "forecast_failure");
     end
 end
 
-support = table(Case, Scenario, Model, ExoMode, ReplicatesExpected, ReplicatesGenerated, GenerationDomainFailures, ForecastAttempts, SuccessfulForecasts, NoValidWindows, ForecastDomainFailures);
-support.ForecastSuccessRate = support.SuccessfulForecasts ./ support.ForecastAttempts;
-support.HasValidScore       = support.SuccessfulForecasts > 0;
+support = table(Case, Scenario, Replicate, Method, DatasetStatus, IntendedWindows, Ok, Matched, EstimationUnavailable, InsufficientHistory, DomainFailure, ForecastFailure, DatasetUnavailable);
 
-scenario_summary = outerjoin(support, conditional, 'Keys', keys, 'MergeKeys', true, 'Type', 'left');
-if any(scenario_summary.HasValidScore ~= (scenario_summary.NumScoredReplicates > 0)) || any(scenario_summary.SuccessfulForecasts(scenario_summary.HasValidScore) ~= scenario_summary.NumScoredReplicates(scenario_summary.HasValidScore))
-    error('PARTB_03:ScoredForecastCountMismatch', 'Saved forecast counts disagree with scored replicate counts.');
+if any(support.Ok + support.EstimationUnavailable + support.InsufficientHistory + support.DomainFailure + support.ForecastFailure + support.DatasetUnavailable ~= support.IntendedWindows)
+    error('PARTB_03:SupportCountMismatch', 'Window status counts do not add up to the intended windows.');
 end
-scenario_summary = removevars(scenario_summary, 'NumScoredReplicates');
-scenario_summary = sortrows(scenario_summary, keys);
 end
 
-function stress_summary = local_stress_summary(scenario_summary)
-%LOCAL_STRESS_SUMMARY Aggregate scenario support and complete stress metrics with equal scenario weight.
-keys = {'Case', 'Model', 'ExoMode'};
-stress_summary = local_aggregate(scenario_summary, keys, { ...
-    'NumScenariosExpected',       @numel, 'Scenario'; ...
-    'NumScenariosWithScores',     @sum,   'HasValidScore'; ...
-    'ReplicatesExpected',         @sum,   'ReplicatesExpected'; ...
-    'ReplicatesGenerated',        @sum,   'ReplicatesGenerated'; ...
-    'GenerationDomainFailures',   @sum,   'GenerationDomainFailures'; ...
-    'ForecastAttempts',           @sum,   'ForecastAttempts'; ...
-    'SuccessfulForecasts',        @sum,   'SuccessfulForecasts'; ...
-    'NoValidWindows',             @sum,   'NoValidWindows'; ...
-    'ForecastDomainFailures',     @sum,   'ForecastDomainFailures'; ...
-    'MeanWIS',           @mean,  'MeanWIS'; ...
-    'MeanMAE',           @mean,  'MeanMAE'; ...
-    'MeanRMSE',          @mean,  'MeanRMSE'; ...
-    'MeanCoverage',      @mean,  'MeanCoverage'; ...
-    'MeanIntervalWidth', @mean,  'MeanIntervalWidth'});
-stress_summary.ForecastSuccessRate       = stress_summary.SuccessfulForecasts ./ stress_summary.ForecastAttempts;
-stress_summary.CompleteScenarioCoverage = stress_summary.NumScenariosWithScores == stress_summary.NumScenariosExpected;
+function estimation_summary = local_estimation_summary(generation_status)
+%LOCAL_ESTIMATION_SUMMARY Per-dataset generation and estimation outcome.
+estimation_summary = table([generation_status.case_id]', [generation_status.scenario_id]', [generation_status.replicate_id]', [generation_status.status]', [generation_status.estimation_failure_idx]', [generation_status.zero_incidence_days]', [generation_status.valid_rt_estimates]', ...
+    'VariableNames', {'Case', 'Scenario', 'Replicate', 'GenerationStatus', 'EstimationFailureIdx', 'ZeroIncidenceDays', 'ValidRtEstimates'});
+end
 
-incomplete = ~stress_summary.CompleteScenarioCoverage;
-metric_names = {'MeanWIS', 'MeanMAE', 'MeanRMSE', 'MeanCoverage', 'MeanIntervalWidth'};
+function replicate_summary = local_replicate_summary(window_scores)
+%LOCAL_REPLICATE_SUMMARY Matched-window mean errors per replicate and method.
+matched = window_scores(window_scores.Matched, :);
+replicate_summary = local_aggregate(matched, {'Case', 'Scenario', 'Replicate', 'Method'}, { ...
+    'NumMatchedWindows', @numel, 'MAE'; ...
+    'MAE',               @mean,  'MAE'; ...
+    'MSE',               @mean,  'MSE'; ...
+    'RtDriverMAE',       @mean,  'RtDriverMAE'});
+replicate_summary.RMSE = sqrt(replicate_summary.MSE);
+end
+
+function scenario_summary = local_scenario_summary(replicate_summary, cfg, method_ids)
+%LOCAL_SCENARIO_SUMMARY Equal-weight replicate means per condition, scenario, and method (all slots listed).
+scored = local_aggregate(replicate_summary, {'Case', 'Scenario', 'Method'}, { ...
+    'NumReplicatesScored', @numel, 'MAE'; ...
+    'NumMatchedWindows',   @sum,   'NumMatchedWindows'; ...
+    'MAE',                 @mean,  'MAE'; ...
+    'MSE',                 @mean,  'MSE'; ...
+    'RtDriverMAE',         @mean,  'RtDriverMAE'});
+scored.RMSE = sqrt(scored.MSE);
+
+[case_grid, scenario_grid, method_grid] = ndgrid([cfg.partB.robustness_cases.case_id], [cfg.scenarios.id], method_ids);
+replicates_expected = repmat([cfg.partB.robustness_cases.num_replicates]', 1, numel(cfg.scenarios), numel(method_ids));
+grid = table(case_grid(:), scenario_grid(:), method_grid(:), replicates_expected(:), 'VariableNames', {'Case', 'Scenario', 'Method', 'ReplicatesExpected'});
+
+scenario_summary = outerjoin(grid, scored, 'Keys', {'Case', 'Scenario', 'Method'}, 'MergeKeys', true, 'Type', 'left');
+scenario_summary.NumReplicatesScored(isnan(scenario_summary.NumReplicatesScored)) = 0;
+scenario_summary.NumMatchedWindows(isnan(scenario_summary.NumMatchedWindows))     = 0;
+scenario_summary.HasMatchedWindows = scenario_summary.NumMatchedWindows > 0;
+scenario_summary = sortrows(scenario_summary, {'Case', 'Scenario', 'Method'});
+end
+
+function condition_summary = local_condition_summary(scenario_summary, num_scenarios)
+%LOCAL_CONDITION_SUMMARY Equal-weight scenario means; withheld when scenario coverage is incomplete.
+condition_summary = local_aggregate(scenario_summary, {'Case', 'Method'}, { ...
+    'NumScenariosExpected',   @numel, 'Scenario'; ...
+    'NumScenariosScored',     @sum,   'HasMatchedWindows'; ...
+    'NumMatchedWindows',      @sum,   'NumMatchedWindows'; ...
+    'MAE',                    @mean,  'MAE'; ...
+    'MSE',                    @mean,  'MSE'; ...
+    'RtDriverMAE',            @mean,  'RtDriverMAE'});
+condition_summary.RMSE     = sqrt(condition_summary.MSE);
+condition_summary.Complete = condition_summary.NumScenariosScored == num_scenarios;
+
+metric_names = {'MAE', 'MSE', 'RMSE', 'RtDriverMAE'};
 for i = 1:numel(metric_names)
-    stress_summary.(metric_names{i})(incomplete) = NaN;
+    condition_summary.(metric_names{i})(~condition_summary.Complete) = NaN;
 end
 end
 
-function horizon_summary = local_horizon_summary(horizon_scores, stress_summary)
-%LOCAL_HORIZON_SUMMARY Conditional horizon aggregation with explicit scenario support.
-replicate_level = local_aggregate(horizon_scores, {'Case', 'Scenario', 'Replicate', 'Model', 'ExoMode', 'HorizonIdx'}, { ...
-    'MeanWIS',           @mean, 'WIS'; ...
-    'MeanAbsoluteError', @mean, 'AbsoluteError'; ...
-    'MeanSquaredError',  @mean, 'SquaredError'; ...
-    'MeanCoverage',      @mean, 'MeanCoverage'; ...
-    'MeanIntervalWidth', @mean, 'MeanIntervalWidth'});
-
-scenario_level = local_aggregate(replicate_level, {'Case', 'Scenario', 'Model', 'ExoMode', 'HorizonIdx'}, { ...
-    'MeanWIS',           @mean, 'MeanWIS'; ...
-    'MeanAbsoluteError', @mean, 'MeanAbsoluteError'; ...
-    'MeanSquaredError',  @mean, 'MeanSquaredError'; ...
-    'MeanCoverage',      @mean, 'MeanCoverage'; ...
-    'MeanIntervalWidth', @mean, 'MeanIntervalWidth'});
-
-horizon_summary = local_aggregate(scenario_level, {'Case', 'Model', 'ExoMode', 'HorizonIdx'}, { ...
-    'MeanWIS',           @mean, 'MeanWIS'; ...
-    'MeanAbsoluteError', @mean, 'MeanAbsoluteError'; ...
-    'MeanSquaredError',  @mean, 'MeanSquaredError'; ...
-    'MeanCoverage',      @mean, 'MeanCoverage'; ...
-    'MeanIntervalWidth', @mean, 'MeanIntervalWidth'});
-
-horizon_summary.RMSE = sqrt(horizon_summary.MeanSquaredError);
-horizon_summary = movevars(horizon_summary, 'RMSE', 'After', 'MeanSquaredError');
-horizon_summary = local_add_scenario_coverage(horizon_summary, stress_summary);
+function method_summary = local_method_summary(condition_summary, num_conditions)
+%LOCAL_METHOD_SUMMARY Equal-weight condition means per method; withheld unless every condition is complete.
+method_summary = local_aggregate(condition_summary, {'Method'}, { ...
+    'NumConditionsComplete', @sum,  'Complete'; ...
+    'MAE',                   @mean, 'MAE'; ...
+    'MSE',                   @mean, 'MSE'});
+method_summary.RMSE     = sqrt(method_summary.MSE);
+method_summary.Complete = method_summary.NumConditionsComplete == num_conditions;
 end
 
-function interval_summary = local_interval_summary(interval_scores, stress_summary)
-%LOCAL_INTERVAL_SUMMARY Conditional interval aggregation with explicit scenario support.
-replicate_level = local_aggregate(interval_scores, {'Case', 'Scenario', 'Replicate', 'Model', 'ExoMode', 'Alpha', 'NominalCoverage'}, { ...
-    'MeanCoverage',      @mean, 'Coverage'; ...
-    'MeanIntervalWidth', @mean, 'IntervalWidth'});
+function horizon_summary = local_horizon_summary(horizon_scores, condition_summary)
+%LOCAL_HORIZON_SUMMARY Matched-window horizon errors aggregated with the same equal-weight hierarchy.
+matched = horizon_scores(horizon_scores.Matched, :);
+replicate_level = local_aggregate(matched, {'Case', 'Scenario', 'Replicate', 'Method', 'HorizonIdx'}, {'MAE', @mean, 'AbsoluteError'; 'MSE', @mean, 'SquaredError'; 'RtDriverMAE', @mean, 'RtDriverAbsError'});
+scenario_level  = local_aggregate(replicate_level, {'Case', 'Scenario', 'Method', 'HorizonIdx'}, {'MAE', @mean, 'MAE'; 'MSE', @mean, 'MSE'; 'RtDriverMAE', @mean, 'RtDriverMAE'});
+horizon_summary = local_aggregate(scenario_level, {'Case', 'Method', 'HorizonIdx'}, {'NumScenariosScored', @numel, 'MAE'; 'MAE', @mean, 'MAE'; 'MSE', @mean, 'MSE'; 'RtDriverMAE', @mean, 'RtDriverMAE'});
+horizon_summary.RMSE = sqrt(horizon_summary.MSE);
 
-scenario_level = local_aggregate(replicate_level, {'Case', 'Scenario', 'Model', 'ExoMode', 'Alpha', 'NominalCoverage'}, { ...
-    'MeanCoverage',      @mean, 'MeanCoverage'; ...
-    'MeanIntervalWidth', @mean, 'MeanIntervalWidth'});
-
-interval_summary = local_aggregate(scenario_level, {'Case', 'Model', 'ExoMode', 'Alpha', 'NominalCoverage'}, { ...
-    'MeanCoverage',      @mean, 'MeanCoverage'; ...
-    'MeanIntervalWidth', @mean, 'MeanIntervalWidth'});
-
-interval_summary.CoverageError = interval_summary.MeanCoverage - interval_summary.NominalCoverage;
-interval_summary = local_add_scenario_coverage(interval_summary, stress_summary);
-end
-
-function generation_summary = local_generation_summary(generation_status)
-%LOCAL_GENERATION_SUMMARY Per stress-case dataset-generation outcome counts.
-status_tbl = table(string({generation_status.case_id})', string({generation_status.status})', 'VariableNames', {'Case', 'Status'});
-
-generation_summary = local_aggregate(status_tbl, {'Case'}, { ...
-    'Attempts',       @numel,                          'Status'; ...
-    'Saved',          @(x) sum(x == "saved"),          'Status'; ...
-    'DomainFailures', @(x) sum(x == "domain_failure"), 'Status'});
-end
-
-function execution_summary = local_execution_summary(forecast_status)
-%LOCAL_EXECUTION_SUMMARY Per stress-case forecast outcome counts from all Script 2 attempts.
-status_tbl = table(string({forecast_status.case_id})', string({forecast_status.model_type})', string({forecast_status.exo_mode})', string({forecast_status.status})', 'VariableNames', {'Case', 'Model', 'ExoMode', 'Status'});
-
-execution_summary = local_aggregate(status_tbl, {'Case', 'Model', 'ExoMode'}, { ...
-    'Attempts',       @numel,                          'Status'; ...
-    'Saved',          @(x) sum(x == "saved"),          'Status'; ...
-    'NoWindows',      @(x) sum(x == "no_windows"),     'Status'; ...
-    'DomainFailures', @(x) sum(x == "domain_failure"), 'Status'; ...
-    'Pending',        @(x) sum(x == "pending"),        'Status'});
-execution_summary.SuccessRate = execution_summary.Saved ./ execution_summary.Attempts;
-end
-
-function [degradation_scenario_summary, degradation_summary, num_undefined] = local_degradation_summary(horizon_scores, partA_horizon, stress_summary)
-%LOCAL_DEGRADATION_SUMMARY Match robustness WIS to the synthetic baseline and aggregate degradation.
-match_keys = {'Scenario', 'Model', 'ExoMode', 'WindowDay', 'HorizonIdx'};
-
-baseline = partA_horizon(:, [match_keys, {'WIS'}]);
-baseline = renamevars(baseline, 'WIS', 'PartA_WIS');
-if height(unique(baseline(:, match_keys))) ~= height(baseline)
-    error('PARTB_03:AmbiguousBaseline', 'Part A baseline rows are not unique across the matching keys.');
-end
-
-matched = innerjoin(horizon_scores, baseline, 'Keys', match_keys);
-if height(matched) ~= height(horizon_scores)
-    error('PARTB_03:UnmatchedBaseline', '%d Part B horizon rows have no matching Part A baseline row.', height(horizon_scores) - height(matched));
-end
-
-matched.PartB_WIS      = matched.WIS;
-matched.WIS_Difference = matched.PartB_WIS - matched.PartA_WIS;
-
-ratio           = matched.PartB_WIS ./ matched.PartA_WIS;
-undefined_mask  = matched.PartA_WIS == 0;
-ratio(undefined_mask) = NaN;
-matched.WIS_Ratio = ratio;
-num_undefined     = sum(undefined_mask);
-
-replicate_level = local_aggregate(matched, {'Case', 'Scenario', 'Replicate', 'Model', 'ExoMode'}, { ...
-    'PartA_WIS',      @mean,                   'PartA_WIS'; ...
-    'PartB_WIS',      @mean,                   'PartB_WIS'; ...
-    'WIS_Difference', @mean,                   'WIS_Difference'; ...
-    'WIS_Ratio',      @(x) mean(x, 'omitnan'), 'WIS_Ratio'});
-
-degradation_scenario_summary = local_aggregate(replicate_level, {'Case', 'Scenario', 'Model', 'ExoMode'}, { ...
-    'PartA_MeanWIS',     @mean, 'PartA_WIS'; ...
-    'PartB_MeanWIS',     @mean, 'PartB_WIS'; ...
-    'MeanWISDifference', @mean, 'WIS_Difference'});
-degradation_scenario_summary.MeanWISRatio = degradation_scenario_summary.PartB_MeanWIS ./ degradation_scenario_summary.PartA_MeanWIS;
-degradation_scenario_summary.MeanWISRatio(degradation_scenario_summary.PartA_MeanWIS == 0) = NaN;
-degradation_scenario_summary.RelativeWISIncrease = degradation_scenario_summary.MeanWISRatio - 1;
-
-degradation_summary = local_aggregate(degradation_scenario_summary, {'Case', 'Model', 'ExoMode'}, { ...
-    'PartA_MeanWIS',     @mean, 'PartA_MeanWIS'; ...
-    'PartB_MeanWIS',     @mean, 'PartB_MeanWIS'; ...
-    'MeanWISDifference', @mean, 'MeanWISDifference'});
-
-degradation_summary.MeanWISRatio = degradation_summary.PartB_MeanWIS ./ degradation_summary.PartA_MeanWIS;
-
-undefined_summary_mask = degradation_summary.PartA_MeanWIS == 0;
-degradation_summary.MeanWISRatio(undefined_summary_mask) = NaN;
-
-degradation_summary.RelativeWISIncrease = degradation_summary.MeanWISRatio - 1;
-degradation_summary = local_add_scenario_coverage(degradation_summary, stress_summary);
-
-incomplete = ~degradation_summary.CompleteScenarioCoverage;
-metric_names = {'PartA_MeanWIS', 'PartB_MeanWIS', 'MeanWISDifference', 'MeanWISRatio', 'RelativeWISIncrease'};
+horizon_summary = innerjoin(horizon_summary, condition_summary(:, {'Case', 'Method', 'Complete'}), 'Keys', {'Case', 'Method'});
+metric_names = {'MAE', 'MSE', 'RMSE', 'RtDriverMAE'};
 for i = 1:numel(metric_names)
-    degradation_summary.(metric_names{i})(incomplete) = NaN;
+    horizon_summary.(metric_names{i})(~horizon_summary.Complete) = NaN;
 end
 end
 
-function summary = local_add_scenario_coverage(summary, stress_summary)
-%LOCAL_ADD_SCENARIO_COVERAGE Attach expected and represented scenario counts.
-keys = {'Case', 'Model', 'ExoMode'};
-coverage = stress_summary(:, [keys, {'NumScenariosExpected', 'NumScenariosWithScores', 'CompleteScenarioCoverage'}]);
-summary = innerjoin(summary, coverage, 'Keys', keys);
+function [paired_windows, paired_scenario, paired_condition] = local_paired_summary(window_scores, cfg)
+%LOCAL_PAIRED_SUMMARY Matched-window ARX-versus-persistence and oracle comparisons.
+matched = window_scores(window_scores.Matched, {'Case', 'Scenario', 'Replicate', 'WindowDay', 'Method', 'MAE', 'RMSE'});
+wide = unstack(matched, {'MAE', 'RMSE'}, 'Method');
+
+paired_windows = wide(:, {'Case', 'Scenario', 'Replicate', 'WindowDay'});
+paired_windows.MAE_persistence = wide.MAE_persistence;
+paired_windows.MAE_oracle      = wide.MAE_oracle;
+paired_windows.MAE_arx         = wide.MAE_arx;
+paired_windows.DeltaMAE        = wide.MAE_persistence - wide.MAE_arx;
+paired_windows.DeltaRMSE       = wide.RMSE_persistence - wide.RMSE_arx;
+paired_windows.PersistenceExcessMAE = wide.MAE_persistence - wide.MAE_oracle;
+paired_windows.ArxExcessMAE    = wide.MAE_arx - wide.MAE_oracle;
+paired_windows.ArxBetter       = double(wide.MAE_arx < wide.MAE_persistence);
+
+specs = {'NumMatchedWindows', @numel, 'DeltaMAE'; 'DeltaMAE', @mean, 'DeltaMAE'; 'DeltaRMSE', @mean, 'DeltaRMSE'; 'PersistenceExcessMAE', @mean, 'PersistenceExcessMAE'; 'ArxExcessMAE', @mean, 'ArxExcessMAE'; 'ArxWinShare', @mean, 'ArxBetter'};
+replicate_level = local_aggregate(paired_windows, {'Case', 'Scenario', 'Replicate'}, specs);
+
+specs_up = {'NumMatchedWindows', @sum, 'NumMatchedWindows'; 'DeltaMAE', @mean, 'DeltaMAE'; 'DeltaRMSE', @mean, 'DeltaRMSE'; 'PersistenceExcessMAE', @mean, 'PersistenceExcessMAE'; 'ArxExcessMAE', @mean, 'ArxExcessMAE'; 'ArxWinShare', @mean, 'ArxWinShare'};
+paired_scenario  = local_aggregate(replicate_level, {'Case', 'Scenario'}, [{'NumReplicatesScored', @numel, 'DeltaMAE'}; specs_up]);
+paired_condition = local_aggregate(paired_scenario, {'Case'}, [{'NumScenariosScored', @numel, 'DeltaMAE'}; specs_up]);
+
+all_cases = table([cfg.partB.robustness_cases.case_id]', 'VariableNames', {'Case'});
+paired_condition = outerjoin(all_cases, paired_condition, 'Keys', 'Case', 'MergeKeys', true, 'Type', 'left');
+paired_condition.NumScenariosScored(isnan(paired_condition.NumScenariosScored)) = 0;
+paired_condition.Complete = paired_condition.NumScenariosScored == numel(cfg.scenarios);
+
+metric_names = {'DeltaMAE', 'DeltaRMSE', 'PersistenceExcessMAE', 'ArxExcessMAE', 'ArxWinShare'};
+for i = 1:numel(metric_names)
+    paired_condition.(metric_names{i})(~paired_condition.Complete) = NaN;
+end
 end
 
-function value = local_sample_std(values)
-%LOCAL_SAMPLE_STD Sample standard deviation when replicate variation is estimable.
-if numel(values) < 2
-    value = NaN;
-else
-    value = std(values);
+function [degradation_scenario, degradation] = local_degradation_summary(scenario_summary, paired_scenario, num_scenarios)
+%LOCAL_DEGRADATION_SUMMARY Scenario-level change relative to the clean baseline, averaged over scenarios.
+clean = scenario_summary(scenario_summary.Case == "clean_baseline", {'Scenario', 'Method', 'MAE', 'RMSE', 'NumMatchedWindows'});
+clean = renamevars(clean, {'MAE', 'RMSE', 'NumMatchedWindows'}, {'CleanMAE', 'CleanRMSE', 'CleanMatchedWindows'});
+
+stressed = scenario_summary(scenario_summary.Case ~= "clean_baseline", {'Case', 'Scenario', 'Method', 'MAE', 'RMSE', 'NumMatchedWindows'});
+degradation_scenario = innerjoin(stressed, clean, 'Keys', {'Scenario', 'Method'});
+degradation_scenario.MAEChange  = degradation_scenario.MAE - degradation_scenario.CleanMAE;
+degradation_scenario.RMSEChange = degradation_scenario.RMSE - degradation_scenario.CleanRMSE;
+degradation_scenario.MAERatio   = degradation_scenario.MAE ./ degradation_scenario.CleanMAE;
+
+clean_delta = paired_scenario(paired_scenario.Case == "clean_baseline", {'Scenario', 'DeltaMAE'});
+clean_delta = renamevars(clean_delta, 'DeltaMAE', 'CleanDeltaMAE');
+delta = outerjoin(paired_scenario(:, {'Case', 'Scenario', 'DeltaMAE'}), clean_delta, 'Keys', 'Scenario', 'MergeKeys', true, 'Type', 'left');
+delta.ArxAdvantageChange = delta.DeltaMAE - delta.CleanDeltaMAE;
+degradation_scenario = outerjoin(degradation_scenario, delta(:, {'Case', 'Scenario', 'ArxAdvantageChange'}), 'Keys', {'Case', 'Scenario'}, 'MergeKeys', true, 'Type', 'left');
+degradation_scenario = degradation_scenario(~ismissing(degradation_scenario.Method), :);
+degradation_scenario = sortrows(degradation_scenario, {'Case', 'Method', 'Scenario'});
+
+defined = isfinite(degradation_scenario.MAEChange);
+degradation_scenario.Defined = defined;
+degradation = local_aggregate(degradation_scenario, {'Case', 'Method'}, { ...
+    'NumScenariosDefined', @sum,  'Defined'; ...
+    'MAEChange',           @mean, 'MAEChange'; ...
+    'RMSEChange',          @mean, 'RMSEChange'; ...
+    'MAERatio',            @mean, 'MAERatio'; ...
+    'ArxAdvantageChange',  @mean, 'ArxAdvantageChange'});
+degradation.Complete = degradation.NumScenariosDefined == num_scenarios;
+
+metric_names = {'MAEChange', 'RMSEChange', 'MAERatio', 'ArxAdvantageChange'};
+for i = 1:numel(metric_names)
+    degradation.(metric_names{i})(~degradation.Complete) = NaN;
 end
 end
 
@@ -506,21 +409,8 @@ for i = 1:size(specs, 1)
 end
 end
 
-function snapshot = local_evaluation_snapshot(cfg, partA_eval_path, status_counts)
-%LOCAL_EVALUATION_SNAPSHOT Build minimal provenance for the robustness evaluation.
-snapshot = struct();
-snapshot.experiment_id           = cfg.partB.experiment_id;
-snapshot.model_types             = cfg.partB.run.model_types;
-snapshot.wis_alphas              = cfg.forecast.wis_alphas;
-snapshot.horizon                 = cfg.forecast.horizon;
-snapshot.min_window              = cfg.forecast.min_window;
-snapshot.step_size               = cfg.forecast.step_size;
-snapshot.partA_baseline_artifact = string(partA_eval_path);
-snapshot.status_counts           = status_counts;
-end
-
 function local_write_table(table_dir, filename, table_data)
-%LOCAL_WRITE_TABLE Write one compact summary CSV table.
+%LOCAL_WRITE_TABLE Write one summary CSV table.
 output_path = fullfile(table_dir, filename);
 writetable(table_data, output_path);
 fprintf('Table saved to: %s\n', output_path);
