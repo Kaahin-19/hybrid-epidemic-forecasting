@@ -1,0 +1,28 @@
+[2026-11-18 02:04:50] Run ID: 20261118_020450
+[2026-11-18 02:04:50] Running Part A synthetic forecasting pipeline
+[2026-11-18 02:04:50] Pipeline started
+[2026-11-18 02:04:57] Starting Generating Part A synthetic ground truth
+[2026-11-18 02:05:06] Completed Generating Part A synthetic ground truth in 9s
+[2026-11-18 02:05:06] Starting Selecting model configuration for N4SID | None
+[2026-11-18 02:05:41] Completed Selecting model configuration for N4SID | None in 35s
+[2026-11-18 02:05:41] Starting Running forecasts for N4SID | None
+[2026-11-18 02:06:02] Completed Running forecasts for N4SID | None in 21s
+[2026-11-18 02:06:02] Starting Selecting model configuration for N4SID | S
+[2026-11-18 02:09:04] Completed Selecting model configuration for N4SID | S in 182s
+[2026-11-18 02:09:04] Starting Running forecasts for N4SID | S
+[2026-11-18 02:11:36] Completed Running forecasts for N4SID | S in 152s
+[2026-11-18 02:11:36] Starting Selecting model configuration for N4SID | I
+[2026-11-18 02:14:35] Completed Selecting model configuration for N4SID | I in 179s
+[2026-11-18 02:14:35] Starting Running forecasts for N4SID | I
+[2026-11-18 02:17:08] Completed Running forecasts for N4SID | I in 153s
+[2026-11-18 02:17:08] Starting Selecting model configuration for N4SID | Both
+[2026-11-18 02:20:03] Completed Selecting model configuration for N4SID | Both in 175s
+[2026-11-18 02:20:03] Starting Running forecasts for N4SID | Both
+[2026-11-18 02:22:35] Completed Running forecasts for N4SID | Both in 152s
+[2026-11-18 02:22:35] Starting Evaluating accumulated Part A forecast artifacts
+[2026-11-18 02:22:43] Completed Evaluating accumulated Part A forecast artifacts in 8s
+[2026-11-18 02:22:43] Starting Generating Part A thesis figures
+[2026-11-18 02:24:02] Completed Generating Part A thesis figures in 79s
+[2026-11-18 02:24:02] Part A synthetic forecasting pipeline completed successfully in 1152s
+[2026-11-18 02:24:02] Thesis-level figures generated under: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/figures
+[2026-11-18 02:24:02] Run logs saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450

@@ -1,0 +1,15 @@
+=== Part A Forecast Evaluation ===
+Evaluated 1408 forecast windows and 19712 horizon rows.
+Evaluated 1408 infected-state projection windows and 19712 projection horizon rows.
+Evaluation artifact saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/evaluation/partA_04_evaluation_results.mat
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_window_scores.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_horizon_scores.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_scenario_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_horizon_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_interval_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_i_projection_window_scores.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_i_projection_horizon_scores.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_i_projection_scenario_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_i_projection_horizon_summary.csv
+=== Part A Forecast Evaluation Complete ===
+

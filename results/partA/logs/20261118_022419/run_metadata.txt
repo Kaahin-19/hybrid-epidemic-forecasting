@@ -1,0 +1,117 @@
+== Execution ==
+Run ID: 20261118_022419
+Started: 2026-11-18 02:24:19
+Repository: /home/kaahin/degree_project/hybrid-epidemic-forecasting
+Command: ./run_partA_pipeline.sh --models 4 
+Fresh (--fresh): no
+Selected model/exo combinations (4):
+  SSEST | None
+  SSEST | S
+  SSEST | I
+  SSEST | Both
+Skipped invalid combinations (0):
+
+== Git provenance ==
+Commit: c69e62e13b8295c3345f7f4ddd38ec155e429994
+Branch: dev
+Working tree: modified
+
+Modified and untracked files (git status --porcelain):
+ M data/partA/partA_01_truth_A1.mat
+ M data/partA/partA_01_truth_A2.mat
+ M data/partA/partA_01_truth_A3.mat
+ M data/partA/partA_01_truth_A4.mat
+ M results/partA/evaluation/partA_04_evaluation_results.mat
+ M results/partA/figures/partA_05_coverage_summary.pdf
+ M results/partA/figures/partA_05_forecast_comparison_A1_ARX_Both.pdf
+ M results/partA/figures/partA_05_forecast_comparison_A1_ARX_I.pdf
+ M results/partA/figures/partA_05_forecast_comparison_A1_ARX_S.pdf
+ M results/partA/figures/partA_05_forecast_comparison_A1_AR_None.pdf
+ M results/partA/figures/partA_05_forecast_comparison_A2_ARX_Both.pdf
+ M results/partA/figures/partA_05_forecast_comparison_A2_ARX_I.pdf
+ M results/partA/figures/partA_05_forecast_comparison_A2_ARX_S.pdf
+ M results/partA/figures/partA_05_forecast_comparison_A2_AR_None.pdf
+ M results/partA/figures/partA_05_forecast_comparison_A3_ARX_Both.pdf
+ M results/partA/figures/partA_05_forecast_comparison_A3_ARX_I.pdf
+ M results/partA/figures/partA_05_forecast_comparison_A3_ARX_S.pdf
+ M results/partA/figures/partA_05_forecast_comparison_A3_AR_None.pdf
+ M results/partA/figures/partA_05_forecast_comparison_A4_ARX_Both.pdf
+ M results/partA/figures/partA_05_forecast_comparison_A4_ARX_I.pdf
+ M results/partA/figures/partA_05_forecast_comparison_A4_ARX_S.pdf
+ M results/partA/figures/partA_05_forecast_comparison_A4_AR_None.pdf
+ M results/partA/figures/partA_05_infected_projection_mae_by_horizon.pdf
+ M results/partA/figures/partA_05_mean_wis_by_horizon.pdf
+ M results/partA/figures/partA_05_model_wis_distribution.pdf
+ M results/partA/figures/partA_05_rt_scenarios.pdf
+ M results/partA/tables/partA_04_horizon_scores.csv
+ M results/partA/tables/partA_04_horizon_summary.csv
+ M results/partA/tables/partA_04_i_projection_horizon_scores.csv
+ M results/partA/tables/partA_04_i_projection_horizon_summary.csv
+ M results/partA/tables/partA_04_i_projection_scenario_summary.csv
+ M results/partA/tables/partA_04_i_projection_window_scores.csv
+ M results/partA/tables/partA_04_interval_summary.csv
+ M results/partA/tables/partA_04_scenario_summary.csv
+ M results/partA/tables/partA_04_window_scores.csv
+?? results/partA/figures/partA_05_forecast_comparison_A1_N4SID_Both.pdf
+?? results/partA/figures/partA_05_forecast_comparison_A1_N4SID_I.pdf
+?? results/partA/figures/partA_05_forecast_comparison_A1_N4SID_None.pdf
+?? results/partA/figures/partA_05_forecast_comparison_A1_N4SID_S.pdf
+?? results/partA/figures/partA_05_forecast_comparison_A2_N4SID_Both.pdf
+?? results/partA/figures/partA_05_forecast_comparison_A2_N4SID_I.pdf
+?? results/partA/figures/partA_05_forecast_comparison_A2_N4SID_None.pdf
+?? results/partA/figures/partA_05_forecast_comparison_A2_N4SID_S.pdf
+?? results/partA/figures/partA_05_forecast_comparison_A3_N4SID_Both.pdf
+?? results/partA/figures/partA_05_forecast_comparison_A3_N4SID_I.pdf
+?? results/partA/figures/partA_05_forecast_comparison_A3_N4SID_None.pdf
+?? results/partA/figures/partA_05_forecast_comparison_A3_N4SID_S.pdf
+?? results/partA/figures/partA_05_forecast_comparison_A4_N4SID_Both.pdf
+?? results/partA/figures/partA_05_forecast_comparison_A4_N4SID_I.pdf
+?? results/partA/figures/partA_05_forecast_comparison_A4_N4SID_None.pdf
+?? results/partA/figures/partA_05_forecast_comparison_A4_N4SID_S.pdf
+?? results/partA/forecasts/partA_03_forecast_A1_N4SID_Both.mat
+?? results/partA/forecasts/partA_03_forecast_A1_N4SID_I.mat
+?? results/partA/forecasts/partA_03_forecast_A1_N4SID_None.mat
+?? results/partA/forecasts/partA_03_forecast_A1_N4SID_S.mat
+?? results/partA/forecasts/partA_03_forecast_A2_N4SID_Both.mat
+?? results/partA/forecasts/partA_03_forecast_A2_N4SID_I.mat
+?? results/partA/forecasts/partA_03_forecast_A2_N4SID_None.mat
+?? results/partA/forecasts/partA_03_forecast_A2_N4SID_S.mat
+?? results/partA/forecasts/partA_03_forecast_A3_N4SID_Both.mat
+?? results/partA/forecasts/partA_03_forecast_A3_N4SID_I.mat
+?? results/partA/forecasts/partA_03_forecast_A3_N4SID_None.mat
+?? results/partA/forecasts/partA_03_forecast_A3_N4SID_S.mat
+?? results/partA/forecasts/partA_03_forecast_A4_N4SID_Both.mat
+?? results/partA/forecasts/partA_03_forecast_A4_N4SID_I.mat
+?? results/partA/forecasts/partA_03_forecast_A4_N4SID_None.mat
+?? results/partA/forecasts/partA_03_forecast_A4_N4SID_S.mat
+?? results/partA/logs/20261118_020450/
+?? results/partA/model_selection/partA_02_global_hyperparameters_N4SID_Both.mat
+?? results/partA/model_selection/partA_02_global_hyperparameters_N4SID_I.mat
+?? results/partA/model_selection/partA_02_global_hyperparameters_N4SID_None.mat
+?? results/partA/model_selection/partA_02_global_hyperparameters_N4SID_S.mat
+
+Submodules (git submodule status; leading + = checkout differs from recorded commit, - = not initialised):
+ 4e0183b0b3e6150d4d810c44e7a7151b66410f56 third_party/stenglib (heads/master)
+ f75526ca077202d6837e2088ae1fcc6ed61e2fbc third_party/urdme (v1.3.0-44-gf75526c)
+
+== MATLAB environment ==
+Executable: /home/kaahin/MATLAB/R2025b/bin/matlab
+MATLAB root: /home/kaahin/MATLAB/R2025b
+VersionInfo.xml release: R2025b
+VersionInfo.xml version: 25.2.0.3360999
+VersionInfo.xml update: Update 7
+
+Installed products (MATLAB ver; license number omitted):
+--------------------------------------------------------------------------------------------------------------------
+MATLAB Version: 25.2.0.3360999 (R2025b) Update 7
+Operating System: Linux 6.18.58.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Tue Oct 27 00:24:11 UTC 2026 x86_64
+Java Version: Java is not loaded
+--------------------------------------------------------------------------------------------------------------------
+MATLAB                                                Version 25.2        (R2025b)
+Simulink                                              Version 25.2        (R2025b)
+Control System Toolbox                                Version 25.2        (R2025b)
+Financial Toolbox                                     Version 25.2        (R2025b)
+Optimization Toolbox                                  Version 25.2        (R2025b)
+Parallel Computing Toolbox                            Version 25.2        (R2025b)
+Statistics and Machine Learning Toolbox               Version 25.2        (R2025b)
+System Identification Toolbox                         Version 25.2        (R2025b)

@@ -1,0 +1,23 @@
+Timestamp	Step	Model	Exo	Status	LogFile	Details
+2026-11-18 02:04:57	truth	-	-	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/partA_01_generate_truth.log	Generating Part A synthetic ground truth
+2026-11-18 02:05:06	truth	-	-	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/partA_01_generate_truth.log	9s
+2026-11-18 02:05:06	model_selection	N4SID	None	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/N4SID_None_model_selection.log	Selecting model configuration for N4SID | None
+2026-11-18 02:05:41	model_selection	N4SID	None	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/N4SID_None_model_selection.log	35s
+2026-11-18 02:05:41	forecast	N4SID	None	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/N4SID_None_forecast.log	Running forecasts for N4SID | None
+2026-11-18 02:06:02	forecast	N4SID	None	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/N4SID_None_forecast.log	21s
+2026-11-18 02:06:02	model_selection	N4SID	S	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/N4SID_S_model_selection.log	Selecting model configuration for N4SID | S
+2026-11-18 02:09:04	model_selection	N4SID	S	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/N4SID_S_model_selection.log	182s
+2026-11-18 02:09:04	forecast	N4SID	S	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/N4SID_S_forecast.log	Running forecasts for N4SID | S
+2026-11-18 02:11:36	forecast	N4SID	S	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/N4SID_S_forecast.log	152s
+2026-11-18 02:11:36	model_selection	N4SID	I	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/N4SID_I_model_selection.log	Selecting model configuration for N4SID | I
+2026-11-18 02:14:35	model_selection	N4SID	I	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/N4SID_I_model_selection.log	179s
+2026-11-18 02:14:35	forecast	N4SID	I	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/N4SID_I_forecast.log	Running forecasts for N4SID | I
+2026-11-18 02:17:08	forecast	N4SID	I	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/N4SID_I_forecast.log	153s
+2026-11-18 02:17:08	model_selection	N4SID	Both	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/N4SID_Both_model_selection.log	Selecting model configuration for N4SID | Both
+2026-11-18 02:20:03	model_selection	N4SID	Both	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/N4SID_Both_model_selection.log	175s
+2026-11-18 02:20:03	forecast	N4SID	Both	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/N4SID_Both_forecast.log	Running forecasts for N4SID | Both
+2026-11-18 02:22:35	forecast	N4SID	Both	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/N4SID_Both_forecast.log	152s
+2026-11-18 02:22:35	evaluation	-	-	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/partA_04_evaluate_forecasts.log	Evaluating accumulated Part A forecast artifacts
+2026-11-18 02:22:43	evaluation	-	-	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/partA_04_evaluate_forecasts.log	8s
+2026-11-18 02:22:43	figures	-	-	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/partA_05_generate_figures.log	Generating Part A thesis figures
+2026-11-18 02:24:02	figures	-	-	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261118_020450/partA_05_generate_figures.log	79s
