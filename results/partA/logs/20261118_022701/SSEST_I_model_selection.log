@@ -1,0 +1,17 @@
+=== Global Model-Configuration Selection ===
+Configuration: Model = SSEST | Exogenous Mode = I
+Prepared scenario 1/4 (A1): 44 intended windows
+Prepared scenario 2/4 (A2): 44 intended windows
+Prepared scenario 3/4 (A3): 44 intended windows
+Prepared scenario 4/4 (A4): 44 intended windows
+Stage: Evaluating 4 candidate configurations across 4 scenarios
+Starting parallel pool (parpool) using the 'Processes' profile ...
+Connected to parallel pool with 4 workers.
+Infeasible candidate [4 0] in scenario A2 at window 1: FORECAST_CLOSED:InvalidForecastDraw
+Infeasible candidate [3 0] in scenario A2 at window 1: EPIDEMIC:SusceptibleBelowThreshold
+Stage: Candidate evaluation complete
+Parallel pool using the 'Processes' profile is shutting down.
+Selected global model configuration: [2 0]
+Global model-selection artifact saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_SSEST_I.mat
+=== Global Model-Configuration Selection Complete ===
+
