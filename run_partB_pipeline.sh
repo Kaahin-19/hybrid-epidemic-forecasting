@@ -5,7 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 REPO_ROOT="$SCRIPT_DIR"
 MATLAB_BIN="${MATLAB_BIN:-/home/kaahin/MATLAB/R2025b/bin/matlab}"
 LOG_ROOT="$REPO_ROOT/results/partB/logs"
-SELECTION_ARTIFACT="$REPO_ROOT/results/partA/model_selection/partA_02_global_hyperparameters_ARX_I.mat"
+AR_SELECTION_ARTIFACT="$REPO_ROOT/results/partA/model_selection/partA_02_global_hyperparameters_AR_None.mat"
+ARX_SELECTION_ARTIFACT="$REPO_ROOT/results/partA/model_selection/partA_02_global_hyperparameters_ARX_I.mat"
 RUN_ID=""
 RUN_LOG_DIR=""
 PIPELINE_LOG=""
@@ -28,9 +29,12 @@ Description:
     4. scripts/partB/partB_04_generate_figures.m
 
   The stages generate synthetic truth, observations, and historical
-  estimates; forecast I with persistence, oracle, and Part A-selected ARX/I
-  Rt drivers; evaluate the forecasts against the synthetic truth; and
-  generate the Part B figures.
+  estimates; forecast I with persistence, oracle, and Part A-selected AR/None
+  and ARX/I Rt drivers; evaluate the forecasts against the synthetic truth on
+  the primary (persistence, oracle, ARX/I) and extended (all four methods)
+  matched sets; and generate the Part B figures. Both Part A selection
+  artifacts must exist; their compatibility with the current selection
+  protocol is checked by partB_02 before any forecast is made.
 
   Each invocation creates a timestamped run folder under:
     results/partB/logs/<run_id>/
@@ -328,7 +332,8 @@ if [[ ! -f "$REPO_ROOT/startup.m" ]] || [[ ! -d "$REPO_ROOT/scripts" ]]; then
 fi
 
 [[ -x "$MATLAB_BIN" ]] || die "MATLAB binary not found or not executable: $MATLAB_BIN"
-[[ -f "$SELECTION_ARTIFACT" ]] || die "Missing Part A ARX/I selection artifact: ${SELECTION_ARTIFACT#"$REPO_ROOT"/}"
+[[ -f "$AR_SELECTION_ARTIFACT" ]] || die "Missing Part A AR/None selection artifact: ${AR_SELECTION_ARTIFACT#"$REPO_ROOT"/}"
+[[ -f "$ARX_SELECTION_ARTIFACT" ]] || die "Missing Part A ARX/I selection artifact: ${ARX_SELECTION_ARTIFACT#"$REPO_ROOT"/}"
 
 GIT_PROVENANCE="$(capture_git_provenance)"
 

@@ -1,11 +1,14 @@
 %PARTB_04_GENERATE_FIGURES Generate Part B infectious-population forecasting figures.
 %
 %   Description:
-%       Generates the Part B thesis figures: infectious-population
-%       trajectories at a representative origin, matched-window MAE by
-%       horizon, condition-level MAE and RMSE, the paired MAE improvement of
-%       ARX over persistence, and execution support. Withheld aggregates are
-%       marked and never drawn as zero.
+%       Generates the Part B thesis figures: persistence, oracle, AR, and ARX
+%       infectious-population trajectories at a representative origin,
+%       matched-window MAE by horizon for the primary (persistence, oracle,
+%       ARX) and extended (all four methods) matched sets, condition-level
+%       MAE and RMSE for both sets, the primary paired MAE improvement of ARX
+%       over persistence, the extended paired comparisons involving AR, and
+%       execution support. Withheld aggregates are marked and never drawn as
+%       zero.
 %
 %   Workflow:
 %       1. Initialize figure paths and shared styling.
@@ -16,7 +19,7 @@
 %            PLOT_DISTRIBUTION, APPLY_PANEL_STYLE.
 %
 % A. M. Kaahin 2026-07-18
-% Modified: 2026-11-18
+% Modified: 2026-11-25
 
 %% 1. Initialization
 clear; close all; clc;
@@ -44,12 +47,17 @@ summaries = evaluation.summaries;
 case_ids    = [pb.robustness_cases.case_id]';
 case_labels = [pb.robustness_cases.case_name]';
 
+primary  = pb.matched_sets([pb.matched_sets.set_id] == "primary");
+extended = pb.matched_sets([pb.matched_sets.set_id] == "extended");
+
 %% 3. Figures
 local_figure_trajectories(cfg, snapshot, style, figure_dir);
-local_figure_horizon(summaries.horizon_summary, summaries.condition_summary, case_ids, case_labels, pb.method_ids, style, figure_dir);
-local_figure_conditions(summaries.condition_summary, case_ids, case_labels, pb.method_ids, style, figure_dir);
-local_figure_improvement(evaluation.paired_windows, summaries.paired_condition_summary, case_ids, case_labels, style, figure_dir);
-local_figure_support(summaries.support_condition, case_ids, case_labels, pb.method_ids, style, figure_dir);
+local_figure_horizon(summaries.horizon_summary, summaries.condition_summary, case_ids, case_labels, primary, style, fullfile(figure_dir, 'partB_04_mae_by_horizon.pdf'));
+local_figure_horizon(summaries.horizon_summary, summaries.condition_summary, case_ids, case_labels, extended, style, fullfile(figure_dir, 'partB_04_mae_by_horizon_extended.pdf'));
+local_figure_conditions(summaries.condition_summary, case_ids, case_labels, pb.matched_sets, style, figure_dir);
+local_figure_paired(evaluation.paired_windows, summaries.paired_condition_summary, "primary", "persistence_vs_arx", case_ids, case_labels, style, fullfile(figure_dir, 'partB_04_arx_improvement.pdf'));
+local_figure_paired(evaluation.paired_windows, summaries.paired_condition_summary, "extended", ["persistence_vs_ar"; "persistence_vs_arx"; "ar_vs_arx"; "ar_vs_oracle"; "arx_vs_oracle"], case_ids, case_labels, style, fullfile(figure_dir, 'partB_04_paired_comparisons_extended.pdf'));
+local_figure_support(summaries.support_condition, case_ids, case_labels, pb.method_ids, pb.matched_sets, style, figure_dir);
 
 fprintf('Figures saved to: %s\n', figure_dir);
 fprintf('=== Part B Figure Generation Complete ===\n\n');
@@ -63,12 +71,13 @@ end
 end
 
 function local_figure_trajectories(cfg, snapshot, style, figure_dir)
-%LOCAL_FIGURE_TRAJECTORIES Truth, estimated history, and three forecasts at a representative origin.
+%LOCAL_FIGURE_TRAJECTORIES Truth, estimated history, and every method forecast at a representative origin.
 vis       = cfg.partB.visualization;
 scenarios = cfg.scenarios;
 n_rows    = numel(vis.trajectory_cases);
 n_cols    = numel(scenarios);
-method_labels = ["Persistence forecast", "Oracle forecast", "ARX/I forecast"];
+[method_labels, method_colors] = local_method_style(cfg.partB.method_ids);
+method_labels = method_labels + " forecast";
 
 fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 4.6 * n_rows + 1.5], 'Color', 'w');
 tl  = tiledlayout(fig, n_rows, n_cols, 'Padding', 'compact', 'TileSpacing', 'compact');
@@ -116,13 +125,13 @@ for r = 1:n_rows
         series(end + 1, 1) = s;
 
         unavailable = strings(0, 1);
-        for m = 1:3
+        for m = 1:numel(forecast.method_ids)
             if win.status(m) ~= "ok"
                 unavailable(end + 1, 1) = forecast.method_ids(m) + ": " + strrep(win.status(m), "_", " ");
                 continue;
             end
             s = local_series_template();
-            s.x = dataset.tspan(future); s.y = [win.X_hat_T(2); win.I_pred(:, m)]; s.color = style.method_colors(m, :); s.line_width = style.line_width; s.label = method_labels(m);
+            s.x = dataset.tspan(future); s.y = [win.X_hat_T(2); win.I_pred(:, m)]; s.color = method_colors(m, :); s.line_width = style.line_width; s.label = method_labels(m);
             series(end + 1, 1) = s;
         end
 
@@ -149,9 +158,12 @@ exportgraphics(fig, fullfile(figure_dir, 'partB_04_infectious_trajectories.pdf')
 close(fig);
 end
 
-function local_figure_horizon(horizon_summary, condition_summary, case_ids, case_labels, method_ids, style, figure_dir)
-%LOCAL_FIGURE_HORIZON Matched-window infectious-population MAE by horizon, one panel per condition.
-method_labels = local_method_labels(method_ids);
+function local_figure_horizon(horizon_summary, condition_summary, case_ids, case_labels, set_def, style, output_path)
+%LOCAL_FIGURE_HORIZON Matched-window infectious-population MAE by horizon for one matched set, one panel per condition.
+method_ids = set_def.method_ids;
+[method_labels, method_colors] = local_method_style(method_ids);
+horizon_summary   = horizon_summary(horizon_summary.MatchedSet == set_def.set_id, :);
+condition_summary = condition_summary(condition_summary.MatchedSet == set_def.set_id, :);
 fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 10.5], 'Color', 'w');
 tl  = tiledlayout(fig, 2, 3, 'Padding', 'compact', 'TileSpacing', 'compact');
 legend_handles = [];
@@ -164,7 +176,7 @@ for i = 1:numel(case_ids)
     for m = 1:numel(method_ids)
         rows = sortrows(horizon_summary(horizon_summary.Case == case_ids(i) & horizon_summary.Method == method_ids(m), :), 'HorizonIdx');
         s = local_series_template();
-        s.x = rows.HorizonIdx; s.y = rows.MAE; s.color = style.method_colors(m, :); s.line_width = style.line_width; s.marker = "o"; s.marker_size = style.marker_size; s.label = method_labels(m);
+        s.x = rows.HorizonIdx; s.y = rows.MAE; s.color = method_colors(m, :); s.line_width = style.line_width; s.marker = "o"; s.marker_size = style.marker_size; s.label = method_labels(m);
         series(end + 1, 1) = s;
     end
 
@@ -183,66 +195,95 @@ if ~isempty(legend_handles)
     lg = legend(legend_handles, method_labels, 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.legend_font_size, 'Box', 'off', 'Orientation', 'horizontal');
     lg.Layout.Tile = 'north';
 end
+title(tl, set_def.set_name, 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal');
 
-exportgraphics(fig, fullfile(figure_dir, 'partB_04_mae_by_horizon.pdf'), 'ContentType', 'vector');
+exportgraphics(fig, output_path, 'ContentType', 'vector');
 close(fig);
 end
 
-function local_figure_conditions(condition_summary, case_ids, case_labels, method_ids, style, figure_dir)
-%LOCAL_FIGURE_CONDITIONS Condition-level MAE and RMSE per method with incomplete-coverage markers.
-method_labels = local_method_labels(method_ids);
-fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 8.5], 'Color', 'w');
-tl  = tiledlayout(fig, 1, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
+function local_figure_conditions(condition_summary, case_ids, case_labels, matched_sets, style, figure_dir)
+%LOCAL_FIGURE_CONDITIONS Condition-level MAE and RMSE per method and matched set with incomplete-coverage markers.
+fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 8.0 * numel(matched_sets) + 0.5], 'Color', 'w');
+tl  = tiledlayout(fig, numel(matched_sets), 2, 'Padding', 'compact', 'TileSpacing', 'compact');
 metrics = ["MAE", "RMSE"];
 y_labels = ["MAE of {\itI} (persons)", "RMSE of {\itI} (persons)"];
+panel = 0;
 
-complete_matrix = local_case_method_matrix(condition_summary, case_ids, method_ids, 'Complete');
+for r = 1:numel(matched_sets)
+    set_def = matched_sets(r);
+    [method_labels, method_colors] = local_method_style(set_def.method_ids);
+    set_rows = condition_summary(condition_summary.MatchedSet == set_def.set_id, :);
+    complete_matrix = local_case_method_matrix(set_rows, case_ids, set_def.method_ids, 'Complete');
 
-for k = 1:2
-    ax = nexttile(tl);
-    matrix = local_case_method_matrix(condition_summary, case_ids, method_ids, metrics(k));
-    h = local_grouped_bars(ax, matrix, style);
-    local_style_bar_axis(ax, (1:numel(case_ids))', case_labels, y_labels(k), style);
-    if any(isfinite(matrix), 'all')
-        ylim(ax, [0, 1.15 * max(matrix(isfinite(matrix)))]);
+    for k = 1:2
+        panel = panel + 1;
+        ax = nexttile(tl);
+        matrix = local_case_method_matrix(set_rows, case_ids, set_def.method_ids, metrics(k));
+        h = local_grouped_bars(ax, matrix, method_colors);
+        local_style_bar_axis(ax, (1:numel(case_ids))', case_labels, y_labels(k), style);
+        if any(isfinite(matrix), 'all')
+            ylim(ax, [0, 1.15 * max(matrix(isfinite(matrix)))]);
+        end
+        local_mark_incomplete(ax, h, complete_matrix, style);
+        local_apply_legend(ax, h, method_labels, style, numel(set_def.method_ids));
+        title(ax, set_def.set_name, 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal', 'Interpreter', 'tex');
+        local_panel_label(ax, "(" + char('a' + panel - 1) + ")", style);
     end
-    local_mark_incomplete(ax, h, complete_matrix, style);
-    local_apply_legend(ax, h, method_labels, style, numel(method_ids));
-    local_panel_label(ax, "(" + char('a' + k - 1) + ")", style);
 end
 
 exportgraphics(fig, fullfile(figure_dir, 'partB_04_condition_comparison.pdf'), 'ContentType', 'vector');
 close(fig);
 end
 
-function local_figure_improvement(paired_windows, paired_condition, case_ids, case_labels, style, figure_dir)
-%LOCAL_FIGURE_IMPROVEMENT Distribution of paired window-level MAE improvement of ARX over persistence.
-fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 9.0], 'Color', 'w');
-ax  = axes(fig);
+function local_figure_paired(paired_windows, paired_condition, set_id, comparison_ids, case_ids, case_labels, style, output_path)
+%LOCAL_FIGURE_PAIRED Distributions of paired window-level DeltaMAE = MAE_reference - MAE_candidate, one panel per comparison.
+num_panels = numel(comparison_ids);
+num_cols   = min(num_panels, 2);
+num_rows   = ceil(num_panels / num_cols);
+fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, max(9.0, 7.0 * num_rows)], 'Color', 'w');
+tl  = tiledlayout(fig, num_rows, num_cols, 'Padding', 'compact', 'TileSpacing', 'compact');
 
-present = ismember(case_ids, unique(paired_windows.Case));
-x_labels = strings(height(paired_windows), 1);
-for i = 1:numel(case_ids)
-    x_labels(paired_windows.Case == case_ids(i)) = case_labels(i);
+for p = 1:num_panels
+    ax = nexttile(tl);
+    rows = paired_windows(paired_windows.MatchedSet == set_id & paired_windows.Comparison == comparison_ids(p), :);
+    condition_rows = paired_condition(paired_condition.MatchedSet == set_id & paired_condition.Comparison == comparison_ids(p), :);
+    reference_label = local_method_style(condition_rows.Reference(1));
+    candidate_label = local_method_style(condition_rows.Candidate(1));
+
+    present = ismember(case_ids, unique(rows.Case));
+    x_labels = strings(height(rows), 1);
+    for i = 1:numel(case_ids)
+        x_labels(rows.Case == case_ids(i)) = case_labels(i);
+    end
+
+    plot_distribution(ax, struct('x', categorical(x_labels, case_labels(present)), 'y', rows.DeltaMAE, 'group', [], 'style', struct('y_label', "{\Delta}MAE (persons)", 'grid', true, 'font_name', style.font_name, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size)));
+    yline(ax, 0, '--', 'Color', [0, 0, 0], 'LineWidth', 1.0, 'HandleVisibility', 'off');
+    if num_panels > 1
+        ax.XTickLabelRotation = 35;
+    end
+    title(ax, "{\Delta}MAE = MAE_{" + reference_label + "} - MAE_{" + candidate_label + "}", 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal', 'Interpreter', 'tex');
+
+    drawnow;
+    y_limits = ylim(ax);
+    y_limits(2) = y_limits(2) + 0.25 * diff(y_limits);
+    ylim(ax, y_limits);
+    present_ids = case_ids(present);
+    for i = 1:numel(present_ids)
+        row   = condition_rows(condition_rows.Case == present_ids(i), :);
+        n     = sum(rows.Case == present_ids(i));
+        share = mean(rows.CandidateBetter(rows.Case == present_ids(i)));
+        text(ax, i, y_limits(2), [sprintf('{\\itn} = %d', n), sprintf('%s better: %.0f%%', candidate_label, 100 * share) + string(local_incomplete_tag(row.Complete))], 'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', 'FontName', style.font_name, 'FontSize', style.tick_font_size - 1, 'Interpreter', 'tex');
+    end
+    text(ax, 0.01, 0.02, sprintf('Positive values: %s more accurate than %s', candidate_label, reference_label), 'Units', 'normalized', 'VerticalAlignment', 'bottom', 'FontName', style.font_name, 'FontSize', style.tick_font_size - 1);
 end
 
-plot_distribution(ax, struct('x', categorical(x_labels, case_labels(present)), 'y', paired_windows.DeltaMAE, 'group', [], 'style', struct('y_label', "{\Delta}MAE = MAE_{persistence} - MAE_{ARX} (persons)", 'grid', true, 'font_name', style.font_name, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size)));
-yline(ax, 0, '--', 'Color', [0, 0, 0], 'LineWidth', 1.0, 'HandleVisibility', 'off');
-
-drawnow;
-y_limits = ylim(ax);
-y_limits(2) = y_limits(2) + 0.18 * diff(y_limits);
-ylim(ax, y_limits);
-present_ids = case_ids(present);
-for i = 1:numel(present_ids)
-    row = paired_condition(paired_condition.Case == present_ids(i), :);
-    n   = sum(paired_windows.Case == present_ids(i));
-    share = mean(paired_windows.ArxBetter(paired_windows.Case == present_ids(i)));
-    text(ax, i, y_limits(2), [sprintf('{\\itn} = %d', n), sprintf('ARX better: %.0f%%', 100 * share) + string(local_incomplete_tag(row.Complete))], 'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', 'FontName', style.font_name, 'FontSize', style.tick_font_size - 1, 'Interpreter', 'tex');
+set_name = "Primary matched set";
+if set_id == "extended"
+    set_name = "Extended matched set";
 end
-text(ax, 0.01, 0.02, 'Positive values: ARX more accurate than persistence (matched windows)', 'Units', 'normalized', 'VerticalAlignment', 'bottom', 'FontName', style.font_name, 'FontSize', style.tick_font_size - 1);
+title(tl, set_name, 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal');
 
-exportgraphics(fig, fullfile(figure_dir, 'partB_04_arx_improvement.pdf'), 'ContentType', 'vector');
+exportgraphics(fig, output_path, 'ContentType', 'vector');
 close(fig);
 end
 
@@ -255,24 +296,22 @@ else
 end
 end
 
-function local_figure_support(support_condition, case_ids, case_labels, method_ids, style, figure_dir)
-%LOCAL_FIGURE_SUPPORT Stacked status shares of all intended forecast windows per condition and method.
+function local_figure_support(support_condition, case_ids, case_labels, method_ids, matched_sets, style, figure_dir)
+%LOCAL_FIGURE_SUPPORT Stacked status shares of all intended forecast windows per condition and method, plus matched-set shares.
 status_vars   = {'Ok', 'EstimationUnavailable', 'InsufficientHistory', 'DomainFailure', 'ForecastFailure', 'DatasetUnavailable'};
 status_labels = ["Valid forecast", "Estimation unavailable", "Insufficient history", "Domain failure", "Forecast failure", "Dataset unavailable"];
 status_colors = [0.000, 0.620, 0.451; 0.600, 0.600, 0.600; 0.800, 0.475, 0.655; 0.835, 0.369, 0.000; 0.902, 0.624, 0.000; 0.250, 0.250, 0.250];
-method_labels = local_method_labels(method_ids);
+method_labels = local_method_style(method_ids);
 
-fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 8.5], 'Color', 'w');
-tl  = tiledlayout(fig, 1, numel(method_ids), 'Padding', 'compact', 'TileSpacing', 'compact');
+fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.5, 15.0], 'Color', 'w');
+tl  = tiledlayout(fig, 2, 3, 'Padding', 'compact', 'TileSpacing', 'compact');
 
 for m = 1:numel(method_ids)
     shares   = zeros(numel(case_ids), numel(status_vars));
     intended = zeros(numel(case_ids), 1);
-    matched  = zeros(numel(case_ids), 1);
     for i = 1:numel(case_ids)
         row = support_condition(support_condition.Case == case_ids(i) & support_condition.Method == method_ids(m), :);
         intended(i) = row.IntendedWindows;
-        matched(i)  = row.Matched;
         for j = 1:numel(status_vars)
             shares(i, j) = row.(status_vars{j}) / row.IntendedWindows;
         end
@@ -293,24 +332,47 @@ for m = 1:numel(method_ids)
     ylim(ax, [0, 1.12]);
     title(ax, method_labels(m), 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal', 'Interpreter', 'tex');
 
-    if m == numel(method_ids)
+    if m == 1
         lg = legend(b, status_labels, 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.legend_font_size, 'Box', 'off', 'Orientation', 'horizontal', 'NumColumns', 3);
         lg.Layout.Tile = 'north';
     end
 end
 
+matched_shares = zeros(numel(case_ids), numel(matched_sets));
+for i = 1:numel(case_ids)
+    for k = 1:numel(matched_sets)
+        row = support_condition(support_condition.Case == case_ids(i) & support_condition.Method == matched_sets(k).method_ids(1), :);
+        matched_shares(i, k) = row.("Matched_" + matched_sets(k).set_id) / row.IntendedWindows;
+    end
+end
+
+ax = nexttile(tl);
+b  = bar(ax, (1:numel(case_ids))', matched_shares);
+set_colors = [0.350, 0.350, 0.350; 0.700, 0.700, 0.700];
+for k = 1:numel(b)
+    b(k).FaceColor = set_colors(k, :);
+    b(k).EdgeColor = 'none';
+end
+local_style_bar_axis(ax, (1:numel(case_ids))', case_labels, "Share of intended forecast windows", style);
+ax.XTickLabelRotation = 35;
+ylim(ax, [0, 1.12]);
+title(ax, "Matched sets", 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'normal', 'Interpreter', 'tex');
+local_apply_legend(ax, b, [matched_sets.set_name], style, 1);
+
 exportgraphics(fig, fullfile(figure_dir, 'partB_04_execution_support.pdf'), 'ContentType', 'vector');
 close(fig);
 end
 
-function labels = local_method_labels(method_ids)
-%LOCAL_METHOD_LABELS Display labels for the forecast methods.
+function [labels, colors] = local_method_style(method_ids)
+%LOCAL_METHOD_STYLE Display labels (M-by-1) and RGB colors (M-by-3) for the forecast methods.
 labels = strings(numel(method_ids), 1);
+colors = zeros(numel(method_ids), 3);
 for m = 1:numel(method_ids)
     switch method_ids(m)
-        case "persistence"; labels(m) = "Persistence";
-        case "oracle";      labels(m) = "Oracle";
-        case "arx";         labels(m) = "ARX/I";
+        case "persistence"; labels(m) = "Persistence"; colors(m, :) = [0.902, 0.624, 0.000];
+        case "oracle";      labels(m) = "Oracle";      colors(m, :) = [0.000, 0.447, 0.698];
+        case "ar";          labels(m) = "AR/None";     colors(m, :) = [0.800, 0.475, 0.655];
+        case "arx";         labels(m) = "ARX/I";       colors(m, :) = [0.000, 0.620, 0.451];
     end
 end
 end
@@ -328,11 +390,11 @@ for i = 1:numel(case_ids)
 end
 end
 
-function h = local_grouped_bars(ax, matrix, style)
+function h = local_grouped_bars(ax, matrix, colors)
 %LOCAL_GROUPED_BARS Grouped categorical bars colored by method.
 h = bar(ax, (1:size(matrix, 1))', matrix);
 for j = 1:numel(h)
-    h(j).FaceColor = style.method_colors(j, :);
+    h(j).FaceColor = colors(j, :);
     h(j).EdgeColor = 'none';
 end
 end
@@ -379,10 +441,6 @@ style.line_width        = 1.2;
 style.truth_line_width  = 1.3;
 style.marker_size       = 3.5;
 style.unavailable_color = [0.835, 0.369, 0.000];
-style.method_colors     = [
-    0.902, 0.624, 0.000;
-    0.000, 0.447, 0.698;
-    0.000, 0.620, 0.451];
 end
 
 function local_apply_legend(ax, handles, labels, style, num_columns)

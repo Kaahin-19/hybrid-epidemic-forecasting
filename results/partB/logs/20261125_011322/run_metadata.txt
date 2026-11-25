@@ -1,17 +1,24 @@
 == Execution ==
-Run ID: 20261118_135421
-Started: 2026-11-18 13:54:21
+Run ID: 20261125_011322
+Started: 2026-11-25 01:13:22
 Repository: /home/kaahin/degree_project/hybrid-epidemic-forecasting
 Command: ./run_partB_pipeline.sh --fresh 
 Fresh (--fresh): yes
 
 == Git provenance (captured before cleanup) ==
-Commit: 9844d9ae96d0fc2125fc8bf23b10fda28e0f47e4
+Commit: ce45a86b353f8a48ebedfe090a12629a2be7ab10
 Branch: dev
-Working tree: clean
+Working tree: modified
+WARNING: uncommitted changes outside data/ and results/; the run cannot be reconstructed exactly from the commit alone.
 
 Modified and untracked files (git status --porcelain):
-(none)
+ M README.md
+ M config/partB_config.m
+ M run_partB_pipeline.sh
+ M scripts/partB/partB_02_run_forecasts.m
+ M scripts/partB/partB_03_evaluate_forecasts.m
+ M scripts/partB/partB_04_generate_figures.m
+ D scripts/partB/partB_verify_implementation.m
 
 Submodules (git submodule status; leading + = checkout differs from recorded commit, - = not initialised):
  4e0183b0b3e6150d4d810c44e7a7151b66410f56 third_party/stenglib (heads/master)
