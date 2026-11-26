@@ -75,7 +75,7 @@ cfg.scenarios(1).params      = struct("center", 1, "amp", 0.18, "period", T_end,
 cfg.scenarios(2).id          = "A2";
 cfg.scenarios(2).name        = "Policy Intervention";
 cfg.scenarios(2).signal_type = "sigmoid";
-cfg.scenarios(2).params      = struct("high", 1.30, "low", 0.65, "t0", 51, "k", 4 / 14);
+cfg.scenarios(2).params      = struct("high", 1.30, "low", 0.65, "t0", 70, "k", 4 / 14);
 
 cfg.scenarios(3).id          = "A3";
 cfg.scenarios(3).name        = "Damped Recurrent Waves";
@@ -122,7 +122,7 @@ cfg.design.refinement.num_variants = 3;
 cfg.design.assessment.num_variants = 3;
 
 cfg.design.variants.A1 = struct("amp", [0.12, 0.18], "phase", [0, 2 * pi]);
-cfg.design.variants.A2 = struct("t0", [49, 63], "k", [3, 5] / 14, "low", [0.65, 0.85], "growth_fraction", [0.7, 1.0]);
+cfg.design.variants.A2 = struct("t0", [63, 77], "k", [3, 5] / 14, "low", [0.65, 0.85], "growth_fraction", [0.7, 1.0]);
 cfg.design.variants.A3 = struct("spacing", [70, 80], "scale", [0.24, 0.30], "ratio", [0.92, 0.97]);
 cfg.design.variants.A4 = struct("spacing", [70, 80], "scale", [0.22, 0.27], "ratio", [1.03, 1.06]);
 
@@ -164,12 +164,15 @@ cfg.forecast.plot_lead_time = 7;
 
 cfg.forecast.seed_policy = "Origin w of the trajectory with seed index k uses seed run.seed + 10000*k + w for residual resampling and that seed + 1e6 as the SIRS epidemic seed, which is inert under the deterministic uds solver.";
 
-% Forecast failures recorded as experimental infeasibility; any other error
-% terminates the run.
+% Errors raised while generating a forecast, including the SIRS propagation
+% of each closed-loop predictive path, that are recorded as forecast
+% infeasibility. Any other error, and any error during truth generation or
+% the idealised projection, terminates the run.
 cfg.forecast.infeasibility_ids = [
     "FORECAST_OPEN:InvalidForecastDraw";
     "FORECAST_CLOSED:InvalidForecastDraw";
     "EPIDEMIC:SusceptibleBelowThreshold";
+    "EPIDEMIC:InvalidState";
     "FORECAST_OPEN:ConstantSeries";
     "FORECAST_CLOSED:ConstantSeries";
     "FORECAST_OPEN:InsufficientHistory";

@@ -458,7 +458,7 @@ ok         = evaluation.status == "ok";
 failed     = evaluation.status == "infeasible";
 classes    = local_failure_class(evaluation.error_id(failed));
 
-row = table(model, exo, stage, numel(evidence.feasible), nnz(evidence.feasible), numel(evaluation.status), nnz(ok), nnz(failed), nnz(evaluation.status == "not_evaluated"), NaN, sum(classes == "invalid_draw"), sum(classes == "susceptible_domain"), sum(classes == "identification"), mean(evaluation.spectral_radius(ok) >= 1), mean(evaluation.iteration_limit_reached(ok)), 'VariableNames', local_feasibility_names());
+row = table(model, exo, stage, numel(evidence.feasible), nnz(evidence.feasible), numel(evaluation.status), nnz(ok), nnz(failed), nnz(evaluation.status == "not_evaluated"), NaN, sum(classes == "invalid_draw"), sum(classes == "susceptible_domain"), sum(classes == "invalid_state"), sum(classes == "identification"), mean(evaluation.spectral_radius(ok) >= 1), mean(evaluation.iteration_limit_reached(ok)), 'VariableNames', local_feasibility_names());
 end
 
 function tbl = local_forecast_feasibility(window_scores)
@@ -471,7 +471,7 @@ for g = 1:height(groups)
     ok      = rows.Status == "ok";
     classes = local_failure_class(rows.ErrorId(~ok));
 
-    blocks{g} = table(groups.Model(g), groups.ExoMode(g), groups.Stage(g), NaN, NaN, height(rows), nnz(ok), nnz(~ok), 0, mean(ok), sum(classes == "invalid_draw"), sum(classes == "susceptible_domain"), sum(classes == "identification"), mean(rows.SpectralRadius(ok) >= 1), mean(rows.IterationLimitReached(ok)), 'VariableNames', local_feasibility_names());
+    blocks{g} = table(groups.Model(g), groups.ExoMode(g), groups.Stage(g), NaN, NaN, height(rows), nnz(ok), nnz(~ok), 0, mean(ok), sum(classes == "invalid_draw"), sum(classes == "susceptible_domain"), sum(classes == "invalid_state"), sum(classes == "identification"), mean(rows.SpectralRadius(ok) >= 1), mean(rows.IterationLimitReached(ok)), 'VariableNames', local_feasibility_names());
 end
 
 tbl = vertcat(blocks{:});
@@ -479,7 +479,7 @@ end
 
 function names = local_feasibility_names()
 %LOCAL_FEASIBILITY_NAMES Column names of the feasibility summary.
-names = {'Model', 'ExoMode', 'Stage', 'NumCandidates', 'NumFeasibleCandidates', 'NumOrigins', 'NumOriginsOk', 'NumOriginsInfeasible', 'NumOriginsNotEvaluated', 'Availability', 'InvalidDrawFailures', 'SusceptibleDomainFailures', 'IdentificationFailures', 'UnstableFitFraction', 'IterationLimitFraction'};
+names = {'Model', 'ExoMode', 'Stage', 'NumCandidates', 'NumFeasibleCandidates', 'NumOrigins', 'NumOriginsOk', 'NumOriginsInfeasible', 'NumOriginsNotEvaluated', 'Availability', 'InvalidDrawFailures', 'SusceptibleDomainFailures', 'InvalidStateFailures', 'IdentificationFailures', 'UnstableFitFraction', 'IterationLimitFraction'};
 end
 
 function failure_class = local_failure_class(error_ids)
@@ -487,6 +487,7 @@ function failure_class = local_failure_class(error_ids)
 failure_class = repmat("identification", size(error_ids));
 failure_class(endsWith(error_ids, "InvalidForecastDraw"))       = "invalid_draw";
 failure_class(endsWith(error_ids, "SusceptibleBelowThreshold")) = "susceptible_domain";
+failure_class(endsWith(error_ids, "InvalidState"))              = "invalid_state";
 end
 
 function tbl = local_trajectory_summary(window_scores)
