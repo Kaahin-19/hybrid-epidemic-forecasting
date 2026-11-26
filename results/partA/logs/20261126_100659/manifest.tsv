@@ -1,0 +1,11 @@
+Timestamp	Step	Model	Exo	Status	LogFile	Details
+2026-11-26 10:07:04	truth	-	-	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_100659/partA_01_generate_truth.log	Generating or reusing Part A synthetic datasets
+2026-11-26 10:07:23	truth	-	-	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_100659/partA_01_generate_truth.log	19s
+2026-11-26 10:07:23	model_selection	AR	None	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_100659/AR_None_model_selection.log	Selecting hyperparameters for AR | None
+2026-11-26 10:08:17	model_selection	AR	None	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_100659/AR_None_model_selection.log	54s
+2026-11-26 10:08:17	forecast	AR	None	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_100659/AR_None_assessment.log	Running independent assessment forecasts for AR | None
+2026-11-26 10:08:45	forecast	AR	None	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_100659/AR_None_assessment.log	28s
+2026-11-26 10:08:45	evaluation	-	-	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_100659/partA_04_evaluate_forecasts.log	Evaluating accumulated Part A selection and forecast artifacts
+2026-11-26 10:08:53	evaluation	-	-	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_100659/partA_04_evaluate_forecasts.log	8s
+2026-11-26 10:08:53	figures	-	-	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_100659/partA_05_generate_figures.log	Generating Part A thesis figures
+2026-11-26 10:09:32	figures	-	-	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_100659/partA_05_generate_figures.log	39s

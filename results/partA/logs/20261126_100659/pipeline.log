@@ -1,0 +1,16 @@
+[2026-11-26 10:06:59] Run ID: 20261126_100659
+[2026-11-26 10:06:59] Running Part A synthetic forecasting pipeline
+[2026-11-26 10:06:59] Pipeline started
+[2026-11-26 10:07:04] Starting Generating or reusing Part A synthetic datasets
+[2026-11-26 10:07:23] Completed Generating or reusing Part A synthetic datasets in 19s
+[2026-11-26 10:07:23] Starting Selecting hyperparameters for AR | None
+[2026-11-26 10:08:17] Completed Selecting hyperparameters for AR | None in 54s
+[2026-11-26 10:08:17] Starting Running independent assessment forecasts for AR | None
+[2026-11-26 10:08:45] Completed Running independent assessment forecasts for AR | None in 28s
+[2026-11-26 10:08:45] Starting Evaluating accumulated Part A selection and forecast artifacts
+[2026-11-26 10:08:53] Completed Evaluating accumulated Part A selection and forecast artifacts in 8s
+[2026-11-26 10:08:53] Starting Generating Part A thesis figures
+[2026-11-26 10:09:32] Completed Generating Part A thesis figures in 39s
+[2026-11-26 10:09:32] Part A synthetic forecasting pipeline completed successfully in 153s
+[2026-11-26 10:09:32] Thesis-level figures generated under: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/figures
+[2026-11-26 10:09:32] Run logs saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_100659

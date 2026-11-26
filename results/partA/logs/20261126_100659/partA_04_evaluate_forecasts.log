@@ -1,0 +1,20 @@
+=== Part A Forecast Evaluation ===
+Artifacts: selection 1/12, transfer 1/12, assessment 1/12 configurations
+Evaluation covers an incomplete set of configurations; see the coverage table.
+Scored 2464 forecast origins (2464 available) and 528 infectious-projection origins.
+Evaluation artifact saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/evaluation/partA_04_evaluation_results.mat
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_window_scores.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_horizon_scores.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_scenario_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_horizon_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_interval_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_i_projection_window_scores.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_i_projection_horizon_scores.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_i_projection_scenario_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_i_projection_horizon_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_selection_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_candidate_diagnostics.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_trajectory_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_feasibility_summary.csv
+=== Part A Forecast Evaluation Complete ===
+

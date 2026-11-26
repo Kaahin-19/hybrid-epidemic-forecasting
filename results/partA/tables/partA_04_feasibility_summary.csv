@@ -1,0 +1,9 @@
+Model,ExoMode,Stage,NumCandidates,NumFeasibleCandidates,NumOrigins,NumOriginsOk,NumOriginsInfeasible,NumOriginsNotEvaluated,Availability,InvalidDrawFailures,SusceptibleDomainFailures,InvalidStateFailures,IdentificationFailures,UnstableFitFraction,IterationLimitFraction
+AR,None,development,7,7,2464,2464,0,0,NaN,0,0,0,0,0,0
+AR,None,refinement,7,7,4928,4928,0,0,NaN,0,0,0,0,0.0170454545454545,0
+ARX,S,development,112,109,39424,38397,3,1024,NaN,0,3,0,0,0.647915201708467,0
+ARX,S,refinement,112,30,78848,36988,85,41775,NaN,13,72,0,0,0.534335460149238,0
+AR,None,assessment,NaN,NaN,528,528,0,0,1,0,0,0,0,0,0
+AR,None,transfer,NaN,NaN,704,704,0,0,1,0,0,0,0,0.119318181818182,0
+ARX,S,assessment,NaN,NaN,528,528,0,0,1,0,0,0,0,0.702651515151515,0
+ARX,S,transfer,NaN,NaN,704,700,4,0,0.994318181818182,2,2,0,0,0.881428571428571,0

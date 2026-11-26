@@ -1,0 +1,194 @@
+== Execution ==
+Run ID: 20261126_102338
+Started: 2026-11-26 10:23:38
+Repository: /home/kaahin/degree_project/hybrid-epidemic-forecasting
+Command: ./run_partA_pipeline.sh --models 2 --exo 1 
+Fresh (--fresh): no
+Selected model/exo combinations (1):
+  ARX | S
+Skipped invalid combinations (0):
+
+== Git provenance ==
+Commit: 048bb5d8c7aa02c87203d76af15f56e4fad0e3db
+Branch: dev
+Working tree: modified
+
+Modified and untracked files (git status --porcelain):
+ D data/partA/partA_01_truth_A1.mat
+ D data/partA/partA_01_truth_A2.mat
+ D data/partA/partA_01_truth_A3.mat
+ D data/partA/partA_01_truth_A4.mat
+ M results/partA/evaluation/partA_04_evaluation_results.mat
+ D results/partA/figures/partA_05_coverage_summary.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A1_ARX_Both.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A1_ARX_I.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A1_ARX_S.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A1_AR_None.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A1_N4SID_Both.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A1_N4SID_I.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A1_N4SID_None.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A1_N4SID_S.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A1_SSEST_Both.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A1_SSEST_I.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A1_SSEST_None.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A1_SSEST_S.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A2_ARX_Both.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A2_ARX_I.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A2_ARX_S.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A2_AR_None.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A2_N4SID_Both.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A2_N4SID_I.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A2_N4SID_None.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A2_N4SID_S.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A2_SSEST_Both.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A2_SSEST_I.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A2_SSEST_None.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A2_SSEST_S.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A3_ARX_Both.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A3_ARX_I.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A3_ARX_S.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A3_AR_None.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A3_N4SID_Both.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A3_N4SID_I.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A3_N4SID_None.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A3_N4SID_S.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A3_SSEST_Both.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A3_SSEST_I.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A3_SSEST_None.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A3_SSEST_S.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A4_ARX_Both.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A4_ARX_I.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A4_ARX_S.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A4_AR_None.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A4_N4SID_Both.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A4_N4SID_I.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A4_N4SID_None.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A4_N4SID_S.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A4_SSEST_Both.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A4_SSEST_I.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A4_SSEST_None.pdf
+ D results/partA/figures/partA_05_forecast_comparison_A4_SSEST_S.pdf
+ M results/partA/figures/partA_05_infected_projection_mae_by_horizon.pdf
+ D results/partA/figures/partA_05_mean_wis_by_horizon.pdf
+ D results/partA/figures/partA_05_model_wis_distribution.pdf
+ M results/partA/figures/partA_05_rt_scenarios.pdf
+ D results/partA/forecasts/partA_03_forecast_A1_ARX_Both.mat
+ D results/partA/forecasts/partA_03_forecast_A1_ARX_I.mat
+ D results/partA/forecasts/partA_03_forecast_A1_ARX_S.mat
+ D results/partA/forecasts/partA_03_forecast_A1_AR_None.mat
+ D results/partA/forecasts/partA_03_forecast_A1_N4SID_Both.mat
+ D results/partA/forecasts/partA_03_forecast_A1_N4SID_I.mat
+ D results/partA/forecasts/partA_03_forecast_A1_N4SID_None.mat
+ D results/partA/forecasts/partA_03_forecast_A1_N4SID_S.mat
+ D results/partA/forecasts/partA_03_forecast_A1_SSEST_Both.mat
+ D results/partA/forecasts/partA_03_forecast_A1_SSEST_I.mat
+ D results/partA/forecasts/partA_03_forecast_A1_SSEST_None.mat
+ D results/partA/forecasts/partA_03_forecast_A1_SSEST_S.mat
+ D results/partA/forecasts/partA_03_forecast_A2_ARX_Both.mat
+ D results/partA/forecasts/partA_03_forecast_A2_ARX_I.mat
+ D results/partA/forecasts/partA_03_forecast_A2_ARX_S.mat
+ D results/partA/forecasts/partA_03_forecast_A2_AR_None.mat
+ D results/partA/forecasts/partA_03_forecast_A2_N4SID_Both.mat
+ D results/partA/forecasts/partA_03_forecast_A2_N4SID_I.mat
+ D results/partA/forecasts/partA_03_forecast_A2_N4SID_None.mat
+ D results/partA/forecasts/partA_03_forecast_A2_N4SID_S.mat
+ D results/partA/forecasts/partA_03_forecast_A2_SSEST_Both.mat
+ D results/partA/forecasts/partA_03_forecast_A2_SSEST_I.mat
+ D results/partA/forecasts/partA_03_forecast_A2_SSEST_None.mat
+ D results/partA/forecasts/partA_03_forecast_A2_SSEST_S.mat
+ D results/partA/forecasts/partA_03_forecast_A3_ARX_Both.mat
+ D results/partA/forecasts/partA_03_forecast_A3_ARX_I.mat
+ D results/partA/forecasts/partA_03_forecast_A3_ARX_S.mat
+ D results/partA/forecasts/partA_03_forecast_A3_AR_None.mat
+ D results/partA/forecasts/partA_03_forecast_A3_N4SID_Both.mat
+ D results/partA/forecasts/partA_03_forecast_A3_N4SID_I.mat
+ D results/partA/forecasts/partA_03_forecast_A3_N4SID_None.mat
+ D results/partA/forecasts/partA_03_forecast_A3_N4SID_S.mat
+ D results/partA/forecasts/partA_03_forecast_A3_SSEST_Both.mat
+ D results/partA/forecasts/partA_03_forecast_A3_SSEST_I.mat
+ D results/partA/forecasts/partA_03_forecast_A3_SSEST_None.mat
+ D results/partA/forecasts/partA_03_forecast_A3_SSEST_S.mat
+ D results/partA/forecasts/partA_03_forecast_A4_ARX_Both.mat
+ D results/partA/forecasts/partA_03_forecast_A4_ARX_I.mat
+ D results/partA/forecasts/partA_03_forecast_A4_ARX_S.mat
+ D results/partA/forecasts/partA_03_forecast_A4_AR_None.mat
+ D results/partA/forecasts/partA_03_forecast_A4_N4SID_Both.mat
+ D results/partA/forecasts/partA_03_forecast_A4_N4SID_I.mat
+ D results/partA/forecasts/partA_03_forecast_A4_N4SID_None.mat
+ D results/partA/forecasts/partA_03_forecast_A4_N4SID_S.mat
+ D results/partA/forecasts/partA_03_forecast_A4_SSEST_Both.mat
+ D results/partA/forecasts/partA_03_forecast_A4_SSEST_I.mat
+ D results/partA/forecasts/partA_03_forecast_A4_SSEST_None.mat
+ D results/partA/forecasts/partA_03_forecast_A4_SSEST_S.mat
+ D results/partA/model_selection/partA_02_global_hyperparameters_ARX_Both.mat
+ D results/partA/model_selection/partA_02_global_hyperparameters_ARX_I.mat
+ D results/partA/model_selection/partA_02_global_hyperparameters_ARX_S.mat
+ M results/partA/model_selection/partA_02_global_hyperparameters_AR_None.mat
+ D results/partA/model_selection/partA_02_global_hyperparameters_N4SID_Both.mat
+ D results/partA/model_selection/partA_02_global_hyperparameters_N4SID_I.mat
+ D results/partA/model_selection/partA_02_global_hyperparameters_N4SID_None.mat
+ D results/partA/model_selection/partA_02_global_hyperparameters_N4SID_S.mat
+ D results/partA/model_selection/partA_02_global_hyperparameters_SSEST_Both.mat
+ D results/partA/model_selection/partA_02_global_hyperparameters_SSEST_I.mat
+ D results/partA/model_selection/partA_02_global_hyperparameters_SSEST_None.mat
+ D results/partA/model_selection/partA_02_global_hyperparameters_SSEST_S.mat
+ M results/partA/tables/partA_04_horizon_scores.csv
+ M results/partA/tables/partA_04_horizon_summary.csv
+ M results/partA/tables/partA_04_i_projection_horizon_scores.csv
+ M results/partA/tables/partA_04_i_projection_horizon_summary.csv
+ M results/partA/tables/partA_04_i_projection_scenario_summary.csv
+ M results/partA/tables/partA_04_i_projection_window_scores.csv
+ M results/partA/tables/partA_04_interval_summary.csv
+ M results/partA/tables/partA_04_scenario_summary.csv
+ M results/partA/tables/partA_04_window_scores.csv
+?? data/partA/assessment/
+?? data/partA/development/
+?? data/partA/partA_01_dataset_manifest.mat
+?? data/partA/refinement/
+?? results/partA/figures/partA_05_coverage_summary_assessment.pdf
+?? results/partA/figures/partA_05_coverage_summary_transfer.pdf
+?? results/partA/figures/partA_05_feasibility_summary.pdf
+?? results/partA/figures/partA_05_forecast_comparison_assessment_AR_None.pdf
+?? results/partA/figures/partA_05_forecast_comparison_transfer_AR_None.pdf
+?? results/partA/figures/partA_05_mean_wis_by_horizon_assessment.pdf
+?? results/partA/figures/partA_05_mean_wis_by_horizon_transfer.pdf
+?? results/partA/figures/partA_05_model_wis_distribution_assessment.pdf
+?? results/partA/figures/partA_05_model_wis_distribution_transfer.pdf
+?? results/partA/figures/partA_05_preliminary_vs_final.pdf
+?? results/partA/figures/partA_05_selection_diagnostics_development.pdf
+?? results/partA/figures/partA_05_selection_diagnostics_refinement.pdf
+?? results/partA/forecasts/partA_02_forecast_transfer_AR_None.mat
+?? results/partA/forecasts/partA_03_forecast_assessment_AR_None.mat
+?? results/partA/logs/20261126_100659/
+?? results/partA/model_selection/partA_02_development_AR_None.mat
+?? results/partA/model_selection/partA_02_refinement_AR_None.mat
+?? results/partA/tables/partA_04_candidate_diagnostics.csv
+?? results/partA/tables/partA_04_feasibility_summary.csv
+?? results/partA/tables/partA_04_selection_summary.csv
+?? results/partA/tables/partA_04_trajectory_summary.csv
+
+Submodules (git submodule status; leading + = checkout differs from recorded commit, - = not initialised):
+ 4e0183b0b3e6150d4d810c44e7a7151b66410f56 third_party/stenglib (heads/master)
+ f75526ca077202d6837e2088ae1fcc6ed61e2fbc third_party/urdme (v1.3.0-44-gf75526c)
+
+== MATLAB environment ==
+Executable: /home/kaahin/MATLAB/R2025b/bin/matlab
+MATLAB root: /home/kaahin/MATLAB/R2025b
+VersionInfo.xml release: R2025b
+VersionInfo.xml version: 25.2.0.3360999
+VersionInfo.xml update: Update 7
+
+Installed products (MATLAB ver; license number omitted):
+--------------------------------------------------------------------------------------------------------------------
+MATLAB Version: 25.2.0.3360999 (R2025b) Update 7
+Operating System: Linux 6.18.58.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Tue Oct 27 00:24:11 UTC 2026 x86_64
+Java Version: Java is not loaded
+--------------------------------------------------------------------------------------------------------------------
+MATLAB                                                Version 25.2        (R2025b)
+Simulink                                              Version 25.2        (R2025b)
+Control System Toolbox                                Version 25.2        (R2025b)
+Financial Toolbox                                     Version 25.2        (R2025b)
+Optimization Toolbox                                  Version 25.2        (R2025b)
+Parallel Computing Toolbox                            Version 25.2        (R2025b)
+Statistics and Machine Learning Toolbox               Version 25.2        (R2025b)
+System Identification Toolbox                         Version 25.2        (R2025b)
