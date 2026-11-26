@@ -10,7 +10,8 @@ function cfg = partA_config()
 %       scenarios, SIRS parameters, the role-separated synthetic dataset
 %       design, the active model configuration, the forecasting protocol and
 %       candidate grids, the one-SE selection rule, predictive interval
-%       settings, artifact snapshots, and output paths.
+%       settings, artifact snapshots, figure-generation scope, and output
+%       paths.
 %
 %   Inputs:
 %       None.
@@ -30,6 +31,8 @@ function cfg = partA_config()
 %           .selection  : One-SE threshold multipliers.
 %           .intervals  : Predictive interval simulation settings.
 %           .snapshot   : Artifact compatibility snapshots.
+%           .figures    : Scope and model/input configurations of the
+%                         configuration-specific figures.
 %           .output     : Data, result, figure, and table paths.
 %
 %   See also PARTA_01_GENERATE_TRUTH, PARTA_02_SELECT_HYPERPARAMETERS,
@@ -195,7 +198,17 @@ cfg.snapshot.selection = struct("model_type", cfg.run.model_type, "exo_mode", cf
 
 cfg.snapshot.forecast = struct("model_type", cfg.run.model_type, "exo_mode", cfg.run.exo_mode, "seed", cfg.run.seed, "min_window", cfg.forecast.min_window, "step_size", cfg.forecast.step_size, "horizon", cfg.forecast.horizon, "wis_alphas", cfg.forecast.wis_alphas, "infeasibility_ids", cfg.forecast.infeasibility_ids, "num_draws", cfg.intervals.num_draws, "include_epidemic_seed_variation", cfg.intervals.include_epidemic_seed_variation, "sirs", cfg.sirs, "design", cfg.snapshot.design);
 
-%% 12. Output Paths
+%% 12. Figure Generation Scope
+% Configuration-specific figures (the representative forecasts) are drawn
+% for every available forecast artifact ("all") or for the selected
+% configurations ("selected"): the active run configuration, or the
+% comma-separated Model/Exo list in PARTA_FIGURE_CONFIGURATIONS, which
+% run_partA_pipeline.sh sets with PARTA_FIGURE_SCOPE to its selected
+% combinations. Comparative figures always use all accumulated results.
+cfg.figures.scope = string(local_env_or_default('PARTA_FIGURE_SCOPE', 'all'));  % "all" or "selected"
+cfg.figures.configurations = local_resolve_figure_configurations(cfg.figures.scope, cfg.run.model_type + "/" + cfg.run.exo_mode, cfg.run.valid_configurations);
+
+%% 13. Output Paths
 thisDir  = fileparts(mfilename('fullpath'));
 repoRoot = fileparts(thisDir);
 
@@ -210,7 +223,7 @@ cfg.output.table_dir           = fullfile(cfg.output.root_dir, "tables");
 
 end
 
-%% 13. Local Functions
+%% 14. Local Functions
 function value = local_env_or_default(env_name, default_value)
 %LOCAL_ENV_OR_DEFAULT Return environment value or default string.
 value = getenv(env_name);
@@ -239,5 +252,23 @@ end
 
 if ~any(valid_configurations(:, 1) == model_type & valid_configurations(:, 2) == exo_mode)
     error('CFG:InvalidRunCombination', '%s does not support EXO_MODE %s.', model_type, exo_mode);
+end
+end
+
+function configurations = local_resolve_figure_configurations(scope, active_configuration, valid_configurations)
+%LOCAL_RESOLVE_FIGURE_CONFIGURATIONS Model/input configurations of the configuration-specific figures.
+switch scope
+    case "all"
+        configurations = valid_configurations;
+    case "selected"
+        listed  = string(local_env_or_default('PARTA_FIGURE_CONFIGURATIONS', active_configuration));
+        entries = split(listed, ",");
+        configurations = [extractBefore(entries, "/"), extractAfter(entries, "/")];
+
+        if ~all(ismember(configurations(:, 1) + "/" + configurations(:, 2), valid_configurations(:, 1) + "/" + valid_configurations(:, 2)))
+            error('CFG:InvalidFigureConfiguration', 'Unsupported PARTA_FIGURE_CONFIGURATIONS value: %s.', listed);
+        end
+    otherwise
+        error('CFG:InvalidFigureScope', 'Unsupported PARTA_FIGURE_SCOPE value: %s.', scope);
 end
 end

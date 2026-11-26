@@ -12,6 +12,14 @@
 %       fixed model/input ordering, and are annotated when the evaluated
 %       configuration set is incomplete.
 %
+%       The representative forecast figures are configuration-specific and
+%       are drawn for the configurations of cfg.figures (all available
+%       forecast artifacts, or the selected configurations); figures outside
+%       that scope are left as they are. All other figures are comparative
+%       and always use every accumulated result. Plotting categories without
+%       data in a panel are not drawn, and shared legends list the categories
+%       drawn in any panel.
+%
 %   Workflow:
 %       1. Initialize figure paths, source artifacts, and shared styling.
 %       2. Generate the synthetic Rt trajectory panels.
@@ -47,8 +55,13 @@ strata_names = [[cfg.design.development.strata.name]'; [cfg.scenarios.name]'];
 family_ids   = [cfg.scenarios.id]';
 family_names = [cfg.scenarios.name]';
 
-forecast_files = [dir(fullfile(forecast_dir, 'partA_02_forecast_transfer_*.mat')); dir(fullfile(forecast_dir, 'partA_03_forecast_assessment_*.mat'))];
+figure_configurations = cfg.figures.configurations;
+configuration_suffixes = figure_configurations(:, 1) + "_" + figure_configurations(:, 2);
+forecast_files = [fullfile(forecast_dir, "partA_02_forecast_transfer_" + configuration_suffixes + ".mat"); fullfile(forecast_dir, "partA_03_forecast_assessment_" + configuration_suffixes + ".mat")];
+forecast_files = forecast_files(isfile(forecast_files));
 evaluation_artifact = fullfile(evaluation_dir, 'partA_04_evaluation_results.mat');
+
+fprintf('Figure scope: %s (%s)\n', cfg.figures.scope, strjoin(figure_configurations(:, 1) + "/" + figure_configurations(:, 2), ", "));
 
 %% 2. Synthetic Rt Trajectories
 if exist(cfg.output.dataset_manifest, 'file') ~= 2
@@ -117,7 +130,7 @@ end
 
 %% 3. Representative Fixed-Lead Forecasts
 if isempty(forecast_files)
-    fprintf('Skipping forecast comparisons - no forecast artifacts in %s.\n', forecast_dir);
+    fprintf('Skipping forecast comparisons - no forecast artifacts of the figure scope in %s.\n', forecast_dir);
 else
     lead        = cfg.forecast.plot_lead_time;
     plot_alphas = sort(cfg.forecast.plot_alphas);
@@ -125,10 +138,13 @@ else
     fprintf('Drawing %d representative forecast figure(s) at lead %d day(s)...\n', numel(forecast_files), lead);
 
     for f = 1:numel(forecast_files)
-        loaded = load(fullfile(forecast_files(f).folder, forecast_files(f).name));
+        loaded = load(forecast_files(f));
 
         fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 11.5], 'Color', 'w');
         tl  = tiledlayout(fig, 2, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
+
+        legend_handles = gobjects(0, 1);
+        legend_labels  = strings(0, 1);
 
         for p = 1:numel(family_ids)
             ax = nexttile(tl);
@@ -143,15 +159,16 @@ else
             forecast = loaded.forecasts(representative);
             fc = local_fixed_lead(forecast, loaded.wis_alphas, lead, plot_alphas);
 
-            spec = struct('series', local_forecast_series(fc, plot_alphas, style), 'style', struct('y_limits', rt_bounds, 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+            spec = struct('series', local_series_with_data(local_forecast_series(fc, plot_alphas, style)), 'style', struct('y_limits', rt_bounds, 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
             [h, labels] = plot_series(ax, spec);
+            [legend_handles, legend_labels] = local_merge_legend(legend_handles, legend_labels, h, labels);
 
             title(ax, sprintf('(%c) %s (%s)', 'a' + p - 1, family_names(p), strrep(forecast.dataset_id, "_", "\_")), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size, 'FontWeight', 'normal');
         end
 
         xlabel(tl, "Time, {\it t} (days)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
         ylabel(tl, "Effective reproduction number, {\it R}_t", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
-        local_tile_legend(h, labels, style);
+        local_tile_legend(legend_handles, legend_labels, style);
 
         plot_name = sprintf('partA_05_forecast_comparison_%s_%s_%s.pdf', loaded.stage, loaded.model_type, loaded.exo_mode);
         exportgraphics(fig, fullfile(figure_dir, plot_name), 'ContentType', 'vector');
@@ -285,22 +302,26 @@ else
         fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 4.2 * n_rows + 2.0], 'Color', 'w');
         tl  = tiledlayout(fig, n_rows, n_cols, 'Padding', 'compact', 'TileSpacing', 'compact');
 
+        legend_handles = gobjects(0, 1);
+        legend_labels  = strings(0, 1);
+
         for i = 1:n_panels
             ax = nexttile(tl);
             group_candidates = stage_candidates(local_configuration_label(stage_candidates.Model, stage_candidates.ExoMode) == groups(i), :);
             threshold = evaluation.selection_summary.Threshold(local_configuration_label(evaluation.selection_summary.Model, evaluation.selection_summary.ExoMode) == groups(i) & evaluation.selection_summary.SelectionStage == selection_stages(s));
 
             plotted_wis = [group_candidates.GlobalWIS(group_candidates.Feasible); threshold];
-            spec = struct('series', local_selection_series(group_candidates, threshold, style), 'style', struct('x_limits', [min(group_candidates.Complexity) - 0.5, max(group_candidates.Complexity) + 0.5], 'y_limits', [min(plotted_wis) / 1.5, max(plotted_wis) * 1.5], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+            spec = struct('series', local_series_with_data(local_selection_series(group_candidates, threshold, style)), 'style', struct('x_limits', [min(group_candidates.Complexity) - 0.5, max(group_candidates.Complexity) + 0.5], 'y_limits', [min(plotted_wis) / 1.5, max(plotted_wis) * 1.5], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
 
             [h, labels] = plot_series(ax, spec);
+            [legend_handles, legend_labels] = local_merge_legend(legend_handles, legend_labels, h, labels);
             set(ax, 'YScale', 'log', 'YMinorGrid', 'off');
             title(ax, groups(i), 'Interpreter', 'none', 'FontName', style.font_name, 'FontSize', style.axis_font_size, 'FontWeight', 'normal');
         end
 
         xlabel(tl, local_noted_label("Candidate complexity (estimated coefficients)", note), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
         ylabel(tl, "Global mean WIS (log scale)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
-        local_tile_legend(h, labels, style);
+        local_tile_legend(legend_handles, legend_labels, style);
 
         exportgraphics(fig, fullfile(figure_dir, "partA_05_selection_diagnostics_" + selection_stages(s) + ".pdf"), 'ContentType', 'vector');
         close(fig);
@@ -386,7 +407,7 @@ else
     fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 9.5], 'Color', 'w');
     ax  = axes('Parent', fig);
 
-    spec = struct('series', series, 'style', struct('x_label', "Model / exogenous mode", 'y_label', "Fraction", 'x_limits', [0.5, numel(groups) + 0.5], 'y_limits', [0, 1.05], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+    spec = struct('series', local_series_with_data(series), 'style', struct('x_label', "Model / exogenous mode", 'y_label', "Fraction",'x_limits', [0.5, numel(groups) + 0.5], 'y_limits', [0, 1.05], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
 
     [h, labels] = plot_series(ax, spec);
     set(ax, 'XTick', 1:numel(groups), 'XTickLabel', groups, 'XTickLabelRotation', 30);
@@ -580,6 +601,22 @@ style.palette          = [
     0.000, 0.447, 0.698;
     0.835, 0.369, 0.000;
     0.800, 0.475, 0.655];
+end
+
+function series = local_series_with_data(series)
+%LOCAL_SERIES_WITH_DATA Drop plotting categories without data; they draw nothing and take no legend entry.
+series = series(arrayfun(@(s) ~isempty(s.x), series));
+end
+
+function [legend_handles, legend_labels] = local_merge_legend(legend_handles, legend_labels, handles, labels)
+%LOCAL_MERGE_LEGEND Add a panel's legend entries missing from the shared legend, after the entry preceding them in the panel.
+for k = 1:numel(labels)
+    if ~any(legend_labels == labels(k))
+        position = max([0; find(ismember(legend_labels, labels(1:k - 1)))]);
+        legend_handles = [legend_handles(1:position); handles(k); legend_handles(position + 1:end)];
+        legend_labels  = [legend_labels(1:position); labels(k); legend_labels(position + 1:end)];
+    end
+end
 end
 
 function local_apply_legend(ax, handles, labels, style, num_columns)

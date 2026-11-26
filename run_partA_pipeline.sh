@@ -31,7 +31,11 @@ Description:
     3. For each selected valid Model/Exo combination, run the independent
        assessment forecasts of the final configuration.
     4. Evaluate all accumulated compatible artifacts.
-    5. Generate Part A thesis figures.
+    5. Generate Part A thesis figures: comparative figures from all
+       accumulated compatible results, and configuration-specific
+       (representative forecast) figures for the selected combinations
+       only. Configuration-specific figures of other combinations are
+       kept as they are.
 
   Selection for every requested combination completes before any
   independent assessment starts. Artifacts of combinations from earlier
@@ -736,6 +740,15 @@ run_matlab_script \
 
 stage_index=$((stage_index + 1))
 
+# The selected combinations set the scope of the configuration-specific
+# figures (cfg.figures in partA_config.m).
+figure_configurations=""
+for idx in "${!combo_models[@]}"; do
+  figure_configurations+="${figure_configurations:+,}${combo_models[$idx]}/${combo_exos[$idx]}"
+done
+
+PARTA_FIGURE_SCOPE="selected" \
+PARTA_FIGURE_CONFIGURATIONS="$figure_configurations" \
 run_matlab_script \
   "$stage_index" \
   "$TOTAL_STAGES" \
