@@ -1,0 +1,17 @@
+=== Part A Figure Generation ===
+Drawing synthetic Rt trajectories of every dataset role...
+Drawing 6 representative forecast figure(s) at lead 7 day(s)...
+Drawing evaluation figures from partA_04 artifact...
+{Unable to perform assignment because the size of the left side is 1-by-1 and
+the size of the right side is 0-by-1.
+
+Error in plot_series (line 64)
+            handles(n_labelled, 1) = h;
+            ^^^^^^^^^^^^^^^^^^^^^^
+Error in partA_05_generate_figures (line 296)
+            [h, labels] = plot_series(ax, spec);
+                          ^^^^^^^^^^^^^^^^^^^^^
+Error in run (line 112)
+evalin('caller', strcat(scriptStem, ';'));
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+} 

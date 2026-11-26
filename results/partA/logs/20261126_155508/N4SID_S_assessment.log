@@ -1,0 +1,19 @@
+=== Part A Independent Assessment Forecasts ===
+Configuration: Model = N4SID | Exogenous Mode = S
+Using final configuration 1 (selection 20261126T155523.407_N4SID_S)
+Processing trajectory 1/12 (asm_A1_v01)
+Processing trajectory 2/12 (asm_A1_v02)
+Processing trajectory 3/12 (asm_A1_v03)
+Processing trajectory 4/12 (asm_A2_v01)
+Processing trajectory 5/12 (asm_A2_v02)
+Processing trajectory 6/12 (asm_A2_v03)
+Processing trajectory 7/12 (asm_A3_v01)
+Processing trajectory 8/12 (asm_A3_v02)
+Processing trajectory 9/12 (asm_A3_v03)
+Processing trajectory 10/12 (asm_A4_v01)
+Processing trajectory 11/12 (asm_A4_v02)
+Processing trajectory 12/12 (asm_A4_v03)
+Final configuration forecast at 528 of 528 assessment origins
+Assessment artifact saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/forecasts/partA_03_forecast_assessment_N4SID_S.mat
+=== Part A Independent Assessment Forecasts Complete ===
+
