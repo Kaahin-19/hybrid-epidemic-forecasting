@@ -1,0 +1,16 @@
+[2026-11-26 21:44:47] Run ID: 20261126_214447
+[2026-11-26 21:44:47] Running Part A synthetic forecasting pipeline
+[2026-11-26 21:44:47] Pipeline started
+[2026-11-26 21:44:58] Starting Generating or reusing Part A synthetic datasets
+[2026-11-26 21:45:07] Completed Generating or reusing Part A synthetic datasets in 9s
+[2026-11-26 21:45:07] Starting Selecting hyperparameters for N4SID | S
+[2026-11-26 22:03:33] Completed Selecting hyperparameters for N4SID | S in 1106s
+[2026-11-26 22:03:33] Starting Running independent assessment forecasts for N4SID | S
+[2026-11-26 22:11:00] Completed Running independent assessment forecasts for N4SID | S in 447s
+[2026-11-26 22:11:00] Starting Evaluating accumulated Part A selection and forecast artifacts
+[2026-11-26 22:11:14] Completed Evaluating accumulated Part A selection and forecast artifacts in 14s
+[2026-11-26 22:11:14] Starting Generating Part A thesis figures
+[2026-11-26 22:11:53] Completed Generating Part A thesis figures in 39s
+[2026-11-26 22:11:53] Part A synthetic forecasting pipeline completed successfully in 1626s
+[2026-11-26 22:11:53] Thesis-level figures generated under: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/figures
+[2026-11-26 22:11:53] Run logs saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_214447

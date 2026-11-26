@@ -1,0 +1,54 @@
+=== Part A Hyperparameter Selection ===
+Configuration: Model = SSEST | Exogenous Mode = S
+Loaded 8 development trajectories with 44 forecast origins each
+Stage 1: Preliminary identification - evaluating 4 candidates on 8 development trajectories
+Starting parallel pool (parpool) using the 'Processes' profile ...
+Connected to parallel pool with 4 workers.
+Infeasible candidate 3 on dev_PH_01 at origin day 49: Forecasted SIRS state of draw 1 crossed the susceptible-domain threshold at lead 7.
+Evaluated candidate 3
+Evaluated candidate 1
+Evaluated candidate 2
+Evaluated candidate 4
+Preliminary configuration: 4 | feasible 3/4 | minimum WIS 0.007048 at 4 | SE 0.000971 | threshold 0.008019 | eligible 1
+Development artifact saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_development_SSEST_S.mat
+Loaded 16 refinement trajectories with 44 forecast origins each
+Stage 2: Cross-scenario validation - forecasting the preliminary configuration on 16 refinement trajectories
+Warning: The initial model has an unstable predictor (some eigenvalues of (A-K*C) are outside the stability threshold). You can use the "init" command to create a stable predictor. Use the "StabilityThreshold" estimation option to set custom thresholds.
+> In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('ctrlMsgUtils.warning', '/home/kaahin/MATLAB/R2025b/toolbox/shared/controllib/general/+ctrlMsgUtils/warning.m', 25)" style="font-weight:bold">ctrlMsgUtils.warning</a> (<a href="matlab: opentoline('/home/kaahin/MATLAB/R2025b/toolbox/shared/controllib/general/+ctrlMsgUtils/warning.m',25,0)">line 25</a>)
+In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('idpack.ssdata/reconcileBounds', '/home/kaahin/MATLAB/R2025b/toolbox/ident/ident/+idpack/@ssdata/reconcileBounds.m', 106)" style="font-weight:bold">idpack.ssdata/reconcileBounds</a> (<a href="matlab: opentoline('/home/kaahin/MATLAB/R2025b/toolbox/ident/ident/+idpack/@ssdata/reconcileBounds.m',106,0)">line 106</a>)
+In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('idpack.ssdata/pem>pem_local', '/home/kaahin/MATLAB/R2025b/toolbox/ident/ident/+idpack/@ssdata/pem.m', 185)" style="font-weight:bold">idpack.ssdata/pem>pem_local</a> (<a href="matlab: opentoline('/home/kaahin/MATLAB/R2025b/toolbox/ident/ident/+idpack/@ssdata/pem.m',185,0)">line 185</a>)
+In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('idpack.ssdata/pem', '/home/kaahin/MATLAB/R2025b/toolbox/ident/ident/+idpack/@ssdata/pem.m', 139)" style="font-weight:bold">idpack.ssdata/pem</a> (<a href="matlab: opentoline('/home/kaahin/MATLAB/R2025b/toolbox/ident/ident/+idpack/@ssdata/pem.m',139,0)">line 139</a>)
+In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('idss/pem_', '/home/kaahin/MATLAB/R2025b/toolbox/ident/ident/@idss/pem_.m', 78)" style="font-weight:bold">idss/pem_</a> (<a href="matlab: opentoline('/home/kaahin/MATLAB/R2025b/toolbox/ident/ident/@idss/pem_.m',78,0)">line 78</a>)
+In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('ssest', '/home/kaahin/MATLAB/R2025b/toolbox/ident/ident/ssest.m', 179)" style="font-weight:bold">ssest</a> (<a href="matlab: opentoline('/home/kaahin/MATLAB/R2025b/toolbox/ident/ident/ssest.m',179,0)">line 179</a>)
+In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('forecast_closed>local_ss_closed', '/home/kaahin/degree_project/hybrid-epidemic-forecasting/src/forecasting/forecast_closed.m', 166)" style="font-weight:bold">forecast_closed>local_ss_closed</a> (<a href="matlab: opentoline('/home/kaahin/degree_project/hybrid-epidemic-forecasting/src/forecasting/forecast_closed.m',166,0)">line 166</a>)
+In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('forecast_closed', '/home/kaahin/degree_project/hybrid-epidemic-forecasting/src/forecasting/forecast_closed.m', 71)" style="font-weight:bold">forecast_closed</a> (<a href="matlab: opentoline('/home/kaahin/degree_project/hybrid-epidemic-forecasting/src/forecasting/forecast_closed.m',71,0)">line 71</a>)
+In <a href="matlab:matlab.lang.internal.introspective.errorDocCallback('partA_02_select_hyperparameters>local_forecast_trajectory', '/home/kaahin/degree_project/hybrid-epidemic-forecasting/scripts/partA/partA_02_select_hyperparameters.m', 305)" style="font-weight:bold">partA_02_select_hyperparameters>local_forecast_trajectory</a> (<a href="matlab: opentoline('/home/kaahin/degree_project/hybrid-epidemic-forecasting/scripts/partA/partA_02_select_hyperparameters.m',305,0)">line 305</a>)
+Forecast trajectory ref_A1_c
+Forecast trajectory ref_A1_v03
+Forecast trajectory ref_A1_v02
+Forecast trajectory ref_A1_v01
+Forecast trajectory ref_A2_v01
+Forecast trajectory ref_A2_v03
+Forecast trajectory ref_A3_v03
+Forecast trajectory ref_A3_v01
+Forecast trajectory ref_A2_c
+Forecast trajectory ref_A2_v02
+Forecast trajectory ref_A3_v02
+Forecast trajectory ref_A3_c
+Forecast trajectory ref_A4_c
+Forecast trajectory ref_A4_v02
+Forecast trajectory ref_A4_v01
+Forecast trajectory ref_A4_v03
+Preliminary configuration forecast at 695 of 704 refinement origins; transfer artifact saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/forecasts/partA_02_forecast_transfer_SSEST_S.mat
+Stage 3: Final refinement - evaluating 3 candidates on 16 refinement trajectories
+Infeasible candidate 3 on ref_A2_c at origin day 56: Forecasted SIRS state of draw 5 crossed the susceptible-domain threshold at lead 14.
+Evaluated candidate 3
+Infeasible candidate 2 on ref_A2_c at origin day 70: Bootstrap draw 1 produced a non-finite or non-positive Rt at lead 10.
+Evaluated candidate 2
+Evaluated candidate 1
+Parallel pool using the 'Processes' profile is shutting down.
+Final configuration: 1 | feasible 1/4 | minimum WIS 0.0245 at 1 | SE 0.000591 | threshold 0.02509 | eligible 1
+Refinement artifact saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_refinement_SSEST_S.mat
+Final configuration handover saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/model_selection/partA_02_global_hyperparameters_SSEST_S.mat
+=== Part A Hyperparameter Selection Complete ===
+
