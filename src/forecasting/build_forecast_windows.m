@@ -32,7 +32,7 @@ function [window_data, num_exo] = build_forecast_windows(Rt_true, S_true, I_true
 %                     U_past and sirs_state are empty when exo_mode is "None".
 %       num_exo     - Number of exogenous covariate columns (0 for "None").
 %
-%   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS,
+%   See also PARTA_02_SELECT_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS,
 %            PARTB_02_RUN_FORECASTS.
 %
 % A. M. Kaahin 2026-06-28

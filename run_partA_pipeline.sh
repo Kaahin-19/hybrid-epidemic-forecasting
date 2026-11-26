@@ -23,12 +23,21 @@ Usage:
 Description:
   Runs the configuration-driven Part A synthetic forecasting pipeline:
 
-    1. Generate synthetic ground truth.
-    2. For each selected valid Model/Exo combination:
-         - select global model configuration;
-         - run probabilistic forecasts.
-    3. Evaluate accumulated forecast artifacts.
-    4. Generate Part A thesis figures.
+    1. Generate (or reuse) the development, refinement, and assessment
+       synthetic datasets.
+    2. For each selected valid Model/Exo combination, select its
+       hyperparameters: preliminary identification on the development
+       data, cross-scenario validation on A1-A4, and final refinement.
+    3. For each selected valid Model/Exo combination, run the independent
+       assessment forecasts of the final configuration.
+    4. Evaluate all accumulated compatible artifacts.
+    5. Generate Part A thesis figures.
+
+  Selection for every requested combination completes before any
+  independent assessment starts. Artifacts of combinations from earlier
+  runs are kept and evaluated together with the new ones when they were
+  produced under the same configuration; incompatible artifacts stop the
+  evaluation stage.
 
   Each invocation creates a timestamped run folder under:
     results/partA/logs/<run_id>/
@@ -72,7 +81,10 @@ Examples:
 Options:
   --models <ids>  Model type IDs to run. Default: all model type IDs.
   --exo <ids>     Exogenous mode IDs to run. Default: all exogenous mode IDs.
-  --fresh         Clear generated Part A data/results before execution.
+  --fresh         Delete data/partA and the generated Part A results
+                  (model_selection, forecasts, evaluation, tables, figures)
+                  before execution. Run logs are kept. With a subset of
+                  combinations, only the selected combinations are rerun.
   --help, -h      Show this help message.
 EOF
 }
@@ -160,12 +172,36 @@ create_partA_directories() {
     "$REPO_ROOT/results/partA/logs"
 }
 
+# Deletes data/partA and the generated results/partA subdirectories below the
+# resolved repository root, keeping results/partA/logs, and refuses symlinks
+# and any target that resolves outside the repository.
 remove_partA_contents() {
-  printf 'Clearing generated Part A artifacts...\n'
+  local target
+  local resolved
 
-  rm -rf \
-    "$REPO_ROOT/data/partA" \
-    "$REPO_ROOT/results/partA"
+  [[ -n "$REPO_ROOT" && "$REPO_ROOT" != "/" && -f "$REPO_ROOT/startup.m" ]] || die "Refusing cleanup: unexpected repository root '$REPO_ROOT'."
+
+  local targets=(
+    "$REPO_ROOT/data/partA"
+    "$REPO_ROOT/results/partA/model_selection"
+    "$REPO_ROOT/results/partA/forecasts"
+    "$REPO_ROOT/results/partA/evaluation"
+    "$REPO_ROOT/results/partA/tables"
+    "$REPO_ROOT/results/partA/figures")
+
+  for target in "${targets[@]}"; do
+    [[ -e "$target" || -L "$target" ]] || continue
+    [[ ! -L "$target" ]] || die "Refusing cleanup: $target is a symbolic link."
+
+    resolved="$(cd "$target" && pwd -P)"
+    [[ "$resolved" == "$target" ]] || die "Refusing cleanup: $target resolves to $resolved."
+  done
+
+  printf 'Clearing generated Part A artifacts (data/partA, results/partA except logs)...\n'
+
+  for target in "${targets[@]}"; do
+    rm -rf -- "$target"
+  done
 
   create_partA_directories
 }
@@ -277,26 +313,38 @@ current_stage_progress() {
 
   case "$step_name" in
     truth)
-      completed="$(grep -Ec '^  - Processing ' "$log_path" 2>/dev/null || true)"
+      if grep -Eq '^Datasets: reused' "$log_path" 2>/dev/null; then
+        printf 'datasets reused'
+        return 0
+      fi
 
-      if (( completed > 0 )); then
-        printf '%d scenarios' "$completed"
+      line="$(grep -E '^Generating [0-9]+ trajectories' "$log_path" 2>/dev/null | tail -n 1 || true)"
+      completed="$(grep -Ec '^  - Generating ' "$log_path" 2>/dev/null || true)"
+
+      if [[ "$line" =~ Generating[[:space:]]+([0-9]+)[[:space:]]+trajectories ]]; then
+        printf '%d/%s trajectories' "$completed" "${BASH_REMATCH[1]}"
       fi
       ;;
 
     model_selection)
-      line="$(grep -E '^Stage: Evaluating [0-9]+ candidate configurations' "$log_path" 2>/dev/null | tail -n 1 || true)"
-
-      if [[ "$line" =~ Evaluating[[:space:]]+([0-9]+)[[:space:]]+candidate ]]; then
-        printf '%s candidates' "${BASH_REMATCH[1]}"
-      fi
+      # Stage k of partA_02 announces its task count (first number on its
+      # header line); candidates or trajectories completed since then are
+      # counted from the worker output.
+      awk '
+        /^Stage [123]:/ {
+          stage = substr($2, 1, 1); total = ""; done = 0
+          for (i = 3; i <= NF; i++) if (total == "" && $i ~ /^[0-9]+$/) total = $i
+        }
+        /^Evaluated candidate / || /^Forecast trajectory / { done++ }
+        END { if (stage != "") printf "stage %s/3 %d/%s", stage, done, total }
+      ' "$log_path" 2>/dev/null || true
       ;;
 
     forecast)
-      line="$(grep -E '^Processing scenario [0-9]+/[0-9]+' "$log_path" 2>/dev/null | tail -n 1 || true)"
+      line="$(grep -E '^Processing trajectory [0-9]+/[0-9]+' "$log_path" 2>/dev/null | tail -n 1 || true)"
 
-      if [[ "$line" =~ Processing[[:space:]]+scenario[[:space:]]+([0-9]+)/([0-9]+) ]]; then
-        printf '%s/%s scenarios' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+      if [[ "$line" =~ Processing[[:space:]]+trajectory[[:space:]]+([0-9]+)/([0-9]+) ]]; then
+        printf '%s/%s trajectories' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
       fi
       ;;
   esac
@@ -305,30 +353,10 @@ current_stage_progress() {
 final_stage_progress() {
   local step_name="$1"
   local log_path="$2"
-  local completed
-  local line
-  local progress
 
   case "$step_name" in
-    truth)
-      completed="$(grep -Ec '^  - Processing ' "$log_path" 2>/dev/null || true)"
-
-      if (( completed > 0 )); then
-        printf '%d/%d scenarios' "$completed" "$completed"
-      fi
-      ;;
-
-    model_selection)
-      line="$(grep -E '^Stage: Evaluating [0-9]+ candidate configurations' "$log_path" 2>/dev/null | tail -n 1 || true)"
-
-      if [[ "$line" =~ Evaluating[[:space:]]+([0-9]+)[[:space:]]+candidate ]]; then
-        printf '%s/%s candidates' "${BASH_REMATCH[1]}" "${BASH_REMATCH[1]}"
-      fi
-      ;;
-
-    forecast)
-      progress="$(current_stage_progress "$step_name" "$log_path")"
-      printf '%s' "$progress"
+    truth|model_selection|forecast)
+      current_stage_progress "$step_name" "$log_path"
       ;;
   esac
 }
@@ -646,8 +674,8 @@ run_matlab_script \
   "$stage_index" \
   "$TOTAL_STAGES" \
   "truth" \
-  "Generate synthetic truth" \
-  "Generating Part A synthetic ground truth" \
+  "Generate synthetic datasets" \
+  "Generating or reusing Part A synthetic datasets" \
   "$RUN_LOG_DIR/partA_01_generate_truth.log" \
   "scripts/partA/partA_01_generate_truth.m"
 
@@ -666,13 +694,20 @@ for idx in "${!combo_models[@]}"; do
     "$TOTAL_STAGES" \
     "model_selection" \
     "Select ${model_name} | ${exo_name}" \
-    "Selecting model configuration for ${model_name} | ${exo_name}" \
+    "Selecting hyperparameters for ${model_name} | ${exo_name}" \
     "$model_name" \
     "$exo_name" \
     "$RUN_LOG_DIR/${safe_model}_${safe_exo}_model_selection.log" \
-    "run('scripts/partA/partA_02_select_global_hyperparameters.m');"
+    "run('scripts/partA/partA_02_select_hyperparameters.m');"
 
   stage_index=$((stage_index + 1))
+done
+
+for idx in "${!combo_models[@]}"; do
+  model_name="${combo_models[$idx]}"
+  exo_name="${combo_exos[$idx]}"
+  safe_model="$(sanitize_name "$model_name")"
+  safe_exo="$(sanitize_name "$exo_name")"
 
   PARTA_MODEL_TYPE="$model_name" \
   PARTA_EXO_MODE="$exo_name" \
@@ -680,11 +715,11 @@ for idx in "${!combo_models[@]}"; do
     "$stage_index" \
     "$TOTAL_STAGES" \
     "forecast" \
-    "Forecast ${model_name} | ${exo_name}" \
-    "Running forecasts for ${model_name} | ${exo_name}" \
+    "Assess ${model_name} | ${exo_name}" \
+    "Running independent assessment forecasts for ${model_name} | ${exo_name}" \
     "$model_name" \
     "$exo_name" \
-    "$RUN_LOG_DIR/${safe_model}_${safe_exo}_forecast.log" \
+    "$RUN_LOG_DIR/${safe_model}_${safe_exo}_assessment.log" \
     "run('scripts/partA/partA_03_run_forecasts.m');"
 
   stage_index=$((stage_index + 1))
@@ -694,8 +729,8 @@ run_matlab_script \
   "$stage_index" \
   "$TOTAL_STAGES" \
   "evaluation" \
-  "Evaluate forecasts" \
-  "Evaluating accumulated Part A forecast artifacts" \
+  "Evaluate artifacts" \
+  "Evaluating accumulated Part A selection and forecast artifacts" \
   "$RUN_LOG_DIR/partA_04_evaluate_forecasts.log" \
   "scripts/partA/partA_04_evaluate_forecasts.m"
 

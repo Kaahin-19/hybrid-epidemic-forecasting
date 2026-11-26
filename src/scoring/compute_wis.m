@@ -23,7 +23,7 @@ function [wis, components] = compute_wis(truth, pred, lower, upper, alphas)
 %       components - Struct with fields median_term, dispersion,
 %                    underprediction, and overprediction.
 %
-%   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS,
+%   See also PARTA_02_SELECT_HYPERPARAMETERS,
 %            PARTA_04_EVALUATE_FORECASTS, PARTB_03_EVALUATE_FORECASTS,
 %            PARTC_02_SELECT_LOCAL_ORDERS, PARTC_04_EVALUATE_FORECASTS,
 %            COMPUTE_INTERVAL_DIAGNOSTICS.

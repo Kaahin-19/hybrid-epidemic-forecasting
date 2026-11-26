@@ -1,23 +1,29 @@
 %PARTA_05_GENERATE_FIGURES Generate synthetic-validation thesis figures.
 %
 %   Description:
-%       Exports thesis figures summarizing synthetic Rt trajectories,
-%       fixed-lead forecasts, window-level and horizon-wise WIS,
-%       empirical interval coverage, and infected-state projection
-%       error relative to Rt persistence. Evaluation figures use
-%       logarithmic WIS scales and consistent model/input ordering.
+%       Exports thesis figures from the saved Part A datasets, forecast
+%       artifacts, and evaluation artifact: the synthetic Rt trajectories of
+%       every dataset role, representative fixed-lead forecasts of the
+%       transfer and assessment stages, window-level and horizon-wise WIS,
+%       empirical interval coverage, infectious-population projection error
+%       relative to Rt persistence, model-selection diagnostics, preliminary
+%       versus final performance on the refinement data, and forecast
+%       feasibility. Evaluation figures use logarithmic WIS scales and a
+%       fixed model/input ordering, and are annotated when the evaluated
+%       configuration set is incomplete.
 %
 %   Workflow:
 %       1. Initialize figure paths, source artifacts, and shared styling.
-%       2. Generate the Rt scenario trajectory panels.
-%       3. Generate the fixed-lead forecast comparison figures.
-%       4. Generate the Rt evaluation and infected-state projection figures.
+%       2. Generate the synthetic Rt trajectory panels.
+%       3. Generate the representative fixed-lead forecast figures.
+%       4. Generate the Rt evaluation and infectious-projection figures.
+%       5. Generate the model-selection and feasibility figures.
 %
 %   See also PARTA_CONFIG, PARTA_04_EVALUATE_FORECASTS, PLOT_SERIES,
-%            PLOT_DISTRIBUTION.
+%            PLOT_DISTRIBUTION, APPLY_PANEL_STYLE.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-10-12
+% Modified: 2026-11-26
 
 %% 1. Initialization
 clear; close all; clc;
@@ -26,248 +32,381 @@ fprintf('=== Part A Figure Generation ===\n');
 
 cfg = partA_config();
 
-data_dir       = cfg.output.data_dir;
 forecast_dir   = cfg.output.forecast_dir;
 evaluation_dir = cfg.output.score_dir;
 figure_dir     = cfg.output.fig_dir;
 
 if ~exist(figure_dir, 'dir'), mkdir(figure_dir); end
 
-style       = local_style();
-rt_bounds   = cfg.Rt.bounds;
-truth_files = local_sort_dir_by_name(dir(fullfile(data_dir, 'partA_01_truth_*.mat')));
-forecast_files = local_sort_dir_by_name(dir(fullfile(forecast_dir, 'partA_03_forecast_*.mat')));
+style     = local_style();
+rt_bounds = cfg.Rt.bounds;
+stages    = ["transfer"; "assessment"];
 
-%% 2. Rt Scenario Trajectories
-if isempty(truth_files)
-    fprintf('Skipping Rt scenario figure - no truth artifacts in %s.\n', data_dir);
+strata_ids   = [[cfg.design.development.strata.id]'; [cfg.scenarios.id]'];
+strata_names = [[cfg.design.development.strata.name]'; [cfg.scenarios.name]'];
+family_ids   = [cfg.scenarios.id]';
+family_names = [cfg.scenarios.name]';
+
+forecast_files = [dir(fullfile(forecast_dir, 'partA_02_forecast_transfer_*.mat')); dir(fullfile(forecast_dir, 'partA_03_forecast_assessment_*.mat'))];
+evaluation_artifact = fullfile(evaluation_dir, 'partA_04_evaluation_results.mat');
+
+%% 2. Synthetic Rt Trajectories
+if exist(cfg.output.dataset_manifest, 'file') ~= 2
+    fprintf('Skipping Rt trajectory figure - no dataset manifest in %s.\n', cfg.output.data_dir);
 else
-    fprintf('Drawing Rt scenario trajectories from %d truth artifact(s)...\n', numel(truth_files));
+    fprintf('Drawing synthetic Rt trajectories of every dataset role...\n');
 
-    scenarios = repmat(struct('tspan', [], 'Rt_true', []), numel(truth_files), 1);
+    manifest = load(cfg.output.dataset_manifest);
+    datasets = manifest.datasets;
+    kinds    = ["Development"; "Canonical"; "Refinement variant"; "Assessment variant"];
+    colors   = [style.palette(2, :); 0, 0, 0; style.palette(4, :); style.palette(5, :)];
+    widths   = [style.line_width; style.truth_line_width + 0.4; 0.9; 0.9];
+    lines    = ["-"; "-"; "-"; "--"];
 
-    for i = 1:numel(truth_files)
-        loaded = load(fullfile(truth_files(i).folder, truth_files(i).name));
-        scenarios(i).tspan   = loaded.tspan;
-        scenarios(i).Rt_true = loaded.Rt_true;
-    end
+    fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 15.0], 'Color', 'w');
+    tl  = tiledlayout(fig, 3, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
 
-    n_panels = numel(scenarios);
-    n_cols   = ceil(sqrt(n_panels));
-    n_rows   = ceil(n_panels / n_cols);
+    legend_handles = gobjects(numel(kinds), 1);
+    legend_found   = false(numel(kinds), 1);
 
-    fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 10.5], 'Color', 'w');
+    for p = 1:numel(strata_ids)
+        ax   = nexttile(tl);
+        rows = datasets(datasets.Stratum == strata_ids(p), :);
+        kind = ones(height(rows), 1);
+        kind(rows.IsCanonical) = 2;
+        kind(rows.Role == "refinement" & ~rows.IsCanonical) = 3;
+        kind(rows.Role == "assessment") = 4;
+        [~, order] = sort(kind, 'descend');
 
-    tl = tiledlayout(fig, n_rows, n_cols, 'Padding', 'compact', 'TileSpacing', 'compact');
+        series = repmat(local_series_template(), height(rows), 1);
 
-    for i = 1:n_panels
-        ax = nexttile(tl);
+        for r = 1:height(rows)
+            row    = order(r);
+            loaded = load(fullfile(cfg.output.data_dir, rows.File(row)), 'tspan', 'Rt_true');
 
-        panel = local_series_template();
-        panel.type       = "line";
-        panel.x          = scenarios(i).tspan;
-        panel.y          = scenarios(i).Rt_true;
-        panel.color      = style.palette(4, :);
-        panel.line_width = style.truth_line_width;
+            series(r).type       = "line";
+            series(r).x          = loaded.tspan;
+            series(r).y          = loaded.Rt_true;
+            series(r).color      = colors(kind(row), :);
+            series(r).line_style = lines(kind(row));
+            series(r).line_width = widths(kind(row));
+            series(r).label      = kinds(kind(row));
+        end
 
-        spec = struct('series', panel, 'style', struct('y_limits', rt_bounds, 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+        spec = struct('series', series, 'style', struct('y_limits', rt_bounds, 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+        [h, labels] = plot_series(ax, spec);
 
-        plot_series(ax, spec);
-        local_panel_label(ax, sprintf("(%c)", 'a' + i - 1), style);
+        for k = 1:numel(kinds)
+            match = find(labels == kinds(k), 1);
+            if ~legend_found(k) && ~isempty(match)
+                legend_handles(k) = h(match);
+                legend_found(k)   = true;
+            end
+        end
+
+        title(ax, sprintf('(%c) %s', 'a' + p - 1, strata_names(p)), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size, 'FontWeight', 'normal');
     end
 
     xlabel(tl, "Time, {\it t} (days)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
-
     ylabel(tl, "Effective reproduction number, {\it R}_t", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+    local_tile_legend(legend_handles(legend_found), kinds(legend_found), style);
 
     exportgraphics(fig, fullfile(figure_dir, 'partA_05_rt_scenarios.pdf'), 'ContentType', 'vector');
     close(fig);
 end
 
-%% 3. Fixed-Lead Forecast Comparisons
+%% 3. Representative Fixed-Lead Forecasts
 if isempty(forecast_files)
     fprintf('Skipping forecast comparisons - no forecast artifacts in %s.\n', forecast_dir);
 else
     lead        = cfg.forecast.plot_lead_time;
     plot_alphas = sort(cfg.forecast.plot_alphas);
 
-    fprintf('Drawing %d forecast comparison figure(s) at lead %d day(s)...\n', numel(forecast_files), lead);
+    fprintf('Drawing %d representative forecast figure(s) at lead %d day(s)...\n', numel(forecast_files), lead);
 
     for f = 1:numel(forecast_files)
         loaded = load(fullfile(forecast_files(f).folder, forecast_files(f).name));
 
-        fc = local_fixed_lead(loaded.results, loaded.wis_alphas, loaded.tspan, loaded.Rt_true, lead, plot_alphas);
+        fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 11.5], 'Color', 'w');
+        tl  = tiledlayout(fig, 2, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
 
-        spec = struct('series', local_forecast_series(fc, plot_alphas, style), 'style', struct('x_label', "Time, {\it t} (days)", 'y_label', "Effective reproduction number, {\it R}_t", 'y_limits', rt_bounds, 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+        for p = 1:numel(family_ids)
+            ax = nexttile(tl);
+            in_family = find([loaded.forecasts.family] == family_ids(p));
 
-        fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 9.0], 'Color', 'w');
+            if loaded.stage == "transfer"
+                representative = in_family([loaded.forecasts(in_family).is_canonical]);
+            else
+                representative = in_family(1);
+            end
 
-        ax = axes('Parent', fig);
-        [h, labels] = plot_series(ax, spec);
-        local_apply_legend(ax, h, labels, style, numel(labels));
+            forecast = loaded.forecasts(representative);
+            fc = local_fixed_lead(forecast, loaded.wis_alphas, lead, plot_alphas);
 
-        plot_name = sprintf('partA_05_forecast_comparison_%s_%s_%s.pdf', local_safe_token(loaded.scenario_id), local_safe_token(loaded.model_type), local_safe_token(loaded.exo_mode));
+            spec = struct('series', local_forecast_series(fc, plot_alphas, style), 'style', struct('y_limits', rt_bounds, 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+            [h, labels] = plot_series(ax, spec);
 
+            title(ax, sprintf('(%c) %s (%s)', 'a' + p - 1, family_names(p), strrep(forecast.dataset_id, "_", "\_")), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size, 'FontWeight', 'normal');
+        end
+
+        xlabel(tl, "Time, {\it t} (days)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+        ylabel(tl, "Effective reproduction number, {\it R}_t", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+        local_tile_legend(h, labels, style);
+
+        plot_name = sprintf('partA_05_forecast_comparison_%s_%s_%s.pdf', loaded.stage, loaded.model_type, loaded.exo_mode);
         exportgraphics(fig, fullfile(figure_dir, plot_name), 'ContentType', 'vector');
         close(fig);
     end
 end
 
-%% 4. Evaluation Figures
-evaluation_artifact = fullfile(evaluation_dir, 'partA_04_evaluation_results.mat');
-
+%% 4. Rt Evaluation and Infectious-Projection Figures
 if exist(evaluation_artifact, 'file') ~= 2
     fprintf('Skipping evaluation figures - no evaluation artifact in %s.\n', evaluation_dir);
 else
     fprintf('Drawing evaluation figures from partA_04 artifact...\n');
 
-    evaluation       = load(evaluation_artifact);
-    window_scores    = evaluation.window_scores;
-    horizon_summary  = evaluation.summaries.horizon_summary;
-    interval_summary = evaluation.summaries.interval_summary;
-    i_projection_horizon_summary = evaluation.summaries.i_projection_horizon_summary;
+    evaluation = load(evaluation_artifact);
+    summaries  = evaluation.summaries;
+    note       = local_coverage_note(evaluation.coverage, evaluation.is_complete);
 
-    scenario_ids   = [cfg.scenarios.id]';
-    scenario_names = [cfg.scenarios.name]';
-    [~, scenario_pos] = ismember(window_scores.Scenario, scenario_ids);
-    configuration_labels = local_configuration_order(window_scores.Model, window_scores.ExoMode);
+    for s = 1:numel(stages)
+        window_scores = evaluation.window_scores(evaluation.window_scores.Stage == stages(s) & evaluation.window_scores.Status == "ok", :);
 
-    fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 9.5], 'Color', 'w');
+        if isempty(window_scores)
+            continue;
+        end
 
-    ax = axes('Parent', fig);
+        num_zero          = nnz(window_scores.WindowWIS == 0);
+        window_scores     = window_scores(window_scores.WindowWIS > 0, :);
+        distribution_note = note;
 
-    dist_spec = struct('x', categorical(window_scores.Model + " / " + window_scores.ExoMode, configuration_labels), 'y', window_scores.WindowWIS, 'group', categorical(scenario_names(scenario_pos), scenario_names), 'color_order', style.palette, 'style', struct('x_label', "Model / exogenous mode", 'y_label', "Window WIS (log scale)", 'y_limits', 10 .^ [floor(log10(min(window_scores.WindowWIS))), ceil(log10(max(window_scores.WindowWIS)))], 'x_tick_rotation', 30, 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+        if num_zero > 0
+            distribution_note = strtrim(sprintf("%d origins with zero WIS (exact persistence) omitted from the log scale. %s", num_zero, note));
+        end
 
-    [h, labels] = plot_distribution(ax, dist_spec);
-    set(ax, 'YScale', 'log', 'YMinorGrid', 'off');
-    local_apply_legend(ax, h, labels, style, 2);
+        [~, family_pos] = ismember(window_scores.Family, family_ids);
+        configuration_labels = local_configuration_order(window_scores.Model, window_scores.ExoMode);
+        positive_wis = window_scores.WindowWIS;
 
-    exportgraphics(fig, fullfile(figure_dir, 'partA_05_model_wis_distribution.pdf'), 'ContentType', 'vector');
-    close(fig);
+        fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 9.5], 'Color', 'w');
+        ax  = axes('Parent', fig);
 
-    horizon_series = local_grouped_line_series(horizon_summary, 'HorizonIdx', 'MeanWIS', style);
+        dist_spec = struct('x', categorical(local_configuration_label(window_scores.Model, window_scores.ExoMode), configuration_labels), 'y', window_scores.WindowWIS, 'group', categorical(family_names(family_pos), family_names), 'color_order', style.palette, 'style', struct('x_label', "Model / exogenous mode", 'y_label', "Window WIS (log scale)", 'y_limits', 10 .^ [floor(log10(min(positive_wis))), ceil(log10(max(positive_wis)))], 'x_tick_rotation', 30, 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
 
-    fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 9.0], 'Color', 'w');
+        [h, labels] = plot_distribution(ax, dist_spec);
+        set(ax, 'YScale', 'log', 'YMinorGrid', 'off');
+        xlabel(ax, local_noted_label("Model / exogenous mode", distribution_note), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+        local_apply_legend(ax, h, labels, style, 2);
 
-    ax = axes('Parent', fig);
+        exportgraphics(fig, fullfile(figure_dir, "partA_05_model_wis_distribution_" + stages(s) + ".pdf"), 'ContentType', 'vector');
+        close(fig);
 
-    spec = struct('series', horizon_series, 'style', struct('x_label', "Forecast horizon, {\it h} (days)", 'y_label', "Mean WIS (log scale)", 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+        horizon_summary = summaries.horizon_summary(summaries.horizon_summary.Stage == stages(s), :);
 
-    [h, labels] = plot_series(ax, spec);
-    set(ax, 'YScale', 'log', 'YMinorGrid', 'off');
-    local_apply_legend(ax, h, labels, style, 3);
+        fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 9.0], 'Color', 'w');
+        ax  = axes('Parent', fig);
 
-    exportgraphics(fig, fullfile(figure_dir, 'partA_05_mean_wis_by_horizon.pdf'), 'ContentType', 'vector');
-    close(fig);
-
-    coverage_series = local_grouped_line_series(interval_summary, 'NominalCoverage', 'MeanCoverage', style);
-
-    reference = local_series_template();
-    reference.type       = "reference";
-    reference.x          = [0; 1];
-    reference.y          = [0; 1];
-    reference.color      = [0, 0, 0];
-    reference.line_style = "--";
-    reference.line_width = 1.0;
-    reference.label      = "Nominal = empirical";
-
-    coverage_series = [coverage_series; reference];
-
-    fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 16.0, 10.0], 'Color', 'w');
-
-    ax = axes('Parent', fig);
-
-    spec = struct('series', coverage_series, 'style', struct('x_label', "Nominal coverage", 'y_label', "Empirical coverage", 'x_limits', [0, 1], 'y_limits', [0, 1], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
-
-    [h, labels] = plot_series(ax, spec);
-    local_apply_legend(ax, h, labels, style, 4);
-
-    exportgraphics(fig, fullfile(figure_dir, 'partA_05_coverage_summary.pdf'), 'ContentType', 'vector');
-    close(fig);
-
-    projection_groups = local_configuration_order(i_projection_horizon_summary.Model, i_projection_horizon_summary.ExoMode);
-    n_panels = numel(projection_groups);
-    n_cols   = ceil(sqrt(n_panels));
-    n_rows   = ceil(n_panels / n_cols);
-
-    projection_y_max = 1.05 * max([i_projection_horizon_summary.MeanForecastDrivenAbsoluteError; i_projection_horizon_summary.MeanPersistenceRtAbsoluteError]);
-
-    fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 11.5], 'Color', 'w');
-
-    tl = tiledlayout(fig, n_rows, n_cols, 'Padding', 'compact', 'TileSpacing', 'compact');
-
-    legend_handles = gobjects(0, 1);
-    legend_labels  = strings(0, 1);
-
-    for i = 1:n_panels
-        ax = nexttile(tl);
-        group_idx = i_projection_horizon_summary.Model + " / " + i_projection_horizon_summary.ExoMode == projection_groups(i);
-        group_summary = i_projection_horizon_summary(group_idx, :);
-
-        projection_series = local_i_projection_series(group_summary, style);
-        spec = struct('series', projection_series, 'style', struct('x_limits', [1, cfg.forecast.horizon], 'y_limits', [0, projection_y_max], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+        spec = struct('series', local_grouped_line_series(horizon_summary, 'HorizonIdx', 'MeanWIS', style), 'style', struct('x_label', "Forecast horizon, {\it h} (days)", 'y_label', "Mean WIS (log scale)", 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
 
         [h, labels] = plot_series(ax, spec);
-        title(ax, projection_groups(i), 'Interpreter', 'none', 'FontName', style.font_name, 'FontSize', style.axis_font_size, 'FontWeight', 'normal');
+        set(ax, 'YScale', 'log', 'YMinorGrid', 'off');
+        xlabel(ax, local_noted_label("Forecast horizon, {\it h} (days)", note), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+        local_apply_legend(ax, h, labels, style, 4);
 
-        if i == 1
-            legend_handles = h;
-            legend_labels  = labels;
-        end
+        exportgraphics(fig, fullfile(figure_dir, "partA_05_mean_wis_by_horizon_" + stages(s) + ".pdf"), 'ContentType', 'vector');
+        close(fig);
+
+        interval_summary = summaries.interval_summary(summaries.interval_summary.Stage == stages(s), :);
+
+        reference = local_series_template();
+        reference.type       = "reference";
+        reference.x          = [0; 1];
+        reference.y          = [0; 1];
+        reference.color      = [0, 0, 0];
+        reference.line_style = "--";
+        reference.line_width = 1.0;
+        reference.label      = "Nominal = empirical";
+
+        fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 16.0, 10.0], 'Color', 'w');
+        ax  = axes('Parent', fig);
+
+        spec = struct('series', [local_grouped_line_series(interval_summary, 'NominalCoverage', 'MeanCoverage', style); reference], 'style', struct('x_label', "Nominal coverage", 'y_label', "Empirical coverage", 'x_limits', [0, 1], 'y_limits', [0, 1], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+
+        [h, labels] = plot_series(ax, spec);
+        xlabel(ax, local_noted_label("Nominal coverage", note), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+        local_apply_legend(ax, h, labels, style, 4);
+
+        exportgraphics(fig, fullfile(figure_dir, "partA_05_coverage_summary_" + stages(s) + ".pdf"), 'ContentType', 'vector');
+        close(fig);
     end
 
-    xlabel(tl, "Forecast horizon, {\it h} (days)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
-    ylabel(tl, "Mean absolute error in infected population, {\it I}(t)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+    projection_summary = summaries.i_projection_horizon_summary;
 
-    lg = legend(legend_handles, legend_labels);
-    lg.Interpreter = 'tex';
-    lg.FontName    = style.font_name;
-    lg.FontSize    = style.legend_font_size;
-    lg.Box         = 'off';
-    lg.Orientation = 'horizontal';
-    lg.NumColumns  = numel(legend_labels);
-    lg.Layout.Tile = 'north';
+    if ~isempty(projection_summary)
+        projection_groups = local_configuration_order(projection_summary.Model, projection_summary.ExoMode);
+        n_panels = numel(projection_groups);
+        n_cols   = ceil(sqrt(n_panels));
+        n_rows   = ceil(n_panels / n_cols);
 
-    exportgraphics(fig, fullfile(figure_dir, 'partA_05_infected_projection_mae_by_horizon.pdf'), 'ContentType', 'vector');
+        projection_y_max = 1.05 * max([projection_summary.MeanForecastDrivenAbsoluteError; projection_summary.MeanPersistenceRtAbsoluteError]);
+
+        fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 11.5], 'Color', 'w');
+        tl  = tiledlayout(fig, n_rows, n_cols, 'Padding', 'compact', 'TileSpacing', 'compact');
+
+        for i = 1:n_panels
+            ax = nexttile(tl);
+            group_summary = projection_summary(local_configuration_label(projection_summary.Model, projection_summary.ExoMode) == projection_groups(i), :);
+
+            spec = struct('series', local_i_projection_series(group_summary, style), 'style', struct('x_limits', [1, cfg.forecast.horizon], 'y_limits', [0, projection_y_max], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+
+            [h, labels] = plot_series(ax, spec);
+            title(ax, projection_groups(i), 'Interpreter', 'none', 'FontName', style.font_name, 'FontSize', style.axis_font_size, 'FontWeight', 'normal');
+        end
+
+        xlabel(tl, local_noted_label("Forecast horizon, {\it h} (days)", note), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+        ylabel(tl, "Mean absolute error in infected population, {\it I}(t)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+        local_tile_legend(h, labels, style);
+
+        exportgraphics(fig, fullfile(figure_dir, 'partA_05_infected_projection_mae_by_horizon.pdf'), 'ContentType', 'vector');
+        close(fig);
+    end
+
+    %% 5. Model-Selection and Feasibility Figures
+    selection_stages = ["development"; "refinement"];
+    candidates       = evaluation.candidate_diagnostics;
+
+    for s = 1:numel(selection_stages)
+        stage_candidates = candidates(candidates.SelectionStage == selection_stages(s), :);
+        groups   = local_configuration_order(stage_candidates.Model, stage_candidates.ExoMode);
+        n_panels = numel(groups);
+        n_cols   = ceil(sqrt(n_panels));
+        n_rows   = ceil(n_panels / n_cols);
+
+        fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 4.2 * n_rows + 2.0], 'Color', 'w');
+        tl  = tiledlayout(fig, n_rows, n_cols, 'Padding', 'compact', 'TileSpacing', 'compact');
+
+        for i = 1:n_panels
+            ax = nexttile(tl);
+            group_candidates = stage_candidates(local_configuration_label(stage_candidates.Model, stage_candidates.ExoMode) == groups(i), :);
+            threshold = evaluation.selection_summary.Threshold(local_configuration_label(evaluation.selection_summary.Model, evaluation.selection_summary.ExoMode) == groups(i) & evaluation.selection_summary.SelectionStage == selection_stages(s));
+
+            plotted_wis = [group_candidates.GlobalWIS(group_candidates.Feasible); threshold];
+            spec = struct('series', local_selection_series(group_candidates, threshold, style), 'style', struct('x_limits', [min(group_candidates.Complexity) - 0.5, max(group_candidates.Complexity) + 0.5], 'y_limits', [min(plotted_wis) / 1.5, max(plotted_wis) * 1.5], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+
+            [h, labels] = plot_series(ax, spec);
+            set(ax, 'YScale', 'log', 'YMinorGrid', 'off');
+            title(ax, groups(i), 'Interpreter', 'none', 'FontName', style.font_name, 'FontSize', style.axis_font_size, 'FontWeight', 'normal');
+        end
+
+        xlabel(tl, local_noted_label("Candidate complexity (estimated coefficients)", note), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+        ylabel(tl, "Global mean WIS (log scale)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+        local_tile_legend(h, labels, style);
+
+        exportgraphics(fig, fullfile(figure_dir, "partA_05_selection_diagnostics_" + selection_stages(s) + ".pdf"), 'ContentType', 'vector');
+        close(fig);
+    end
+
+    refinement_summary = summaries.scenario_summary(summaries.scenario_summary.Stage == "refinement", :);
+    comparison_strata  = [family_ids; "All"];
+    comparison_names   = [family_names; "Equal-family global mean"];
+    groups             = local_configuration_order(refinement_summary.Model, refinement_summary.ExoMode);
+    roles              = ["preliminary"; "final"];
+    role_labels        = ["Preliminary configuration"; "Final configuration"];
+    role_markers       = ["o"; "s"];
+
+    fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 16.0], 'Color', 'w');
+    tl  = tiledlayout(fig, numel(comparison_strata), 1, 'Padding', 'compact', 'TileSpacing', 'compact');
+
+    for p = 1:numel(comparison_strata)
+        ax     = nexttile(tl);
+        series = repmat(local_series_template(), numel(roles), 1);
+
+        for r = 1:numel(roles)
+            rows = refinement_summary(refinement_summary.Stratum == comparison_strata(p) & refinement_summary.ConfigurationRole == roles(r), :);
+            [~, position] = ismember(local_configuration_label(rows.Model, rows.ExoMode), groups);
+
+            series(r).type        = "line";
+            series(r).x           = position;
+            series(r).y           = rows.MeanWIS;
+            series(r).color       = style.palette(2 * r, :);
+            series(r).line_style  = "none";
+            series(r).marker      = role_markers(r);
+            series(r).marker_size = style.marker_size + 1.5;
+            series(r).label       = role_labels(r);
+        end
+
+        plotted_wis = vertcat(series.y);
+        spec = struct('series', series, 'style', struct('x_limits', [0.5, numel(groups) + 0.5], 'y_limits', [min(plotted_wis) / 1.5, max(plotted_wis) * 1.5], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+
+        [h, labels] = plot_series(ax, spec);
+        set(ax, 'YScale', 'log', 'YMinorGrid', 'off', 'XTick', 1:numel(groups), 'XTickLabel', []);
+        title(ax, comparison_names(p), 'Interpreter', 'none', 'FontName', style.font_name, 'FontSize', style.axis_font_size, 'FontWeight', 'normal');
+    end
+
+    infeasible = evaluation.selection_summary(evaluation.selection_summary.SelectionStage == "refinement" & isnan(evaluation.selection_summary.PreliminaryWIS), :);
+    comparison_note = note;
+
+    if ~isempty(infeasible)
+        comparison_note = strtrim(sprintf("Preliminary configuration infeasible on the refinement data (means over available origins): %s. %s", strjoin(local_configuration_label(infeasible.Model, infeasible.ExoMode), ", "), note));
+    end
+
+    set(ax, 'XTickLabel', groups, 'XTickLabelRotation', 30);
+    xlabel(tl, local_noted_label("Model / exogenous mode", comparison_note), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+    ylabel(tl, "Mean WIS on the refinement data (log scale)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+    local_tile_legend(h, labels, style);
+
+    exportgraphics(fig, fullfile(figure_dir, 'partA_05_preliminary_vs_final.pdf'), 'ContentType', 'vector');
+    close(fig);
+
+    feasibility = evaluation.feasibility_summary;
+    groups      = local_configuration_order(feasibility.Model, feasibility.ExoMode);
+    measures    = struct('stage', {"development"; "refinement"; "transfer"; "assessment"}, 'label', {"Feasible candidates, development"; "Feasible candidates, refinement"; "Available origins, transfer"; "Available origins, assessment"}, 'marker', {"o"; "s"; "^"; "d"});
+    series      = repmat(local_series_template(), numel(measures), 1);
+
+    for k = 1:numel(measures)
+        rows = feasibility(feasibility.Stage == measures(k).stage, :);
+        [~, position] = ismember(local_configuration_label(rows.Model, rows.ExoMode), groups);
+
+        if any(measures(k).stage == selection_stages)
+            fraction = rows.NumFeasibleCandidates ./ rows.NumCandidates;
+        else
+            fraction = rows.Availability;
+        end
+
+        series(k).type        = "line";
+        series(k).x           = position;
+        series(k).y           = fraction;
+        series(k).color       = style.palette(k, :);
+        series(k).line_style  = "none";
+        series(k).marker      = measures(k).marker;
+        series(k).marker_size = style.marker_size + 1.5;
+        series(k).label       = measures(k).label;
+    end
+
+    fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 9.5], 'Color', 'w');
+    ax  = axes('Parent', fig);
+
+    spec = struct('series', series, 'style', struct('x_label', "Model / exogenous mode", 'y_label', "Fraction", 'x_limits', [0.5, numel(groups) + 0.5], 'y_limits', [0, 1.05], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+
+    [h, labels] = plot_series(ax, spec);
+    set(ax, 'XTick', 1:numel(groups), 'XTickLabel', groups, 'XTickLabelRotation', 30);
+    xlabel(ax, local_noted_label("Model / exogenous mode", note), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+    local_apply_legend(ax, h, labels, style, 2);
+
+    exportgraphics(fig, fullfile(figure_dir, 'partA_05_feasibility_summary.pdf'), 'ContentType', 'vector');
     close(fig);
 end
 
 fprintf('Figures saved under %s\n', figure_dir);
 fprintf('=== Part A Figure Generation Complete ===\n\n');
 
-%% 5. Local Functions
+%% 6. Local Functions
+function fc = local_fixed_lead(forecast, interval_alphas, lead, plot_alphas)
+%LOCAL_FIXED_LEAD Collect fixed-lead forecasts at the available origins and the full truth trajectory.
+ok      = forecast.status == "ok";
+columns = arrayfun(@(alpha) find(abs(interval_alphas - alpha) <= 1e-8, 1), plot_alphas);
 
-function fc = local_fixed_lead(results, interval_alphas, tspan, Rt_true, lead, plot_alphas)
-%LOCAL_FIXED_LEAD Collect fixed-lead forecasts and full truth trajectory.
-num_windows = numel(results);
-num_alphas  = numel(plot_alphas);
-
-target_days = nan(num_windows, 1);
-median_fc   = nan(num_windows, 1);
-lower       = nan(num_windows, num_alphas);
-upper       = nan(num_windows, num_alphas);
-
-for w = 1:num_windows
-    result = results(w);
-
-    target_days(w) = result.time_horizon(lead);
-    median_fc(w)   = result.forecast_median(lead);
-
-    for k = 1:num_alphas
-        col = find(abs(interval_alphas(:) - plot_alphas(k)) <= 1e-8, 1);
-
-        if isempty(col)
-            error('PARTA_05:AlphaNotFound', 'Requested alpha %.4g is not stored in the forecast artifact.', plot_alphas(k));
-        end
-
-        lower(w, k) = result.forecast_lower(lead, col);
-        upper(w, k) = result.forecast_upper(lead, col);
-    end
-end
-
-[target_days, order] = sort(target_days);
-
-fc = struct('truth_days', tspan(:), 'truth_Rt', Rt_true(:), 'target_days', target_days, 'median', median_fc(order), 'lower', lower(order, :), 'upper', upper(order, :));
+fc = struct('truth_days', forecast.tspan, 'truth_Rt', forecast.Rt_true, 'target_days', forecast.window_day(ok) + lead, 'median', forecast.forecast_median(lead, ok).', 'lower', reshape(forecast.forecast_lower(lead, columns, ok), numel(columns), []).', 'upper', reshape(forecast.forecast_upper(lead, columns, ok), numel(columns), []).');
 end
 
 function series = local_forecast_series(fc, plot_alphas, style)
@@ -315,7 +454,7 @@ end
 
 function series = local_grouped_line_series(tbl, x_var, y_var, style)
 %LOCAL_GROUPED_LINE_SERIES Build one line series per model/exogenous group in fixed configuration order.
-group_ids = tbl.Model + " / " + tbl.ExoMode;
+group_ids = local_configuration_label(tbl.Model, tbl.ExoMode);
 groups    = local_configuration_order(tbl.Model, tbl.ExoMode);
 markers   = ["o", "s", "^", "d", "v", ">", "<", "p", "h"];
 
@@ -335,19 +474,61 @@ for i = 1:numel(groups)
     series(i).marker      = markers(mod(i - 1, numel(markers)) + 1);
     series(i).marker_size = style.marker_size;
     series(i).label       = groups(i);
+
+    if groups(i) == "Persistence"
+        series(i).color      = [0, 0, 0];
+        series(i).line_style = "--";
+    end
 end
+end
+
+function series = local_selection_series(candidates, threshold, style)
+%LOCAL_SELECTION_SERIES Candidate WIS against complexity with eligibility, selection, and the one-SE threshold.
+feasible  = candidates(candidates.Feasible, :);
+groups    = {~feasible.Eligible, feasible.Eligible, feasible.IsMinimumWIS, feasible.Selected};
+labels    = ["Feasible candidate"; "Within one SE"; "Minimum WIS"; "Selected"];
+colors    = [0.65, 0.65, 0.65; style.palette(3, :); style.palette(5, :); 0, 0, 0];
+markers   = ["o"; "o"; "d"; "p"];
+sizes     = style.marker_size + [0; 0; 2; 3];
+
+series = repmat(local_series_template(), numel(groups) + 1, 1);
+
+for k = 1:numel(groups)
+    series(k).type        = "line";
+    series(k).x           = feasible.Complexity(groups{k});
+    series(k).y           = feasible.GlobalWIS(groups{k});
+    series(k).color       = colors(k, :);
+    series(k).line_style  = "none";
+    series(k).marker      = markers(k);
+    series(k).marker_size = sizes(k);
+    series(k).label       = labels(k);
+end
+
+series(end).type       = "reference";
+series(end).x          = [min(candidates.Complexity); max(candidates.Complexity)];
+series(end).y          = [threshold; threshold];
+series(end).color      = [0, 0, 0];
+series(end).line_style = "--";
+series(end).line_width = 0.8;
+series(end).label      = "One-SE threshold";
+end
+
+function labels = local_configuration_label(models, exo_modes)
+%LOCAL_CONFIGURATION_LABEL Model/input label; the persistence reference carries no input mode.
+labels = models + " / " + exo_modes;
+labels(models == "Persistence") = "Persistence";
 end
 
 function labels = local_configuration_order(models, exo_modes)
 %LOCAL_CONFIGURATION_ORDER Return present model/input labels in fixed family and input order.
-model_order = ["AR"; "ARX"; "N4SID"; "SSEST"];
+model_order = ["AR"; "ARX"; "N4SID"; "SSEST"; "Persistence"];
 exo_order   = ["None"; "S"; "I"; "Both"];
 
 [~, model_rank] = ismember(models, model_order);
 [~, exo_rank]   = ismember(exo_modes, exo_order);
 ranked = unique([model_rank, exo_rank], 'rows');
 
-labels = model_order(ranked(:, 1)) + " / " + exo_order(ranked(:, 2));
+labels = local_configuration_label(model_order(ranked(:, 1)), exo_order(ranked(:, 2)));
 end
 
 function series = local_i_projection_series(summary, style)
@@ -417,19 +598,29 @@ lg.Orientation = 'horizontal';
 lg.NumColumns  = num_columns;
 end
 
-function local_panel_label(ax, label_text, style)
-%LOCAL_PANEL_LABEL Place a bold panel label in the top-left corner.
-text(ax, 0.04, 0.94, label_text, 'Units', 'normalized', 'FontName', style.font_name, 'FontSize', style.panel_font_size, 'FontWeight', 'bold', 'Interpreter', 'tex', 'HorizontalAlignment', 'left', 'VerticalAlignment', 'top');
+function local_tile_legend(handles, labels, style)
+%LOCAL_TILE_LEGEND Attach one horizontal legend above a tiled layout.
+lg = legend(handles, labels);
+lg.Interpreter = 'tex';
+lg.FontName    = style.font_name;
+lg.FontSize    = style.legend_font_size;
+lg.Box         = 'off';
+lg.Orientation = 'horizontal';
+lg.NumColumns  = min(numel(labels), 4);
+lg.Layout.Tile = 'north';
 end
 
-function token = local_safe_token(value)
-%LOCAL_SAFE_TOKEN Convert a value into a filename-safe token.
-token = char(regexprep(string(value), '[^A-Za-z0-9]+', '_'));
-token = regexprep(token, '^_+|_+$', '');
+function note = local_coverage_note(coverage, is_complete)
+%LOCAL_COVERAGE_NOTE Note stating the evaluated configurations when the set is incomplete.
+note = "";
+if ~is_complete
+    note = sprintf("Evaluated configurations: selection %d/%d, transfer %d/%d, assessment %d/%d.", sum(coverage.Selection), height(coverage), sum(coverage.Transfer), height(coverage), sum(coverage.Assessment), height(coverage));
+end
 end
 
-function files = local_sort_dir_by_name(files)
-%LOCAL_SORT_DIR_BY_NAME Sort a dir struct array by file name.
-[~, order] = sort({files.name});
-files = files(order);
+function label = local_noted_label(label, note)
+%LOCAL_NOTED_LABEL Append a note as a small second line of an axis label.
+if strlength(note) > 0
+    label = [label; "\fontsize{7}" + note];
+end
 end

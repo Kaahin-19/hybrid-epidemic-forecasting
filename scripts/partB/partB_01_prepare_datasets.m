@@ -17,11 +17,12 @@
 %       2. Simulate truth, observe, estimate, and save each dataset.
 %       3. Verify completion and persist the final generation status.
 %
-%   See also PARTB_CONFIG, PARTB_02_RUN_FORECASTS, SIRS_INIT, SIRS_STEP,
-%            SEIRS_INIT, SEIRS_STEP, ESTIMATE_SIRS_HISTORY_FROM_INCIDENCE.
+%   See also PARTB_CONFIG, PARTB_02_RUN_FORECASTS, GENERATE_RT_SIGNAL,
+%            SIRS_INIT, SIRS_STEP, SEIRS_INIT, SEIRS_STEP,
+%            ESTIMATE_SIRS_HISTORY_FROM_INCIDENCE.
 %
 % A. M. Kaahin 2026-06-30
-% Modified: 2026-11-18
+% Modified: 2026-11-26
 
 %% 1. Initialization
 clear; close all; clc;
@@ -59,22 +60,7 @@ for ci = 1:numel(pb.robustness_cases)
     for si = 1:numel(cfg.scenarios)
         scenario = cfg.scenarios(si);
 
-        sp = scenario.params;
-        switch scenario.signal_type
-            case "seasonal"
-                Rt_true = sp.center + sp.amp * sin((2 * pi / sp.period) * tspan);
-            case "sigmoid"
-                Rt_true = sp.high + (sp.low - sp.high) ./ (1 + exp(-sp.k * (tspan - sp.t0)));
-            case "multi_wave"
-                peak1 = sp.A1 * exp(-((tspan - sp.mu1).^2) / sp.denom);
-                peak2 = sp.A2 * exp(-((tspan - sp.mu2).^2) / sp.denom);
-                peak3 = sp.A3 * exp(-((tspan - sp.mu3).^2) / sp.denom);
-                peak4 = sp.A4 * exp(-((tspan - sp.mu4).^2) / sp.denom);
-
-                Rt_true = sp.baseline + peak1 + peak2 + peak3 + peak4;
-            otherwise
-                error('PARTB:UnsupportedSignal', 'Unsupported Rt signal type: %s.', scenario.signal_type);
-        end
+        Rt_true = generate_rt_signal(scenario.signal_type, scenario.params, tspan);
 
         if any(Rt_true < rtBounds(1) | Rt_true > rtBounds(2), 'all')
             error('PARTB:RtOutOfBounds', 'Generated Rt signal for %s is outside cfg.Rt.bounds.', scenario.id);

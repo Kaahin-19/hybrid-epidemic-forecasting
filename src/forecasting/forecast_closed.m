@@ -20,7 +20,8 @@ function [ensemble_paths, fit_info] = forecast_closed(model_type, params, Rt_pas
 %       (before beta is computed) and after each advance to guard the returned
 %       state. Fails fast if the series is constant, the history is too short,
 %       any bootstrap draw produces a non-finite or non-positive Rt, or the
-%       forecasted SIRS state crosses the susceptible-domain threshold.
+%       forecasted SIRS state crosses the susceptible-domain threshold. Fit
+%       diagnostics are returned without affecting the forecast.
 %
 %   Inputs:
 %       model_type         - "ARX", "N4SID", or "SSEST".
@@ -42,14 +43,21 @@ function [ensemble_paths, fit_info] = forecast_closed(model_type, params, Rt_pas
 %
 %   Outputs:
 %       ensemble_paths - horizon×num_draws matrix of finite Rt bootstrap draws.
-%       fit_info       - Struct containing the fitted model's corrected AIC in AICc.
+%       fit_info       - Struct with fields:
+%           AICc                    - Corrected AIC of the fitted model.
+%           spectral_radius         - Largest pole modulus of the fitted model
+%                                     (>= 1 means an unstable model).
+%           termination             - SSEST stopping reason; "non-iterative"
+%                                     for ARX and N4SID.
+%           iteration_limit_reached - True when SSEST stopped at its
+%                                     iteration limit.
 %
-%   See also PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS,
+%   See also PARTA_02_SELECT_HYPERPARAMETERS, PARTA_03_RUN_FORECASTS,
 %            PARTB_02_RUN_FORECASTS, PARTC_02_SELECT_LOCAL_ORDERS,
 %            PARTC_03_RUN_FORECASTS, FORECAST_OPEN, SIRS_STEP.
 %
 % A. M. Kaahin 2026-06-15
-% Modified: 2026-08-23
+% Modified: 2026-11-26
 
 %% 1. Forecast Setup
 y = log(Rt_past);
@@ -58,20 +66,17 @@ Rt_origin_driver = Rt_past(end);
 %% 2. Model-Specific Forecast
 switch model_type
     case "ARX"
-        [ensemble_paths, aicc] = local_arx(y, U_past, params, num_exo, num_draws, horizon, exo_mode, base_stepper, sirs_state, Rt_origin_driver, resample_seed, epidemic_base_seed, vary_epidemic_seed);
+        [ensemble_paths, fit_info] = local_arx(y, U_past, params, num_exo, num_draws, horizon, exo_mode, base_stepper, sirs_state, Rt_origin_driver, resample_seed, epidemic_base_seed, vary_epidemic_seed);
     case {"N4SID", "SSEST"}
-        [ensemble_paths, aicc] = local_ss_closed(model_type, y, U_past, params(1), num_exo, num_draws, horizon, exo_mode, base_stepper, sirs_state, Rt_origin_driver, resample_seed, epidemic_base_seed, vary_epidemic_seed);
+        [ensemble_paths, fit_info] = local_ss_closed(model_type, y, U_past, params(1), num_exo, num_draws, horizon, exo_mode, base_stepper, sirs_state, Rt_origin_driver, resample_seed, epidemic_base_seed, vary_epidemic_seed);
     otherwise
         error('FORECAST_CLOSED:UnknownModel', 'Unsupported model type: %s', model_type);
 end
-
-%% 3. Output Assembly
-fit_info = struct('AICc', aicc);
 end
 
-%% 4. Local Functions
+%% 3. Local Functions
 
-function [ensemble, aicc] = local_arx(y, U_past, params, num_exo, num_draws, ...
+function [ensemble, fit_info] = local_arx(y, U_past, params, num_exo, num_draws, ...
     horizon, exo_mode, base_stepper, sirs_state, Rt_origin_driver, ...
     resample_seed, epidemic_base_seed, vary_epidemic_seed)
 %LOCAL_ARX Closed-loop ARX bootstrap ensemble on the log scale.
@@ -91,9 +96,9 @@ end
 
 nb_vec = repmat(nb, 1, num_exo);
 nk_vec = repmat(nk, 1, num_exo);
-sys    = arx(iddata(y, U_past, 1), [na, nb_vec, nk_vec]);
-aicc   = sys.Report.Fit.AICc;
-a_vals = sys.A(2:end);
+sys      = arx(iddata(y, U_past, 1), [na, nb_vec, nk_vec]);
+fit_info = struct('AICc', sys.Report.Fit.AICc, 'spectral_radius', max(abs(roots(sys.A))), 'termination', "non-iterative", 'iteration_limit_reached', false);
+a_vals   = sys.A(2:end);
 b_vals = local_extract_b(sys.B, nb, nk, num_exo);
 
 residuals = zeros(T - max_lag, 1);
@@ -131,11 +136,11 @@ for d = 1:num_draws
         y_next  = y_hat + innovations(h, d);
         Rt_next = exp(y_next);
         if ~isfinite(Rt_next) || Rt_next <= 0
-            error('FORECAST_CLOSED:InvalidForecastDraw', 'Bootstrap draw produced a non-finite or non-positive Rt.');
+            error('FORECAST_CLOSED:InvalidForecastDraw', 'Bootstrap draw %d produced a non-finite or non-positive Rt at lead %d.', d, h);
         end
         [state, stepper] = sirs_step(stepper, state, Rt_driver);
         if state(1) <= min_susceptible
-            error('EPIDEMIC:SusceptibleBelowThreshold', 'Forecasted SIRS state crossed the susceptible-domain threshold.');
+            error('EPIDEMIC:SusceptibleBelowThreshold', 'Forecasted SIRS state of draw %d crossed the susceptible-domain threshold at lead %d.', d, h);
         end
         ensemble(h, d)   = Rt_next;
         roll_y(T + h)    = y_next;
@@ -145,7 +150,7 @@ for d = 1:num_draws
 end
 end
 
-function [ensemble, aicc] = local_ss_closed(model_type, y, U_past, n, ~, ...
+function [ensemble, fit_info] = local_ss_closed(model_type, y, U_past, n, ~, ...
     num_draws, horizon, exo_mode, base_stepper, sirs_state, Rt_origin_driver, ...
     resample_seed, epidemic_base_seed, vary_epidemic_seed)
 %LOCAL_SS_CLOSED Closed-loop state-space bootstrap ensemble on the log scale.
@@ -160,9 +165,8 @@ switch model_type
     case "SSEST"
         sys = ssest(data, n, 'Ts', data.Ts, ssestOptions('Display', 'off'));
 end
-aicc = sys.Report.Fit.AICc;
-
 [A, B, C, D, K_gain] = idssdata(sys);
+fit_info = local_ss_fit_info(model_type, sys, A);
 
 prediction_options = peOptions('InitialCondition', 'e');
 prediction_errors  = pe(sys, data, 1, prediction_options);
@@ -190,20 +194,32 @@ for d = 1:num_draws
     for h = 1:horizon
         [state, stepper] = sirs_step(stepper, state, Rt_driver);
         if state(1) <= min_susceptible
-            error('EPIDEMIC:SusceptibleBelowThreshold', 'Forecasted SIRS state crossed the susceptible-domain threshold.');
+            error('EPIDEMIC:SusceptibleBelowThreshold', 'Forecasted SIRS state of draw %d crossed the susceptible-domain threshold at lead %d.', d, h);
         end
         u_current = local_exo_col(state, exo_mode, pop_size);
         y_hat   = C * x + D * u_current;
         y_next  = y_hat + innovations(h, d);
         Rt_next = exp(y_next);
         if ~isfinite(Rt_next) || Rt_next <= 0
-            error('FORECAST_CLOSED:InvalidForecastDraw', 'Bootstrap draw produced a non-finite or non-positive Rt.');
+            error('FORECAST_CLOSED:InvalidForecastDraw', 'Bootstrap draw %d produced a non-finite or non-positive Rt at lead %d.', d, h);
         end
         x              = A * x + B * u_current + K_gain * innovations(h, d);
         ensemble(h, d) = Rt_next;
         Rt_driver      = Rt_next;
     end
 end
+end
+
+function fit_info = local_ss_fit_info(model_type, sys, A)
+%LOCAL_SS_FIT_INFO AICc, stability, and search-termination diagnostics of a state-space fit.
+if model_type == "SSEST"
+    termination             = string(sys.Report.Termination.WhyStop);
+    iteration_limit_reached = sys.Report.Termination.Iterations >= sys.Report.OptionsUsed.SearchOptions.MaxIterations;
+else
+    termination             = "non-iterative";
+    iteration_limit_reached = false;
+end
+fit_info = struct('AICc', sys.Report.Fit.AICc, 'spectral_radius', max(abs(eig(A))), 'termination', termination, 'iteration_limit_reached', iteration_limit_reached);
 end
 
 function b_vals = local_extract_b(B_property, nb, nk, num_exo)

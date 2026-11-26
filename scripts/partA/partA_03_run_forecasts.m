@@ -1,29 +1,31 @@
-%PARTA_03_RUN_FORECASTS Run final expanding-window forecasts.
+%PARTA_03_RUN_FORECASTS Run the independent Part A assessment forecasts.
 %
 %   Description:
-%       Generates final expanding-window Rt forecasts for each synthetic
-%       scenario using the selected model configuration. Propagates each median
-%       Rt forecast and an origin-only Rt persistence baseline through the
-%       configured SIRS model, then exports the Rt forecasts and matching state
-%       trajectories.
+%       Forecasts the final selected configuration of the active model/input
+%       configuration on the assessment trajectories, which no selection
+%       stage uses. Coefficients are re-estimated at every forecast origin,
+%       and recognised forecast infeasibility is recorded per origin. Each
+%       median Rt forecast and an origin-only Rt persistence driver are
+%       propagated through the deterministic SIRS model from the true origin
+%       state as an idealised infectious-population projection.
 %
 %   Workflow:
-%       1. Initialize the configured Part A forecasting run.
-%       2. Load the selected model configuration.
-%       3. Resolve the scenario artifacts and reusable SIRS steppers.
-%       4. Forecast, project, and save each synthetic scenario.
+%       1. Initialize the configured assessment run.
+%       2. Load the final selected configuration.
+%       3. Load the assessment trajectories.
+%       4. Forecast, project, and save the assessment results.
 %
-%   See also PARTA_CONFIG, PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS,
+%   See also PARTA_CONFIG, PARTA_02_SELECT_HYPERPARAMETERS,
 %            PARTA_04_EVALUATE_FORECASTS, BUILD_FORECAST_WINDOWS,
 %            FORECAST_OPEN, FORECAST_CLOSED, SIRS_INIT, SIRS_STEP.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-08-23
+% Modified: 2026-11-26
 
 %% 1. Initialization
 clear; close all; clc;
 
-fprintf('=== Final Part A Forecast Generation ===\n');
+fprintf('=== Part A Independent Assessment Forecasts ===\n');
 
 cfg        = partA_config();
 model_type = cfg.run.model_type;
@@ -36,151 +38,139 @@ if ~exist(forecast_dir, 'dir')
     mkdir(forecast_dir);
 end
 
-%% 2. Load Selected Configuration
-selection = local_load_selection(cfg, model_type, exo_mode);
+file_suffix = model_type + "_" + exo_mode;
+pop_size    = cfg.sirs.pop_size;
 
-selected_configuration = selection.selected_configuration;
-forecast_snapshot      = cfg.snapshot.forecast;
+protocol = struct('model_type', model_type, 'exo_mode', exo_mode, 'horizon', cfg.forecast.horizon, 'num_draws', cfg.intervals.num_draws, 'wis_alphas', cfg.forecast.wis_alphas, 'base_seed', cfg.run.seed, 'vary_epidemic_seed', cfg.intervals.include_epidemic_seed_variation, 'infeasibility_ids', cfg.forecast.infeasibility_ids);
 
-fprintf('Using selected configuration: %s\n', mat2str(selected_configuration));
+%% 2. Final Configuration
+handover_path = fullfile(cfg.output.model_selection_dir, "partA_02_global_hyperparameters_" + file_suffix + ".mat");
 
-%% 3. Scenario Preparation
-data_dir  = cfg.output.data_dir;
-file_list = dir(fullfile(data_dir, 'partA_01_truth_*.mat'));
-[~, order] = sort({file_list.name});
-file_list = file_list(order);
-
-if isempty(file_list)
-    error('PARTA_03:NoData', 'No synthetic truth files found in %s. Run partA_01 first.', data_dir);
+if ~exist(handover_path, 'file')
+    error('PARTA_03:MissingSelectionArtifact', 'Missing final configuration artifact: %s. Run partA_02 first.', handover_path);
 end
 
-horizon    = cfg.forecast.horizon;
-pop_size   = cfg.sirs.pop_size;
-base_seed  = cfg.run.seed;
-num_draws  = cfg.intervals.num_draws;
-wis_alphas = cfg.forecast.wis_alphas;
-vary       = cfg.intervals.include_epidemic_seed_variation;
+handover = load(handover_path);
+
+if ~isequaln(handover.snapshot, cfg.snapshot.selection)
+    error('PARTA_03:SelectionConfigMismatch', 'The final configuration artifact %s does not match the current Part A selection protocol.', handover_path);
+end
+
+final_configuration = handover.selected_configuration;
+
+fprintf('Using final configuration %s (selection %s)\n', mat2str(final_configuration), handover.selection_id);
+
+%% 3. Assessment Dataset Preparation
+if exist(cfg.output.dataset_manifest, 'file') ~= 2
+    error('PARTA_03:MissingDatasets', 'Missing dataset manifest %s. Run partA_01 first.', cfg.output.dataset_manifest);
+end
+
+manifest = load(cfg.output.dataset_manifest);
+
+if ~isequaln(manifest.snapshot, cfg.snapshot.design)
+    error('PARTA_03:DatasetDesignMismatch', 'The Part A datasets were generated under a different dataset design. Rerun with ./run_partA_pipeline.sh --fresh.');
+end
+
+assessment_rows = manifest.datasets(manifest.datasets.Role == "assessment", :);
+num_assessment  = height(assessment_rows);
 
 if exo_mode == "None"
     base_stepper = [];
 else
-    base_stepper = sirs_init(cfg.sirs, struct('solver', 'uds', 'seed', base_seed));
+    base_stepper = sirs_init(cfg.sirs, struct('solver', 'uds', 'seed', cfg.run.seed));
 end
 
-projection_stepper = sirs_init(cfg.sirs, struct('solver', 'uds', 'seed', base_seed));
+projection_stepper = sirs_init(cfg.sirs, struct('solver', 'uds', 'seed', cfg.run.seed));
 
-%% 4. Scenario Forecast Loop
-for i = 1:numel(file_list)
-    loaded = load(fullfile(data_dir, file_list(i).name));
+%% 4. Assessment Forecast Loop
+forecast_cells = cell(num_assessment, 1);
 
-    scenario_id = string(loaded.scenario_id);
+for j = 1:num_assessment
+    loaded = load(fullfile(cfg.output.data_dir, assessment_rows.File(j)));
 
-    fprintf('Processing scenario %d/%d (%s)\n', i, numel(file_list), scenario_id);
+    fprintf('Processing trajectory %d/%d (%s)\n', j, num_assessment, loaded.dataset_id);
 
-    window_data = build_forecast_windows(loaded.Rt_true, loaded.S_true, loaded.I_true, loaded.tspan, exo_mode, pop_size, cfg.forecast.min_window, cfg.forecast.step_size, horizon);
+    window_data = build_forecast_windows(loaded.Rt_true, loaded.S_true, loaded.I_true, loaded.tspan, exo_mode, pop_size, cfg.forecast.min_window, cfg.forecast.step_size, cfg.forecast.horizon);
 
     if isempty(window_data)
-        error('PARTA_03:NoForecastWindows', ['Scenario %s has no forecast windows; check min_window, ' 'step_size, horizon, and truth length.'], scenario_id);
+        error('PARTA_03:NoForecastWindows', 'Trajectory %s has no forecast windows; check min_window, step_size, and horizon against the truth length.', loaded.dataset_id);
     end
 
-    results = local_run_scenario_forecasts(model_type, exo_mode, selected_configuration, window_data, loaded.S_true, loaded.I_true, pop_size, base_stepper, projection_stepper, base_seed, num_draws, horizon, wis_alphas, vary, i);
-
-    artifact = struct('scenario_id', scenario_id, 'model_type', model_type, 'exo_mode', exo_mode, 'selected_configuration', selected_configuration, 'snapshot', forecast_snapshot, 'wis_alphas', wis_alphas, 'tspan', loaded.tspan, 'Rt_true', loaded.Rt_true, 'results', results);
-
-    file_prefix = sprintf('partA_03_forecast_%s_%s_%s', scenario_id, model_type, exo_mode);
-    artifact_path = fullfile(forecast_dir, [file_prefix, '.mat']);
-
-    save(artifact_path, '-struct', 'artifact');
-    fprintf('Forecast artifact saved to: %s\n', artifact_path);
+    forecast_cells{j} = local_forecast_trajectory(final_configuration, loaded, window_data, base_stepper, projection_stepper, protocol, pop_size);
 end
 
-fprintf('=== Final Part A Forecast Generation Complete ===\n\n');
+forecasts = vertcat(forecast_cells{:});
+
+artifact = struct('stage', "assessment", 'model_type', model_type, 'exo_mode', exo_mode, 'configuration', final_configuration, 'configuration_role', "final", 'selection_id', handover.selection_id, 'wis_alphas', cfg.forecast.wis_alphas, 'horizon', cfg.forecast.horizon, 'seed_policy', cfg.forecast.seed_policy, 'dataset_ids', assessment_rows.DatasetId, 'forecasts', forecasts, 'snapshot', cfg.snapshot.forecast, 'created', string(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss')));
+
+artifact_path = fullfile(forecast_dir, "partA_03_forecast_assessment_" + file_suffix + ".mat");
+save(artifact_path, '-struct', 'artifact');
+
+status = vertcat(forecasts.status);
+fprintf('Final configuration forecast at %d of %d assessment origins\n', sum(status == "ok"), numel(status));
+fprintf('Assessment artifact saved to: %s\n', artifact_path);
+fprintf('=== Part A Independent Assessment Forecasts Complete ===\n\n');
 
 %% 5. Local Functions
+function forecasts = local_forecast_trajectory(params, trajectory, window_data, base_stepper, projection_stepper, protocol, pop_size)
+%LOCAL_FORECAST_TRAJECTORY Forecast and project one fixed configuration at every origin of one trajectory.
+num_windows = numel(window_data);
+H           = protocol.horizon;
+K           = numel(protocol.wis_alphas);
+S_true      = trajectory.S_true;
+I_true      = trajectory.I_true;
 
-function selection = local_load_selection(cfg, model_type, exo_mode)
-%LOCAL_LOAD_SELECTION Load the Script 2 selected configuration artifact.
+forecasts = struct('dataset_id', trajectory.dataset_id, 'family', trajectory.family, 'stratum', trajectory.stratum, 'is_canonical', trajectory.is_canonical, 'seed_index', trajectory.seed_index, 'tspan', trajectory.tspan, 'Rt_true', trajectory.Rt_true, 'window_day', [window_data.window_day].', 'window_idx', [window_data.window_day_idx].', 'status', repmat("not_evaluated", num_windows, 1), 'error_id', strings(num_windows, 1), 'error_message', strings(num_windows, 1), 'origin_Rt', arrayfun(@(win) win.Rt_past(end), window_data), 'truth_Rt', [window_data.truth_Rt], 'forecast_median', nan(H, num_windows), 'forecast_lower', nan(H, K, num_windows), 'forecast_upper', nan(H, K, num_windows), 'aicc', nan(num_windows, 1), 'spectral_radius', nan(num_windows, 1), 'termination', strings(num_windows, 1), 'iteration_limit_reached', false(num_windows, 1), 'truth_S', nan(H, num_windows), 'truth_I', nan(H, num_windows), 'projected_S', nan(H, num_windows), 'projected_I', nan(H, num_windows), 'persistence_S', nan(H, num_windows), 'persistence_I', nan(H, num_windows));
 
-file_prefix = sprintf('partA_02_global_hyperparameters_%s_%s', model_type, exo_mode);
-artifact_path = fullfile(cfg.output.model_selection_dir, [file_prefix, '.mat']);
+for w = 1:num_windows
+    win         = window_data(w);
+    window_seed = protocol.base_seed + 10000 * trajectory.seed_index + w;
+    idx_T       = win.window_day_idx;
 
-if ~exist(artifact_path, 'file')
-    error('PARTA_03:MissingSelectionArtifact', 'Missing model-selection artifact: %s. Run partA_02 first.', artifact_path);
-end
+    initial_state      = [S_true(idx_T); I_true(idx_T); pop_size - S_true(idx_T) - I_true(idx_T)];
+    persistence_states = local_project_sirs_trajectory(projection_stepper, initial_state, repmat(win.Rt_past(end), H, 1));
 
-selection = load(artifact_path);
+    forecasts.truth_S(:, w)       = S_true(idx_T + 1 : idx_T + H);
+    forecasts.truth_I(:, w)       = I_true(idx_T + 1 : idx_T + H);
+    forecasts.persistence_S(:, w) = persistence_states(:, 1);
+    forecasts.persistence_I(:, w) = persistence_states(:, 2);
 
-if ~isequaln(selection.snapshot, cfg.snapshot.selection)
-    error('PARTA_03:SelectionConfigMismatch', 'Script 2 model-selection artifact does not match the current Part A selection protocol');
-end
+    try
+        if isempty(win.U_past)
+            [ensemble, fit_info] = forecast_open(protocol.model_type, params, win.Rt_past, protocol.num_draws, H, window_seed);
+        else
+            [ensemble, fit_info] = forecast_closed(protocol.model_type, params, win.Rt_past, win.U_past, win.sirs_state, size(win.U_past, 2), protocol.num_draws, H, protocol.exo_mode, base_stepper, window_seed, window_seed + 1000000, protocol.vary_epidemic_seed);
+        end
+    catch ME
+        if ~any(ME.identifier == protocol.infeasibility_ids)
+            rethrow(ME);
+        end
 
-end
-
-function results = local_run_scenario_forecasts(model_type, exo_mode, params, window_data, S_true, I_true, pop_size, base_stepper, projection_stepper, base_seed, num_draws, horizon, wis_alphas, vary, scenario_index)
-%LOCAL_RUN_SCENARIO_FORECASTS Run selected-model forecasts for one scenario.
-
-template = struct('window_day', [], 'window_day_idx', [], 'time_horizon', [], 'truth_Rt_window', [], 'forecast_median', [], 'forecast_lower', [], 'forecast_upper', [], 'truth_S_window', [], 'truth_I_window', [], 'truth_R_window', [], 'projected_S', [], 'projected_I', [], 'projected_R', [], 'persistence_S', [], 'persistence_I', [], 'persistence_R', []);
-results = repmat(template, numel(window_data), 1);
-
-for w = 1:numel(window_data)
-    win = window_data(w);
-
-    window_seed = base_seed + 10000 * scenario_index + w;
-    r_seed      = window_seed;
-
-    if isempty(win.U_past)
-        ens = forecast_open(model_type, params, win.Rt_past, num_draws, horizon, r_seed);
-    else
-        e_seed = window_seed + 1000000;
-        ens = forecast_closed(model_type, params, win.Rt_past, win.U_past, win.sirs_state, size(win.U_past, 2), num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
+        forecasts.status(w)        = "infeasible";
+        forecasts.error_id(w)      = ME.identifier;
+        forecasts.error_message(w) = ME.message;
+        continue;
     end
 
-    Rt_pred = median(ens, 2);
-    lower   = quantile(ens, wis_alphas(:).' / 2, 2);
-    upper   = quantile(ens, 1 - wis_alphas(:).' / 2, 2);
+    median_Rt = median(ensemble, 2);
 
-    valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) && all(Rt_pred > 0) && all(isfinite(lower(:))) && all(isfinite(upper(:))) && all(lower(:) <= upper(:));
+    projected_states = local_project_sirs_trajectory(projection_stepper, initial_state, [win.Rt_past(end); median_Rt(1:H - 1)]);
 
-    if ~valid
-        error('PARTA_03:UnscoreableWindow', 'Forecast window produced invalid intervals.');
-    end
-
-    idx_T = win.window_day_idx;
-    truth_indices = idx_T + 1 : idx_T + horizon;
-    truth_S = S_true(truth_indices);
-    truth_I = I_true(truth_indices);
-    truth_R = pop_size - truth_S - truth_I;
-
-    initial_state = [S_true(idx_T); I_true(idx_T); pop_size - S_true(idx_T) - I_true(idx_T)];
-    forecast_Rt_drivers = [win.Rt_past(end); Rt_pred(1:horizon - 1)];
-    persistence_Rt_drivers = repmat(win.Rt_past(end), horizon, 1);
-
-    projected_states = local_project_sirs_trajectory(projection_stepper, initial_state, forecast_Rt_drivers);
-    persistence_states = local_project_sirs_trajectory(projection_stepper, initial_state, persistence_Rt_drivers);
-
-    results(w).window_day = win.window_day;
-    results(w).window_day_idx = win.window_day_idx;
-    results(w).time_horizon = win.time_horizon;
-    results(w).truth_Rt_window = win.truth_Rt;
-    results(w).forecast_median = Rt_pred;
-    results(w).forecast_lower = lower;
-    results(w).forecast_upper = upper;
-    results(w).truth_S_window = truth_S;
-    results(w).truth_I_window = truth_I;
-    results(w).truth_R_window = truth_R;
-    results(w).projected_S = projected_states(:, 1);
-    results(w).projected_I = projected_states(:, 2);
-    results(w).projected_R = projected_states(:, 3);
-    results(w).persistence_S = persistence_states(:, 1);
-    results(w).persistence_I = persistence_states(:, 2);
-    results(w).persistence_R = persistence_states(:, 3);
+    forecasts.status(w)                  = "ok";
+    forecasts.forecast_median(:, w)      = median_Rt;
+    forecasts.forecast_lower(:, :, w)    = quantile(ensemble, protocol.wis_alphas.' / 2, 2);
+    forecasts.forecast_upper(:, :, w)    = quantile(ensemble, 1 - protocol.wis_alphas.' / 2, 2);
+    forecasts.aicc(w)                    = fit_info.AICc;
+    forecasts.spectral_radius(w)         = fit_info.spectral_radius;
+    forecasts.termination(w)             = fit_info.termination;
+    forecasts.iteration_limit_reached(w) = fit_info.iteration_limit_reached;
+    forecasts.projected_S(:, w)          = projected_states(:, 1);
+    forecasts.projected_I(:, w)          = projected_states(:, 2);
 end
-
 end
 
 function projected_states = local_project_sirs_trajectory(stepper, initial_state, Rt_drivers)
 %LOCAL_PROJECT_SIRS_TRAJECTORY Propagate a SIRS state along an Rt trajectory.
-
 projected_states = zeros(numel(Rt_drivers), 3);
 state = initial_state;
 
@@ -188,5 +178,4 @@ for h = 1:numel(Rt_drivers)
     [state, stepper] = sirs_step(stepper, state, Rt_drivers(h));
     projected_states(h, :) = state.';
 end
-
 end

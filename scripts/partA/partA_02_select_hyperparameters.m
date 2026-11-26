@@ -1,31 +1,36 @@
-%PARTA_02_SELECT_GLOBAL_HYPERPARAMETERS Select global model hyperparameters.
+%PARTA_02_SELECT_HYPERPARAMETERS Select Part A model hyperparameters.
 %
 %   Description:
-%       Evaluates candidate model configurations across all synthetic Rt
-%       scenarios using expanding-window forecasts and WIS scoring. Exports
-%       the selected configuration together with the valid candidate grid,
-%       global candidate WIS scores, and per-candidate fitted-model AICc.
-%       Selection uses WIS as its criterion and retains AICc as a diagnostic.
+%       Selects the hyperparameters of the active model/input configuration
+%       in three stages. Preliminary identification evaluates the candidate
+%       grid on the periodic development trajectories. Cross-scenario
+%       validation forecasts the fixed preliminary configuration on the
+%       refinement trajectories of A1-A4. Final refinement evaluates the
+%       candidate grid on the refinement trajectories, reusing the validation
+%       forecasts of the preliminary configuration. Coefficients are
+%       re-estimated at every forecast origin, and each selection takes the
+%       simplest feasible candidate within one standard error of the minimum
+%       trajectory-level WIS.
 %
 %   Workflow:
-%       1. Initialize the configured Part A selection run.
-%       2. Load scenario truth and construct forecast windows.
-%       3. Construct the candidate configuration grid.
-%       4. Fit, forecast, and score every candidate across all scenarios.
-%       5. Apply the one-standard-error selection rule.
-%       6. Save the selected configuration and candidate-score evidence.
+%       1. Initialize the configured selection run.
+%       2. Load the development trajectories.
+%       3. Construct the candidate grid and its complexity ranking.
+%       4. Perform preliminary identification on the development data.
+%       5. Validate the preliminary configuration across A1-A4.
+%       6. Refine and save the final configuration.
 %
 %   See also PARTA_CONFIG, PARTA_01_GENERATE_TRUTH, PARTA_03_RUN_FORECASTS,
 %            BUILD_FORECAST_WINDOWS, FORECAST_OPEN, FORECAST_CLOSED,
-%            COMPUTE_WIS.
+%            COMPUTE_WIS, COMPUTE_POINT_ERROR, COMPUTE_STRATIFIED_MEAN.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-11-17
+% Modified: 2026-11-26
 
 %% 1. Initialization
 clear; close all; clc;
 
-fprintf('=== Global Model-Configuration Selection ===\n');
+fprintf('=== Part A Hyperparameter Selection ===\n');
 
 cfg        = partA_config();
 model_type = cfg.run.model_type;
@@ -34,199 +39,156 @@ exo_mode   = cfg.run.exo_mode;
 fprintf('Configuration: Model = %s | Exogenous Mode = %s\n', model_type, exo_mode);
 
 selection_dir = cfg.output.model_selection_dir;
-if ~exist(selection_dir, 'dir')
-    mkdir(selection_dir);
+forecast_dir  = cfg.output.forecast_dir;
+
+if ~exist(selection_dir, 'dir'), mkdir(selection_dir); end
+if ~exist(forecast_dir, 'dir'), mkdir(forecast_dir); end
+
+file_suffix  = model_type + "_" + exo_mode;
+selection_id = string(datetime('now', 'Format', 'yyyyMMdd''T''HHmmss.SSS')) + "_" + file_suffix;
+created      = string(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss'));
+multipliers  = [cfg.selection.se_multiplier; cfg.selection.sensitivity_multipliers];
+
+protocol = struct('model_type', model_type, 'exo_mode', exo_mode, 'horizon', cfg.forecast.horizon, 'num_draws', cfg.intervals.num_draws, 'wis_alphas', cfg.forecast.wis_alphas, 'base_seed', cfg.run.seed, 'vary_epidemic_seed', cfg.intervals.include_epidemic_seed_variation, 'infeasibility_ids', cfg.forecast.infeasibility_ids);
+
+%% 2. Development Dataset Preparation
+if exist(cfg.output.dataset_manifest, 'file') ~= 2
+    error('PARTA_02:MissingDatasets', 'Missing dataset manifest %s. Run partA_01 first.', cfg.output.dataset_manifest);
 end
 
-%% 2. Scenario Preparation
-data_dir  = cfg.output.data_dir;
-file_list = dir(fullfile(data_dir, 'partA_01_truth_*.mat'));
-[~, order] = sort({file_list.name});
-file_list = file_list(order);
+manifest = load(cfg.output.dataset_manifest);
 
-if isempty(file_list)
-    error('PARTA_02:NoData', 'No synthetic truth files found in %s. Run partA_01 first.', data_dir);
+if ~isequaln(manifest.snapshot, cfg.snapshot.design)
+    error('PARTA_02:DatasetDesignMismatch', 'The Part A datasets were generated under a different dataset design. Rerun with ./run_partA_pipeline.sh --fresh.');
 end
 
-horizon       = cfg.forecast.horizon;
-pop_size      = cfg.sirs.pop_size;
-num_scenarios = numel(file_list);
-
-scenario_template = struct('scenario_id', "", 'num_exo', 0, 'window_data', []);
-scenario_data = repmat(scenario_template, num_scenarios, 1);
-
-for i = 1:num_scenarios
-    loaded = load(fullfile(data_dir, file_list(i).name));
-
-    [window_data, num_exo] = build_forecast_windows(loaded.Rt_true, loaded.S_true, loaded.I_true, loaded.tspan, exo_mode, pop_size, cfg.forecast.min_window, cfg.forecast.step_size, horizon);
-
-    if isempty(window_data)
-        error('PARTA_02:NoForecastWindows', 'Scenario %s has no intended forecast windows; check min_window/step_size/horizon against the truth length.', loaded.scenario_id);
-    end
-
-    scenario_data(i).scenario_id = string(loaded.scenario_id);
-    scenario_data(i).num_exo     = num_exo;
-    scenario_data(i).window_data = window_data;
-
-    fprintf('Prepared scenario %d/%d (%s): %d intended windows\n', i, num_scenarios, loaded.scenario_id, numel(window_data));
-end
-
-intended_window_count = sum(arrayfun(@(s) numel(s.window_data), scenario_data(:)'));
+development = local_load_role(cfg, manifest.datasets, "development", exo_mode);
+num_exo     = development(1).num_exo;
 
 %% 3. Candidate Grid
+% Complexity counts estimated coefficients: AR p; ARX na + r*nb, where the
+% input delay nk is not a coefficient; state space n*(2 + r) for an
+% innovations-form model with D = 0 (A, B, and K in observability-canonical
+% form). Ties are broken by the largest lag, then by WIS, then by grid order.
 switch model_type
     case "AR"
         candidate_grid = (1:cfg.forecast.max_ar_order)';
+        complexity     = candidate_grid;
+        max_lag        = candidate_grid;
     case "ARX"
-        [P, NB, NK] = ndgrid(1:cfg.forecast.max_ar_order, 1:cfg.forecast.max_exo_order, 1:cfg.forecast.max_exo_delay);
+        [P, NB, NK]    = ndgrid(1:cfg.forecast.max_ar_order, 1:cfg.forecast.max_exo_order, 1:cfg.forecast.max_exo_delay);
         candidate_grid = [P(:), NB(:), NK(:)];
+        complexity     = candidate_grid(:, 1) + num_exo * candidate_grid(:, 2);
+        max_lag        = max(candidate_grid(:, 1), candidate_grid(:, 3) + candidate_grid(:, 2) - 1);
     case {"N4SID", "SSEST"}
-        [N_order, D_order] = ndgrid(1:cfg.forecast.max_state_order, cfg.forecast.state_diff_orders);
-        candidate_grid = [N_order(:), D_order(:)];
-    otherwise
-        error('PARTA_02:UnknownModel', 'Unsupported model type: %s', model_type);
+        candidate_grid = (1:cfg.forecast.max_state_order)';
+        complexity     = candidate_grid * (2 + num_exo);
+        max_lag        = candidate_grid;
 end
 
 num_candidates = size(candidate_grid, 1);
 
-%% 4. Candidate Evaluation
-fprintf('Stage: Evaluating %d candidate configurations across %d scenarios\n', num_candidates, num_scenarios);
+%% 4. Preliminary Model Identification
+fprintf('Stage 1: Preliminary identification - evaluating %d candidates on %d development trajectories\n', num_candidates, numel(development));
 
 if isempty(gcp('nocreate'))
     parpool('Processes', cfg.run.num_workers);
     pool_cleanup = onCleanup(@local_shutdown_parallel_pool);
 end
 
-base_seed = cfg.run.seed;
-num_draws = cfg.intervals.num_draws;
-vary      = cfg.intervals.include_epidemic_seed_variation;
-
-scenario_data_const = parallel.pool.Constant(scenario_data);
-wis_alphas_const    = parallel.pool.Constant(cfg.forecast.wis_alphas(:));
 if exo_mode == "None"
-    sirs_stepper_const = [];
+    stepper_const = [];
 else
-    sirs_stepper_const = parallel.pool.Constant(@() sirs_init(cfg.sirs, struct('solver', 'uds', 'seed', base_seed)));
+    stepper_const = parallel.pool.Constant(@() sirs_init(cfg.sirs, struct('solver', 'uds', 'seed', cfg.run.seed)));
 end
 
-candidate_scores = inf(num_candidates, num_scenarios);
-global_mean_wis  = inf(num_candidates, 1);
-candidate_aicc   = inf(num_candidates, num_scenarios);
-global_mean_aicc = inf(num_candidates, 1);
+development_const = parallel.pool.Constant(development);
+records = local_evaluate_candidates(candidate_grid, 1:num_candidates, development_const, stepper_const, protocol);
+clear development_const
 
-parfor idx = 1:num_candidates
-    params               = candidate_grid(idx, :);
-    scen_wis             = nan(1, num_scenarios);
-    scen_aicc            = nan(1, num_scenarios);
-    completed_count      = 0;
-    candidate_infeasible = false;
-    scenario_data_local  = scenario_data_const.Value;
-    wis_alphas_local     = wis_alphas_const.Value;
+development_evidence = local_selection_evidence(records, development, candidate_grid, complexity, max_lag, multipliers, "development");
 
-    for s = 1:num_scenarios
-        data        = scenario_data_local(s);
-        window_wis  = inf(numel(data.window_data), 1);
-        window_aicc = nan(numel(data.window_data), 1);
+preliminary_index         = development_evidence.selection.selected_index;
+preliminary_configuration = candidate_grid(preliminary_index, :);
 
-        for w = 1:numel(data.window_data)
-            win = data.window_data(w);
+development_artifact = development_evidence;
+development_artifact.stage                     = "development";
+development_artifact.model_type                = model_type;
+development_artifact.exo_mode                  = exo_mode;
+development_artifact.selection_id              = selection_id;
+development_artifact.preliminary_configuration = preliminary_configuration;
+development_artifact.snapshot                  = cfg.snapshot.selection;
+development_artifact.created                   = created;
 
-            window_seed = base_seed + 10000 * s + w;
-            r_seed      = window_seed;
+development_path = fullfile(selection_dir, "partA_02_development_" + file_suffix + ".mat");
+save(development_path, '-struct', 'development_artifact');
 
-            try
-                if data.num_exo == 0
-                    [ens, fit_info] = forecast_open(model_type, params, win.Rt_past, num_draws, horizon, r_seed);
-                else
-                    e_seed = window_seed + 1000000;
-                    base_stepper = sirs_stepper_const.Value;
+local_print_selection("Preliminary", development_evidence, preliminary_configuration);
+fprintf('Development artifact saved to: %s\n', development_path);
 
-                    [ens, fit_info] = forecast_closed(model_type, params, win.Rt_past, win.U_past, win.sirs_state, data.num_exo, num_draws, horizon, exo_mode, base_stepper, r_seed, e_seed, vary);
-                end
+%% 5. Cross-Scenario Validation
+refinement = local_load_role(cfg, manifest.datasets, "refinement", exo_mode);
 
-                Rt_pred = median(ens, 2);
-                lower   = quantile(ens, wis_alphas_local.' / 2, 2);
-                upper   = quantile(ens, 1 - wis_alphas_local.' / 2, 2);
+fprintf('Stage 2: Cross-scenario validation - forecasting the preliminary configuration on %d refinement trajectories\n', numel(refinement));
 
-                valid = numel(Rt_pred) == horizon && all(isfinite(Rt_pred)) && all(Rt_pred > 0) && all(isfinite(lower(:))) && all(isfinite(upper(:))) && all(lower(:) <= upper(:));
+refinement_const = parallel.pool.Constant(refinement);
+transfer_cells   = cell(numel(refinement), 1);
 
-                if ~valid
-                    error('PARTA_02:UnscoreableWindow', 'Forecast window produced invalid intervals or non-finite WIS.');
-                end
-
-                wis_h = compute_wis(win.truth_Rt, Rt_pred, lower, upper, wis_alphas_local);
-
-                if numel(wis_h) ~= horizon || ~all(isfinite(wis_h))
-                    error('PARTA_02:UnscoreableWindow', 'Forecast window produced invalid intervals or non-finite WIS.');
-                end
-
-                window_wis(w)   = mean(wis_h);
-                window_aicc(w)  = fit_info.AICc;
-                completed_count = completed_count + 1;
-            catch ME
-                if any(strcmp(ME.identifier, {'FORECAST_CLOSED:InvalidForecastDraw', 'FORECAST_OPEN:InvalidForecastDraw', 'EPIDEMIC:SusceptibleBelowThreshold'}))
-                    candidate_infeasible = true;
-                    fprintf('Infeasible candidate %s in scenario %s at window %d: %s\n', mat2str(params), data.scenario_id, w, ME.identifier);
-                    break;
-                else
-                    rethrow(ME);
-                end
-            end
-        end
-
-        if candidate_infeasible
-            break;
-        end
-
-        scen_wis(s)  = mean(window_wis);
-        scen_aicc(s) = mean(window_aicc);
-    end
-
-    if ~candidate_infeasible && completed_count == intended_window_count
-        candidate_scores(idx, :) = scen_wis;
-        global_mean_wis(idx)     = mean(scen_wis);
-        candidate_aicc(idx, :)   = scen_aicc;
-        global_mean_aicc(idx)    = mean(scen_aicc);
-    end
+parfor j = 1:numel(refinement)
+    trajectories      = refinement_const.Value;
+    transfer_cells{j} = local_forecast_trajectory(preliminary_configuration, trajectories(j), local_worker_stepper(stepper_const), protocol, false);
+    fprintf('Forecast trajectory %s\n', trajectories(j).dataset_id);
 end
 
-fprintf('Stage: Candidate evaluation complete\n');
-clear pool_cleanup scenario_data_const wis_alphas_const sirs_stepper_const
+transfer_forecasts = vertcat(transfer_cells{:});
 
-%% 5. Model Selection
-[best_global_wis, raw_best_index] = min(global_mean_wis);
+transfer_artifact = struct('stage', "transfer", 'model_type', model_type, 'exo_mode', exo_mode, 'configuration', preliminary_configuration, 'configuration_role', "preliminary", 'selection_id', selection_id, 'wis_alphas', cfg.forecast.wis_alphas, 'horizon', cfg.forecast.horizon, 'seed_policy', cfg.forecast.seed_policy, 'dataset_ids', [refinement.dataset_id]', 'forecasts', transfer_forecasts, 'snapshot', cfg.snapshot.forecast, 'created', created);
 
-if ~isfinite(best_global_wis)
-    error('PARTA_02:NoFeasibleCandidate', 'No candidate completed all intended windows without feasibility failures.');
-end
+transfer_path = fullfile(forecast_dir, "partA_02_forecast_transfer_" + file_suffix + ".mat");
+save(transfer_path, '-struct', 'transfer_artifact');
 
-one_se_threshold     = best_global_wis + local_one_se(candidate_scores(raw_best_index, :));
-candidate_complexity = local_candidate_complexity(model_type, candidate_grid, scenario_data(1).num_exo);
-eligible             = isfinite(global_mean_wis) & (global_mean_wis <= one_se_threshold);
-selected_index       = local_select_simplest(candidate_complexity, global_mean_wis, eligible);
+transfer_status = vertcat(transfer_forecasts.status);
+fprintf('Preliminary configuration forecast at %d of %d refinement origins; transfer artifact saved to: %s\n', sum(transfer_status == "ok"), numel(transfer_status), transfer_path);
 
-selected_configuration = candidate_grid(selected_index, :);
+%% 6. Final Model Refinement
+fprintf('Stage 3: Final refinement - evaluating %d candidates on %d refinement trajectories\n', num_candidates - 1, numel(refinement));
 
-%% 6. Artifact Saving
-selection_snapshot = cfg.snapshot.selection;
-valid_candidates   = isfinite(global_mean_wis);
+records = local_evaluate_candidates(candidate_grid, setdiff(1:num_candidates, preliminary_index), refinement_const, stepper_const, protocol);
+records{preliminary_index} = local_record_from_forecasts(transfer_forecasts);
 
-candidate_grid   = candidate_grid(valid_candidates, :);
-candidate_scores = candidate_scores(valid_candidates, :);
-global_mean_wis  = global_mean_wis(valid_candidates);
-candidate_aicc   = candidate_aicc(valid_candidates, :);
-global_mean_aicc = global_mean_aicc(valid_candidates);
+clear pool_cleanup refinement_const stepper_const
 
-file_prefix   = sprintf('partA_02_global_hyperparameters_%s_%s', model_type, exo_mode);
-artifact_path = fullfile(selection_dir, [file_prefix, '.mat']);
+refinement_evidence = local_selection_evidence(records, refinement, candidate_grid, complexity, max_lag, multipliers, "refinement");
 
-artifact = struct('selected_configuration', selected_configuration, 'snapshot', selection_snapshot, 'candidate_grid', candidate_grid, 'candidate_scores', candidate_scores, 'global_mean_wis', global_mean_wis, 'candidate_aicc', candidate_aicc, 'global_mean_aicc', global_mean_aicc);
+final_index         = refinement_evidence.selection.selected_index;
+final_configuration = candidate_grid(final_index, :);
+selection           = refinement_evidence.selection;
 
-save(artifact_path, '-struct', 'artifact');
+refinement_artifact = refinement_evidence;
+refinement_artifact.stage                     = "refinement";
+refinement_artifact.model_type                = model_type;
+refinement_artifact.exo_mode                  = exo_mode;
+refinement_artifact.selection_id              = selection_id;
+refinement_artifact.preliminary_index         = preliminary_index;
+refinement_artifact.preliminary_configuration = preliminary_configuration;
+refinement_artifact.preliminary_source        = "Stage 2 transfer forecasts (identical trajectories, seeds, and protocol)";
+refinement_artifact.final_configuration       = final_configuration;
+refinement_artifact.comparison                = struct('preliminary_global_score', selection.global_score(preliminary_index), 'final_global_score', selection.global_score(final_index), 'preliminary_stratum_score', selection.stratum_score(preliminary_index, :).', 'final_stratum_score', selection.stratum_score(final_index, :).', 'preliminary_complexity', complexity(preliminary_index), 'final_complexity', complexity(final_index));
+refinement_artifact.snapshot                  = cfg.snapshot.selection;
+refinement_artifact.created                   = created;
 
-fprintf('Selected global model configuration: %s\n', mat2str(selected_configuration));
-fprintf('Global model-selection artifact saved to: %s\n', artifact_path);
-fprintf('=== Global Model-Configuration Selection Complete ===\n\n');
+refinement_file = "partA_02_refinement_" + file_suffix + ".mat";
+save(fullfile(selection_dir, refinement_file), '-struct', 'refinement_artifact');
+
+handover = struct('selected_configuration', final_configuration, 'snapshot', cfg.snapshot.selection, 'model_type', model_type, 'exo_mode', exo_mode, 'preliminary_configuration', preliminary_configuration, 'selection_stage', "refinement", 'selection_id', selection_id, 'source_artifact', refinement_file, 'created', created);
+
+handover_path = fullfile(selection_dir, "partA_02_global_hyperparameters_" + file_suffix + ".mat");
+save(handover_path, '-struct', 'handover');
+
+local_print_selection("Final", refinement_evidence, final_configuration);
+fprintf('Refinement artifact saved to: %s\n', fullfile(selection_dir, refinement_file));
+fprintf('Final configuration handover saved to: %s\n', handover_path);
+fprintf('=== Part A Hyperparameter Selection Complete ===\n\n');
 
 %% 7. Local Functions
 function local_shutdown_parallel_pool()
@@ -237,40 +199,209 @@ if ~isempty(pool)
 end
 end
 
-function one_se = local_one_se(scenario_scores)
-%LOCAL_ONE_SE Empirical standard error of the equal-scenario mean WIS.
-n = numel(scenario_scores);
-if n < 2
-    one_se = 0;
+function stepper = local_worker_stepper(stepper_const)
+%LOCAL_WORKER_STEPPER Return the worker's SIRS stepper, or [] for output-only models.
+if isempty(stepper_const)
+    stepper = [];
 else
-    one_se = std(scenario_scores, 0) / sqrt(n);
+    stepper = stepper_const.Value;
 end
 end
 
-function complexity = local_candidate_complexity(model_type, candidate_grid, num_exo)
-%LOCAL_CANDIDATE_COMPLEXITY Estimated free-parameter count per candidate.
-complexity = nan(size(candidate_grid, 1), 1);
+function trajectories = local_load_role(cfg, datasets, role, exo_mode)
+%LOCAL_LOAD_ROLE Load the trajectories of one dataset role and construct their forecast windows.
+rows     = datasets(datasets.Role == role, :);
+template = struct('dataset_id', "", 'family', "", 'stratum', "", 'is_canonical', false, 'seed_index', 0, 'tspan', [], 'Rt_true', [], 'num_exo', 0, 'window_data', []);
+trajectories = repmat(template, height(rows), 1);
 
-for i = 1:size(candidate_grid, 1)
-    row = candidate_grid(i, :);
+for j = 1:height(rows)
+    loaded = load(fullfile(cfg.output.data_dir, rows.File(j)));
 
-    switch model_type
-        case "AR"
-            complexity(i) = row(1);
-        case "ARX"
-            complexity(i) = row(1) + num_exo * row(2) + row(3);
-        case {"N4SID", "SSEST"}
-            complexity(i) = row(1) + row(2);
-        otherwise
-            error('PARTA_02:UnknownModel', 'Unsupported model type: %s', model_type);
+    [window_data, num_exo] = build_forecast_windows(loaded.Rt_true, loaded.S_true, loaded.I_true, loaded.tspan, exo_mode, cfg.sirs.pop_size, cfg.forecast.min_window, cfg.forecast.step_size, cfg.forecast.horizon);
+
+    if isempty(window_data)
+        error('PARTA_02:NoForecastWindows', 'Trajectory %s has no forecast windows; check min_window, step_size, and horizon against the truth length.', loaded.dataset_id);
+    end
+
+    trajectories(j) = struct('dataset_id', loaded.dataset_id, 'family', loaded.family, 'stratum', loaded.stratum, 'is_canonical', loaded.is_canonical, 'seed_index', loaded.seed_index, 'tspan', loaded.tspan, 'Rt_true', loaded.Rt_true, 'num_exo', num_exo, 'window_data', window_data);
+end
+
+fprintf('Loaded %d %s trajectories with %d forecast origins each\n', height(rows), role, numel(trajectories(1).window_data));
+end
+
+function records = local_evaluate_candidates(candidate_grid, candidate_indices, trajectories_const, stepper_const, protocol)
+%LOCAL_EVALUATE_CANDIDATES Evaluate the listed candidates in parallel under the complete-case rule.
+records   = cell(size(candidate_grid, 1), 1);
+evaluated = cell(numel(candidate_indices), 1);
+
+parfor i = 1:numel(candidate_indices)
+    evaluated{i} = local_evaluate_candidate(candidate_grid(candidate_indices(i), :), trajectories_const.Value, local_worker_stepper(stepper_const), protocol);
+end
+
+records(candidate_indices) = evaluated;
+end
+
+function record = local_evaluate_candidate(params, trajectories, stepper, protocol)
+%LOCAL_EVALUATE_CANDIDATE Score one candidate on every trajectory until its first infeasible forecast.
+record = local_empty_record(numel(trajectories), numel(trajectories(1).window_data));
+
+for j = 1:numel(trajectories)
+    forecasts = local_forecast_trajectory(params, trajectories(j), stepper, protocol, true);
+    record    = local_add_to_record(record, j, forecasts);
+
+    failed_window = find(forecasts.status == "infeasible", 1);
+    if ~isempty(failed_window)
+        fprintf('Infeasible candidate %s on %s at origin day %d: %s\n', mat2str(params), trajectories(j).dataset_id, forecasts.window_day(failed_window), forecasts.error_message(failed_window));
+        break;
     end
 end
+
+fprintf('Evaluated candidate %s\n', mat2str(params));
 end
 
-function idx = local_select_simplest(candidate_complexity, global_mean_wis, eligible)
-%LOCAL_SELECT_SIMPLEST Simplest eligible candidate; ties broken by WIS then index.
-candidate_indices = find(eligible);
-keys = [candidate_complexity(candidate_indices), global_mean_wis(candidate_indices), candidate_indices];
-keys = sortrows(keys, [1 2 3]);
-idx  = keys(1, 3);
+function record = local_record_from_forecasts(forecasts)
+%LOCAL_RECORD_FROM_FORECASTS Convert fixed-configuration trajectory forecasts into a candidate record.
+record = local_empty_record(numel(forecasts), numel(forecasts(1).window_day));
+
+for j = 1:numel(forecasts)
+    record = local_add_to_record(record, j, forecasts(j));
+end
+end
+
+function record = local_empty_record(num_trajectories, num_windows)
+%LOCAL_EMPTY_RECORD Trajectory-by-origin candidate record with every origin not yet evaluated.
+record = struct('status', repmat("not_evaluated", num_trajectories, num_windows), 'error_id', strings(num_trajectories, num_windows), 'wis', nan(num_trajectories, num_windows), 'mae', nan(num_trajectories, num_windows), 'rmse', nan(num_trajectories, num_windows), 'aicc', nan(num_trajectories, num_windows), 'spectral_radius', nan(num_trajectories, num_windows), 'iteration_limit_reached', false(num_trajectories, num_windows));
+end
+
+function record = local_add_to_record(record, j, forecasts)
+%LOCAL_ADD_TO_RECORD Store the origin-level scores of one trajectory in a candidate record.
+record.status(j, :)                  = forecasts.status.';
+record.error_id(j, :)                = forecasts.error_id.';
+record.wis(j, :)                     = forecasts.window_wis.';
+record.mae(j, :)                     = forecasts.window_mae.';
+record.rmse(j, :)                    = forecasts.window_rmse.';
+record.aicc(j, :)                    = forecasts.aicc.';
+record.spectral_radius(j, :)         = forecasts.spectral_radius.';
+record.iteration_limit_reached(j, :) = forecasts.iteration_limit_reached.';
+end
+
+function forecasts = local_forecast_trajectory(params, trajectory, stepper, protocol, stop_on_failure)
+%LOCAL_FORECAST_TRAJECTORY Forecast one fixed configuration at every origin of one trajectory.
+window_data = trajectory.window_data;
+num_windows = numel(window_data);
+H           = protocol.horizon;
+K           = numel(protocol.wis_alphas);
+
+forecasts = struct('dataset_id', trajectory.dataset_id, 'family', trajectory.family, 'stratum', trajectory.stratum, 'is_canonical', trajectory.is_canonical, 'seed_index', trajectory.seed_index, 'tspan', trajectory.tspan, 'Rt_true', trajectory.Rt_true, 'window_day', [window_data.window_day].', 'window_idx', [window_data.window_day_idx].', 'status', repmat("not_evaluated", num_windows, 1), 'error_id', strings(num_windows, 1), 'error_message', strings(num_windows, 1), 'origin_Rt', arrayfun(@(win) win.Rt_past(end), window_data), 'truth_Rt', [window_data.truth_Rt], 'forecast_median', nan(H, num_windows), 'forecast_lower', nan(H, K, num_windows), 'forecast_upper', nan(H, K, num_windows), 'window_wis', nan(num_windows, 1), 'window_mae', nan(num_windows, 1), 'window_rmse', nan(num_windows, 1), 'aicc', nan(num_windows, 1), 'spectral_radius', nan(num_windows, 1), 'termination', strings(num_windows, 1), 'iteration_limit_reached', false(num_windows, 1));
+
+for w = 1:num_windows
+    win         = window_data(w);
+    window_seed = protocol.base_seed + 10000 * trajectory.seed_index + w;
+
+    try
+        if isempty(win.U_past)
+            [ensemble, fit_info] = forecast_open(protocol.model_type, params, win.Rt_past, protocol.num_draws, H, window_seed);
+        else
+            [ensemble, fit_info] = forecast_closed(protocol.model_type, params, win.Rt_past, win.U_past, win.sirs_state, size(win.U_past, 2), protocol.num_draws, H, protocol.exo_mode, stepper, window_seed, window_seed + 1000000, protocol.vary_epidemic_seed);
+        end
+    catch ME
+        if ~any(ME.identifier == protocol.infeasibility_ids)
+            rethrow(ME);
+        end
+
+        forecasts.status(w)        = "infeasible";
+        forecasts.error_id(w)      = ME.identifier;
+        forecasts.error_message(w) = ME.message;
+
+        if stop_on_failure
+            return;
+        end
+        continue;
+    end
+
+    median_Rt = median(ensemble, 2);
+    lower     = quantile(ensemble, protocol.wis_alphas.' / 2, 2);
+    upper     = quantile(ensemble, 1 - protocol.wis_alphas.' / 2, 2);
+    wis       = compute_wis(win.truth_Rt, median_Rt, lower, upper, protocol.wis_alphas);
+    point     = compute_point_error(win.truth_Rt, median_Rt);
+
+    forecasts.status(w)                  = "ok";
+    forecasts.forecast_median(:, w)      = median_Rt;
+    forecasts.forecast_lower(:, :, w)    = lower;
+    forecasts.forecast_upper(:, :, w)    = upper;
+    forecasts.window_wis(w)              = mean(wis);
+    forecasts.window_mae(w)              = point.mae;
+    forecasts.window_rmse(w)             = point.rmse;
+    forecasts.aicc(w)                    = fit_info.AICc;
+    forecasts.spectral_radius(w)         = fit_info.spectral_radius;
+    forecasts.termination(w)             = fit_info.termination;
+    forecasts.iteration_limit_reached(w) = fit_info.iteration_limit_reached;
+end
+end
+
+function evidence = local_selection_evidence(records, trajectories, candidate_grid, complexity, max_lag, multipliers, stage)
+%LOCAL_SELECTION_EVIDENCE Stack candidate records and apply the one-SE rule to their trajectory-level WIS.
+fields     = fieldnames(records{1});
+evaluation = struct();
+
+for i = 1:numel(fields)
+    blocks = cellfun(@(record) record.(fields{i}), records, 'UniformOutput', false);
+    evaluation.(fields{i}) = permute(cat(3, blocks{:}), [3, 1, 2]);
+end
+
+feasible = all(evaluation.status == "ok", [2, 3]);
+
+if ~any(feasible)
+    failed_ids = evaluation.error_id(evaluation.status == "infeasible");
+    [ids, ~, id_index] = unique(failed_ids);
+    error('PARTA_02:NoFeasibleCandidate', 'No candidate produced scoreable forecasts at every origin of every %s trajectory. Recorded infeasible forecasts by identifier: %s.', stage, strjoin(compose("%s = %d", ids, accumarray(id_index, 1)), ', '));
+end
+
+trajectory_scores = mean(evaluation.wis, 3);
+trajectory_scores(~feasible, :) = NaN;
+
+strata    = [trajectories.stratum]';
+is_random = ~[trajectories.is_canonical]';
+selection = local_select_one_se(trajectory_scores, feasible, complexity, max_lag, strata, is_random, multipliers);
+
+grid_upper = max(candidate_grid, [], 1);
+selection.minimum_on_grid_boundary  = any(candidate_grid(selection.best_index, :) == grid_upper);
+selection.selected_on_grid_boundary = any(candidate_grid(selection.selected_index, :) == grid_upper);
+
+evidence = struct('dataset_ids', [trajectories.dataset_id]', 'families', [trajectories.family]', 'strata', strata, 'is_random', is_random, 'window_days', [trajectories(1).window_data.window_day]', 'candidate_grid', candidate_grid, 'complexity', complexity, 'max_lag', max_lag, 'evaluation', evaluation, 'feasible', feasible, 'trajectory_scores', trajectory_scores, 'selection', selection);
+end
+
+function selection = local_select_one_se(trajectory_scores, feasible, complexity, max_lag, strata, is_random, multipliers)
+%LOCAL_SELECT_ONE_SE Select the simplest feasible candidate within a multiple of one SE of the minimum WIS.
+num_candidates = size(trajectory_scores, 1);
+num_strata     = numel(unique(strata));
+global_score   = nan(num_candidates, 1);
+global_se      = nan(num_candidates, 1);
+stratum_score  = nan(num_candidates, num_strata);
+stratum_se     = nan(num_candidates, num_strata);
+
+for c = find(feasible).'
+    [global_score(c), global_se(c), stratum_mean, stratum_error] = compute_stratified_mean(trajectory_scores(c, :).', strata, is_random);
+    stratum_score(c, :) = stratum_mean.';
+    stratum_se(c, :)    = stratum_error.';
+end
+
+[best_score, best_index] = min(global_score);
+thresholds       = best_score + multipliers * global_se(best_index);
+eligible         = feasible & global_score <= thresholds.';
+selected_indices = zeros(numel(multipliers), 1);
+
+for m = 1:numel(multipliers)
+    candidates          = find(eligible(:, m));
+    ranking             = sortrows([complexity(candidates), max_lag(candidates), global_score(candidates), candidates]);
+    selected_indices(m) = ranking(1, 4);
+end
+
+selection = struct('stratum_ids', unique(strata, 'stable'), 'global_score', global_score, 'global_se', global_se, 'stratum_score', stratum_score, 'stratum_se', stratum_se, 'best_index', best_index, 'best_score', best_score, 'se', global_se(best_index), 'multipliers', multipliers, 'thresholds', thresholds, 'eligible', eligible, 'selected_indices', selected_indices, 'selected_index', selected_indices(1), 'threshold', thresholds(1));
+end
+
+function local_print_selection(label, evidence, configuration)
+%LOCAL_PRINT_SELECTION Print the one-SE selection summary of one stage.
+selection = evidence.selection;
+fprintf('%s configuration: %s | feasible %d/%d | minimum WIS %.4g at %s | SE %.3g | threshold %.4g | eligible %d\n', label, mat2str(configuration), nnz(evidence.feasible), numel(evidence.feasible), selection.best_score, mat2str(evidence.candidate_grid(selection.best_index, :)), selection.se, selection.threshold, nnz(selection.eligible(:, 1)));
 end
