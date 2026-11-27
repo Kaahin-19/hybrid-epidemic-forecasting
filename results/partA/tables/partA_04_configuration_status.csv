@@ -1,0 +1,13 @@
+Model,ExoMode,SelectionOutcome,FailedStage,SelectionId,Development,Transfer,Refinement,Assessment
+AR,None,selected,,20261126T100728.001_AR_None,completed,completed,completed,completed
+ARX,S,selected,,20261126T102354.301_ARX_S,completed,completed,completed,completed
+ARX,I,not_executed,,,not_executed,not_executed,not_executed,not_executed
+ARX,Both,not_executed,,,not_executed,not_executed,not_executed,not_executed
+N4SID,None,selected,,20261127T023906.105_N4SID_None,completed,completed,completed,completed
+N4SID,S,selected,,20261126T214516.211_N4SID_S,completed,completed,completed,completed
+N4SID,I,selected,,20261127T024025.715_N4SID_I,completed,completed,completed,completed
+N4SID,Both,no_feasible_candidate,refinement,20261127T025803.981_N4SID_Both,completed,completed,no_feasible_candidate,not_applicable
+SSEST,None,selected,,20261127T030854.836_SSEST_None,completed,completed,completed,completed
+SSEST,S,selected,,20261126T221422.867_SSEST_S,completed,completed,completed,completed
+SSEST,I,selected,,20261127T031318.161_SSEST_I,completed,completed,completed,completed
+SSEST,Both,selected,,20261127T033335.049_SSEST_Both,completed,completed,completed,completed

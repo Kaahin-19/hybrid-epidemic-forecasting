@@ -1,0 +1,37 @@
+[2026-11-27 02:38:50] Run ID: 20261127_023850
+[2026-11-27 02:38:50] Running Part A synthetic forecasting pipeline
+[2026-11-27 02:38:50] Pipeline started
+[2026-11-27 02:38:56] Starting Generating or reusing Part A synthetic datasets
+[2026-11-27 02:39:02] Completed Generating or reusing Part A synthetic datasets in 6s (completed)
+[2026-11-27 02:39:02] Starting Selecting hyperparameters for N4SID | None
+[2026-11-27 02:40:21] Completed Selecting hyperparameters for N4SID | None in 79s (completed)
+[2026-11-27 02:40:21] Starting Selecting hyperparameters for N4SID | I
+[2026-11-27 02:58:00] Completed Selecting hyperparameters for N4SID | I in 1059s (completed)
+[2026-11-27 02:58:00] Starting Selecting hyperparameters for N4SID | Both
+[2026-11-27 03:08:51] Completed Selecting hyperparameters for N4SID | Both in 651s (no_feasible_candidate)
+[2026-11-27 03:08:51] Starting Selecting hyperparameters for SSEST | None
+[2026-11-27 03:13:14] Completed Selecting hyperparameters for SSEST | None in 263s (completed)
+[2026-11-27 03:13:14] Starting Selecting hyperparameters for SSEST | I
+[2026-11-27 03:33:31] Completed Selecting hyperparameters for SSEST | I in 1217s (completed)
+[2026-11-27 03:33:31] Starting Selecting hyperparameters for SSEST | Both
+[2026-11-27 03:45:45] Completed Selecting hyperparameters for SSEST | Both in 734s (completed)
+[2026-11-27 03:45:45] Starting Running independent assessment forecasts for N4SID | None
+[2026-11-27 03:46:25] Completed Running independent assessment forecasts for N4SID | None in 40s (completed)
+[2026-11-27 03:46:25] Starting Running independent assessment forecasts for N4SID | I
+[2026-11-27 03:53:24] Completed Running independent assessment forecasts for N4SID | I in 419s (completed)
+[2026-11-27 03:53:24] Starting Running independent assessment forecasts for N4SID | Both
+[2026-11-27 03:53:29] Completed Running independent assessment forecasts for N4SID | Both in 5s (not_applicable)
+[2026-11-27 03:53:29] Starting Running independent assessment forecasts for SSEST | None
+[2026-11-27 03:55:04] Completed Running independent assessment forecasts for SSEST | None in 95s (completed)
+[2026-11-27 03:55:04] Starting Running independent assessment forecasts for SSEST | I
+[2026-11-27 04:02:55] Completed Running independent assessment forecasts for SSEST | I in 471s (completed)
+[2026-11-27 04:02:55] Starting Running independent assessment forecasts for SSEST | Both
+[2026-11-27 04:10:42] Completed Running independent assessment forecasts for SSEST | Both in 467s (completed)
+[2026-11-27 04:10:42] Starting Evaluating accumulated Part A selection and forecast artifacts
+[2026-11-27 04:10:54] Completed Evaluating accumulated Part A selection and forecast artifacts in 12s (completed)
+[2026-11-27 04:10:54] Starting Generating Part A thesis figures
+[2026-11-27 04:11:50] Completed Generating Part A thesis figures in 56s (completed)
+[2026-11-27 04:11:50] Part A synthetic forecasting pipeline completed successfully in 5580s
+[2026-11-27 04:11:50] Thesis-level figures generated under: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/figures
+[2026-11-27 04:11:50] Run logs saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850
+[2026-11-27 04:11:50] No feasible candidate: N4SID | Both

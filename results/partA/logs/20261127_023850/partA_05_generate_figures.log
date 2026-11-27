@@ -1,0 +1,9 @@
+=== Part A Figure Generation ===
+Figure scope: selected (N4SID/None, N4SID/I, N4SID/Both, SSEST/None, SSEST/I, SSEST/Both)
+No representative forecast figure for the stages that are not applicable to N4SID / Both: no feasible candidate in refinement.
+Drawing synthetic Rt trajectories of every dataset role...
+Drawing 11 representative forecast figure(s) at lead 7 day(s)...
+Drawing evaluation figures from partA_04 artifact...
+Figures saved under /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/figures
+=== Part A Figure Generation Complete ===
+

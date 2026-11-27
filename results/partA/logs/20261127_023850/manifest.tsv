@@ -1,0 +1,31 @@
+Timestamp	Step	Model	Exo	Status	LogFile	Details
+2026-11-27 02:38:56	truth	-	-	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/partA_01_generate_truth.log	Generating or reusing Part A synthetic datasets
+2026-11-27 02:39:02	truth	-	-	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/partA_01_generate_truth.log	6s
+2026-11-27 02:39:02	model_selection	N4SID	None	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/N4SID_None_model_selection.log	Selecting hyperparameters for N4SID | None
+2026-11-27 02:40:21	model_selection	N4SID	None	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/N4SID_None_model_selection.log	79s
+2026-11-27 02:40:21	model_selection	N4SID	I	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/N4SID_I_model_selection.log	Selecting hyperparameters for N4SID | I
+2026-11-27 02:58:00	model_selection	N4SID	I	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/N4SID_I_model_selection.log	1059s
+2026-11-27 02:58:00	model_selection	N4SID	Both	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/N4SID_Both_model_selection.log	Selecting hyperparameters for N4SID | Both
+2026-11-27 03:08:51	model_selection	N4SID	Both	no_feasible_candidate	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/N4SID_Both_model_selection.log	651s
+2026-11-27 03:08:51	model_selection	SSEST	None	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/SSEST_None_model_selection.log	Selecting hyperparameters for SSEST | None
+2026-11-27 03:13:14	model_selection	SSEST	None	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/SSEST_None_model_selection.log	263s
+2026-11-27 03:13:14	model_selection	SSEST	I	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/SSEST_I_model_selection.log	Selecting hyperparameters for SSEST | I
+2026-11-27 03:33:31	model_selection	SSEST	I	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/SSEST_I_model_selection.log	1217s
+2026-11-27 03:33:31	model_selection	SSEST	Both	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/SSEST_Both_model_selection.log	Selecting hyperparameters for SSEST | Both
+2026-11-27 03:45:45	model_selection	SSEST	Both	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/SSEST_Both_model_selection.log	734s
+2026-11-27 03:45:45	forecast	N4SID	None	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/N4SID_None_assessment.log	Running independent assessment forecasts for N4SID | None
+2026-11-27 03:46:25	forecast	N4SID	None	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/N4SID_None_assessment.log	40s
+2026-11-27 03:46:25	forecast	N4SID	I	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/N4SID_I_assessment.log	Running independent assessment forecasts for N4SID | I
+2026-11-27 03:53:24	forecast	N4SID	I	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/N4SID_I_assessment.log	419s
+2026-11-27 03:53:24	forecast	N4SID	Both	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/N4SID_Both_assessment.log	Running independent assessment forecasts for N4SID | Both
+2026-11-27 03:53:29	forecast	N4SID	Both	not_applicable	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/N4SID_Both_assessment.log	5s
+2026-11-27 03:53:29	forecast	SSEST	None	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/SSEST_None_assessment.log	Running independent assessment forecasts for SSEST | None
+2026-11-27 03:55:04	forecast	SSEST	None	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/SSEST_None_assessment.log	95s
+2026-11-27 03:55:04	forecast	SSEST	I	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/SSEST_I_assessment.log	Running independent assessment forecasts for SSEST | I
+2026-11-27 04:02:55	forecast	SSEST	I	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/SSEST_I_assessment.log	471s
+2026-11-27 04:02:55	forecast	SSEST	Both	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/SSEST_Both_assessment.log	Running independent assessment forecasts for SSEST | Both
+2026-11-27 04:10:42	forecast	SSEST	Both	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/SSEST_Both_assessment.log	467s
+2026-11-27 04:10:42	evaluation	-	-	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/partA_04_evaluate_forecasts.log	Evaluating accumulated Part A selection and forecast artifacts
+2026-11-27 04:10:54	evaluation	-	-	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/partA_04_evaluate_forecasts.log	12s
+2026-11-27 04:10:54	figures	-	-	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/partA_05_generate_figures.log	Generating Part A thesis figures
+2026-11-27 04:11:50	figures	-	-	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261127_023850/partA_05_generate_figures.log	56s
