@@ -7,11 +7,14 @@
 %       and recognised forecast infeasibility is recorded per origin. Each
 %       median Rt forecast and an origin-only Rt persistence driver are
 %       propagated through the deterministic SIRS model from the true origin
-%       state as an idealised infectious-population projection.
+%       state as an idealised infectious-population projection. When
+%       selection recorded that no candidate is feasible, the assessment is
+%       not applicable and no assessment artifact is produced.
 %
 %   Workflow:
 %       1. Initialize the configured assessment run.
-%       2. Load the final selected configuration.
+%       2. Load the final selected configuration, or stop when the
+%          assessment is not applicable.
 %       3. Load the assessment trajectories.
 %       4. Forecast, project, and save the assessment results.
 %
@@ -20,7 +23,7 @@
 %            FORECAST_OPEN, FORECAST_CLOSED, SIRS_INIT, SIRS_STEP.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-11-26
+% Modified: 2026-11-27
 
 %% 1. Initialization
 clear; close all; clc;
@@ -44,10 +47,23 @@ pop_size    = cfg.sirs.pop_size;
 protocol = struct('model_type', model_type, 'exo_mode', exo_mode, 'horizon', cfg.forecast.horizon, 'num_draws', cfg.intervals.num_draws, 'wis_alphas', cfg.forecast.wis_alphas, 'base_seed', cfg.run.seed, 'vary_epidemic_seed', cfg.intervals.include_epidemic_seed_variation, 'infeasibility_ids', cfg.forecast.infeasibility_ids);
 
 %% 2. Final Configuration
-handover_path = fullfile(cfg.output.model_selection_dir, "partA_02_global_hyperparameters_" + file_suffix + ".mat");
+handover_path    = fullfile(cfg.output.model_selection_dir, "partA_02_global_hyperparameters_" + file_suffix + ".mat");
+no_feasible_path = fullfile(cfg.output.model_selection_dir, "partA_02_no_feasible_candidate_" + file_suffix + ".mat");
 
-if ~exist(handover_path, 'file')
-    error('PARTA_03:MissingSelectionArtifact', 'Missing final configuration artifact: %s. Run partA_02 first.', handover_path);
+if isfile(no_feasible_path) && ~isfile(handover_path)
+    record = load(no_feasible_path);
+
+    if ~isequaln(record.snapshot, cfg.snapshot.selection)
+        error('PARTA_03:SelectionConfigMismatch', 'The no-feasible-candidate record %s does not match the current Part A selection protocol.', no_feasible_path);
+    end
+
+    fprintf('Assessment not applicable: selection %s found no feasible candidate in %s.\n', record.selection_id, record.failed_stage);
+    fprintf('=== Part A Independent Assessment Forecasts Complete ===\n\n');
+    return;
+end
+
+if ~isfile(handover_path) || isfile(no_feasible_path)
+    error('PARTA_03:MissingSelectionArtifact', 'No unique selection outcome for %s: expected either the final configuration artifact %s or the no-feasible-candidate record %s. Run partA_02 first.', file_suffix, handover_path, no_feasible_path);
 end
 
 handover = load(handover_path);

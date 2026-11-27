@@ -10,11 +10,20 @@
 %       equal-family global mean. The idealised infectious-population
 %       projections of the assessment stage are evaluated, and selection,
 %       candidate, trajectory, and feasibility diagnostics are exported.
-%       Configurations without artifacts are reported as missing.
+%
+%       Every valid configuration is classified by its recorded selection
+%       outcome: a final configuration handover (selected), a
+%       no-feasible-candidate record (no feasible candidate in preliminary
+%       identification or final refinement, with the dependent stages not
+%       applicable), or no artifacts (not executed). The candidate evidence of
+%       configurations without a feasible candidate is evaluated with the
+%       other selection evidence. Artifacts that record no unique outcome,
+%       belong to a stage that is not applicable, or come from different
+%       selection runs stop the evaluation.
 %
 %   Workflow:
 %       1. Initialize the evaluation paths.
-%       2. Check and load the compatible Part A artifacts.
+%       2. Check, classify, and load the compatible Part A artifacts.
 %       3. Score the forecasts and the persistence reference.
 %       4. Summarise the model-selection evidence.
 %       5. Aggregate the scores hierarchically.
@@ -26,7 +35,7 @@
 %            COMPUTE_STRATIFIED_MEAN.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-11-26
+% Modified: 2026-11-27
 
 %% 1. Initialization
 clear; close all; clc;
@@ -47,18 +56,23 @@ if ~isempty(incompatible)
     error('PARTA_04:IncompatibleArtifact', 'These Part A artifacts were produced under a different configuration or artifact schema: %s. Rerun the affected configurations or use ./run_partA_pipeline.sh --fresh.', strjoin(incompatible, ', '));
 end
 
-[selections, forecast_artifacts, coverage] = local_load_artifacts(cfg);
+[selections, forecast_artifacts, configuration_status] = local_load_artifacts(cfg);
 
 if isempty(forecast_artifacts)
-    error('PARTA_04:NoForecastArtifacts', 'No Part A forecast artifacts found under %s. Run partA_02 and partA_03 first.', cfg.output.forecast_dir);
+    error('PARTA_04:NoForecastArtifacts', 'No Part A forecast artifacts to evaluate under %s: no configuration has completed cross-scenario validation. Run partA_02 and partA_03 first.', cfg.output.forecast_dir);
 end
 
-is_complete = all(coverage{:, ["Selection", "Transfer", "Assessment"]}, 'all');
+is_selected = configuration_status.SelectionOutcome == "selected";
+is_complete = ~any(configuration_status{:, ["SelectionOutcome", "Development", "Transfer", "Refinement", "Assessment"]} == "not_executed", 'all');
 
-fprintf('Artifacts: selection %d/%d, transfer %d/%d, assessment %d/%d configurations\n', sum(coverage.Selection), height(coverage), sum(coverage.Transfer), height(coverage), sum(coverage.Assessment), height(coverage));
+fprintf('Configurations: %d selected, %d without a feasible candidate, %d not executed of %d; assessment completed for %d of %d selected\n', nnz(is_selected), nnz(configuration_status.SelectionOutcome == "no_feasible_candidate"), nnz(configuration_status.SelectionOutcome == "not_executed"), height(configuration_status), nnz(configuration_status.Assessment == "completed"), nnz(is_selected));
+
+for c = find(configuration_status.SelectionOutcome == "no_feasible_candidate").'
+    fprintf('No feasible candidate: %s / %s in %s (selection %s)\n', configuration_status.Model(c), configuration_status.ExoMode(c), configuration_status.FailedStage(c), configuration_status.SelectionId(c));
+end
 
 if ~is_complete
-    fprintf('Evaluation covers an incomplete set of configurations; see the coverage table.\n');
+    fprintf('Evaluation covers an incomplete set of configurations; see the configuration status table.\n');
 end
 
 %% 3. Forecast and Persistence Scoring
@@ -98,7 +112,7 @@ evaluation_artifact = fullfile(evaluation_dir, 'partA_04_evaluation_results.mat'
 snapshot = cfg.snapshot.design;
 created  = string(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss'));
 
-save(evaluation_artifact, 'window_scores', 'horizon_scores', 'interval_scores', 'i_projection_window_scores', 'i_projection_horizon_scores', 'trajectory_summary', 'candidate_diagnostics', 'selection_summary', 'feasibility_summary', 'summaries', 'coverage', 'is_complete', 'snapshot', 'created');
+save(evaluation_artifact, 'window_scores', 'horizon_scores', 'interval_scores', 'i_projection_window_scores', 'i_projection_horizon_scores', 'trajectory_summary', 'candidate_diagnostics', 'selection_summary', 'feasibility_summary', 'summaries', 'configuration_status', 'is_complete', 'snapshot', 'created');
 
 fprintf('Evaluation artifact saved to: %s\n', evaluation_artifact);
 
@@ -115,6 +129,7 @@ local_write_table(table_dir, 'partA_04_selection_summary.csv', selection_summary
 local_write_table(table_dir, 'partA_04_candidate_diagnostics.csv', candidate_diagnostics);
 local_write_table(table_dir, 'partA_04_trajectory_summary.csv', trajectory_summary);
 local_write_table(table_dir, 'partA_04_feasibility_summary.csv', feasibility_summary);
+local_write_table(table_dir, 'partA_04_configuration_status.csv', configuration_status);
 
 fprintf('=== Part A Forecast Evaluation Complete ===\n\n');
 
@@ -143,57 +158,94 @@ for i = 1:numel(files)
 end
 end
 
-function [selections, forecast_artifacts, coverage] = local_load_artifacts(cfg)
-%LOCAL_LOAD_ARTIFACTS Load each configuration's artifacts and require one selection identity per configuration.
+function [selections, forecast_artifacts, status] = local_load_artifacts(cfg)
+%LOCAL_LOAD_ARTIFACTS Classify each configuration by its recorded selection outcome and load its artifacts of that selection identity.
 configurations = cfg.run.valid_configurations;
 num_configs    = size(configurations, 1);
-coverage       = table(configurations(:, 1), configurations(:, 2), false(num_configs, 1), false(num_configs, 1), false(num_configs, 1), 'VariableNames', {'Model', 'ExoMode', 'Selection', 'Transfer', 'Assessment'});
+stages         = ["development", "transfer", "refinement", "assessment"];
+not_executed   = repmat("not_executed", num_configs, 1);
+status         = table(configurations(:, 1), configurations(:, 2), not_executed, strings(num_configs, 1), strings(num_configs, 1), not_executed, not_executed, not_executed, not_executed, 'VariableNames', {'Model', 'ExoMode', 'SelectionOutcome', 'FailedStage', 'SelectionId', 'Development', 'Transfer', 'Refinement', 'Assessment'});
 
 selections         = cell(0, 1);
 forecast_artifacts = cell(0, 1);
 
 for c = 1:num_configs
     suffix = configurations(c, 1) + "_" + configurations(c, 2);
-    paths  = [
-        fullfile(cfg.output.model_selection_dir, "partA_02_development_" + suffix + ".mat");
-        fullfile(cfg.output.model_selection_dir, "partA_02_refinement_" + suffix + ".mat");
-        fullfile(cfg.output.model_selection_dir, "partA_02_global_hyperparameters_" + suffix + ".mat");
-        fullfile(cfg.output.forecast_dir, "partA_02_forecast_transfer_" + suffix + ".mat");
-        fullfile(cfg.output.forecast_dir, "partA_03_forecast_assessment_" + suffix + ".mat")];
-    present = isfile(paths);
+    paths  = struct('development', fullfile(cfg.output.model_selection_dir, "partA_02_development_" + suffix + ".mat"), 'transfer', fullfile(cfg.output.forecast_dir, "partA_02_forecast_transfer_" + suffix + ".mat"), 'refinement', fullfile(cfg.output.model_selection_dir, "partA_02_refinement_" + suffix + ".mat"), 'assessment', fullfile(cfg.output.forecast_dir, "partA_03_forecast_assessment_" + suffix + ".mat"), 'handover', fullfile(cfg.output.model_selection_dir, "partA_02_global_hyperparameters_" + suffix + ".mat"), 'no_feasible', fullfile(cfg.output.model_selection_dir, "partA_02_no_feasible_candidate_" + suffix + ".mat"));
+    present = structfun(@isfile, paths);
 
     if ~any(present)
         continue;
     end
 
-    if ~all(present(1:4))
-        error('PARTA_04:IncompleteSelection', 'The selection artifacts of %s are incomplete (its last partA_02 run stopped, for example without a feasible candidate); missing: %s. Rerun partA_02 for this configuration or remove its artifacts.', suffix, strjoin(paths(~present(1:4)), ', '));
+    has = cell2struct(num2cell(present), fieldnames(paths));
+
+    if ~has.development || has.handover == has.no_feasible
+        names = string(fieldnames(paths));
+        error('PARTA_04:IncompleteSelection', 'The selection artifacts of %s do not record one selection outcome (a final configuration handover or a no-feasible-candidate record); its last partA_02 run stopped before recording one. Present: %s. Rerun partA_02 for this configuration.', suffix, strjoin(names(present), ', '));
     end
 
-    development = load(paths(1));
-    refinement  = load(paths(2));
-    handover    = load(paths(3));
-    transfer    = load(paths(4));
-
-    if any([development.selection_id, refinement.selection_id, transfer.selection_id] ~= handover.selection_id)
-        error('PARTA_04:InconsistentSelection', 'The selection artifacts of %s come from different partA_02 runs. Rerun partA_02 for this configuration.', suffix);
+    if has.handover
+        outcome      = load(paths.handover);
+        failed_stage = "";
+        stage_status = ["completed", "completed", "completed", "not_executed"];
+    else
+        outcome      = load(paths.no_feasible);
+        failed_stage = outcome.failed_stage;
+        stage_status = repmat("not_applicable", 1, numel(stages));
+        stage_status(stages == failed_stage) = "no_feasible_candidate";
+        stage_status(1:find(stages == failed_stage) - 1) = "completed";
     end
 
-    selections{end + 1, 1} = struct('model_type', configurations(c, 1), 'exo_mode', configurations(c, 2), 'development', development, 'refinement', refinement);
-    forecast_artifacts{end + 1, 1} = transfer;
-    coverage.Selection(c) = true;
-    coverage.Transfer(c)  = true;
+    artifacts = struct('refinement', []);
 
-    if present(5)
-        assessment = load(paths(5));
+    for k = 1:numel(stages)
+        stage = stages(k);
 
-        if assessment.selection_id ~= handover.selection_id || ~isequal(assessment.configuration, handover.selected_configuration)
-            error('PARTA_04:StaleAssessment', 'The assessment artifact of %s was generated from an earlier selection (%s, current %s). Rerun partA_03 for this configuration.', suffix, assessment.selection_id, handover.selection_id);
+        if stage_status(k) == "not_applicable"
+            if has.(stage)
+                error('PARTA_04:InconsistentSelection', 'The %s artifact of %s belongs to a stage that its recorded selection outcome (no feasible candidate in %s, selection %s) makes not applicable. Rerun partA_02 for this configuration.', stage, suffix, failed_stage, outcome.selection_id);
+            end
+            continue;
         end
 
-        forecast_artifacts{end + 1, 1} = assessment;
-        coverage.Assessment(c) = true;
+        if ~has.(stage)
+            if stage ~= "assessment"
+                error('PARTA_04:IncompleteSelection', 'The %s artifact of %s is missing (selection %s): %s. Rerun partA_02 for this configuration.', stage, suffix, outcome.selection_id, paths.(stage));
+            end
+            continue;
+        end
+
+        artifacts.(stage) = load(paths.(stage));
+
+        if stage == "assessment" && (artifacts.assessment.selection_id ~= outcome.selection_id || ~isequal(artifacts.assessment.configuration, outcome.selected_configuration))
+            error('PARTA_04:StaleAssessment', 'The assessment artifact of %s was generated from an earlier selection (%s, current %s). Rerun partA_03 for this configuration.', suffix, artifacts.assessment.selection_id, outcome.selection_id);
+        end
+
+        if artifacts.(stage).selection_id ~= outcome.selection_id
+            error('PARTA_04:InconsistentSelection', 'The selection artifacts of %s come from different partA_02 runs (%s artifact %s, recorded outcome %s). Rerun partA_02 for this configuration.', suffix, stage, artifacts.(stage).selection_id, outcome.selection_id);
+        end
+
+        if stage == "assessment"
+            stage_status(k) = "completed";
+        end
+
+        if any(stage == ["transfer", "assessment"])
+            forecast_artifacts{end + 1, 1} = artifacts.(stage);
+        end
     end
+
+    selections{end + 1, 1} = struct('model_type', configurations(c, 1), 'exo_mode', configurations(c, 2), 'development', artifacts.development, 'refinement', artifacts.refinement);
+
+    status.SelectionOutcome(c) = "selected";
+
+    if failed_stage ~= ""
+        status.SelectionOutcome(c) = "no_feasible_candidate";
+    end
+
+    status.FailedStage(c) = failed_stage;
+    status.SelectionId(c) = outcome.selection_id;
+    status{c, ["Development", "Transfer", "Refinement", "Assessment"]} = stage_status;
 end
 end
 
@@ -354,7 +406,11 @@ feasibility_blocks = cell(0, 1);
 for s = 1:numel(selections)
     entry = selections{s};
 
-    stages = struct('name', {"development"; "refinement"}, 'evidence', {entry.development; entry.refinement}, 'preliminary_index', {entry.development.selection.selected_index; entry.refinement.preliminary_index});
+    stages = struct('name', "development", 'evidence', entry.development, 'preliminary_index', entry.development.selection.selected_index);
+
+    if ~isempty(entry.refinement)
+        stages(2, 1) = struct('name', "refinement", 'evidence', entry.refinement, 'preliminary_index', entry.refinement.preliminary_index);
+    end
 
     for k = 1:numel(stages)
         evidence          = stages(k).evidence;
@@ -364,9 +420,12 @@ for s = 1:numel(selections)
         candidate_blocks{end + 1, 1}   = local_candidate_table(entry.model_type, entry.exo_mode, stages(k).name, evidence, preliminary_index);
         summary_blocks{end + 1, 1}     = local_selection_row(entry.model_type, entry.exo_mode, stages(k).name, evidence, preliminary_index);
         feasibility_blocks{end + 1, 1} = local_selection_feasibility(entry.model_type, entry.exo_mode, stages(k).name, evidence);
-        trajectory_blocks{end + 1, 1}  = local_selection_trajectories(entry.model_type, entry.exo_mode, stages(k).name, "preliminary", evidence, preliminary_index);
 
-        if stages(k).name == "refinement"
+        if ~isnan(preliminary_index)
+            trajectory_blocks{end + 1, 1} = local_selection_trajectories(entry.model_type, entry.exo_mode, stages(k).name, "preliminary", evidence, preliminary_index);
+        end
+
+        if stages(k).name == "refinement" && ~isnan(selected_index)
             trajectory_blocks{end + 1, 1} = local_selection_trajectories(entry.model_type, entry.exo_mode, stages(k).name, "final", evidence, selected_index);
         end
     end
@@ -434,11 +493,32 @@ function row = local_selection_row(model, exo, stage, evidence, preliminary_inde
 selection = evidence.selection;
 grid      = evidence.candidate_grid;
 selected  = selection.selected_index;
+outcome   = "selected";
 
-row = table(model, exo, stage, size(grid, 1), nnz(evidence.feasible), nnz(selection.eligible(:, 1)), string(mat2str(grid(selection.best_index, :))), selection.best_score, selection.se, selection.threshold, string(mat2str(grid(selected, :))), selection.global_score(selected), evidence.complexity(selected), selection.minimum_on_grid_boundary, selection.selected_on_grid_boundary, string(mat2str(grid(preliminary_index, :))), selection.global_score(preliminary_index), evidence.complexity(preliminary_index), evidence.complexity(selected) - evidence.complexity(preliminary_index), 'VariableNames', {'Model', 'ExoMode', 'SelectionStage', 'NumCandidates', 'NumFeasible', 'NumEligible', 'MinimumWISConfiguration', 'MinimumWIS', 'SE', 'Threshold', 'SelectedConfiguration', 'SelectedWIS', 'SelectedComplexity', 'MinimumOnGridBoundary', 'SelectedOnGridBoundary', 'PreliminaryConfiguration', 'PreliminaryWIS', 'PreliminaryComplexity', 'ComplexityChange'});
+if isnan(selected)
+    outcome = "no_feasible_candidate";
+end
+
+row = table(model, exo, stage, outcome, size(grid, 1), nnz(evidence.feasible), nnz(selection.eligible(:, 1)), local_configuration_text(grid, selection.best_index), selection.best_score, selection.se, selection.threshold, local_configuration_text(grid, selected), local_value_at(selection.global_score, selected), local_value_at(evidence.complexity, selected), selection.minimum_on_grid_boundary, selection.selected_on_grid_boundary, local_configuration_text(grid, preliminary_index), local_value_at(selection.global_score, preliminary_index), local_value_at(evidence.complexity, preliminary_index), local_value_at(evidence.complexity, selected) - local_value_at(evidence.complexity, preliminary_index), 'VariableNames', {'Model', 'ExoMode', 'SelectionStage', 'SelectionOutcome', 'NumCandidates', 'NumFeasible', 'NumEligible', 'MinimumWISConfiguration', 'MinimumWIS', 'SE', 'Threshold', 'SelectedConfiguration', 'SelectedWIS', 'SelectedComplexity', 'MinimumOnGridBoundary', 'SelectedOnGridBoundary', 'PreliminaryConfiguration', 'PreliminaryWIS', 'PreliminaryComplexity', 'ComplexityChange'});
 
 for m = 1:numel(selection.multipliers)
-    row.("SelectedAt" + replace(string(selection.multipliers(m)), ".", "p") + "SE") = string(mat2str(grid(selection.selected_indices(m), :)));
+    row.("SelectedAt" + replace(string(selection.multipliers(m)), ".", "p") + "SE") = local_configuration_text(grid, selection.selected_indices(m));
+end
+end
+
+function text = local_configuration_text(grid, index)
+%LOCAL_CONFIGURATION_TEXT Candidate configuration as text, empty for the NaN index of an unsuccessful selection.
+text = "";
+if ~isnan(index)
+    text = string(mat2str(grid(index, :)));
+end
+end
+
+function value = local_value_at(values, index)
+%LOCAL_VALUE_AT Candidate value, NaN for the NaN index of an unsuccessful selection.
+value = NaN;
+if ~isnan(index)
+    value = values(index);
 end
 end
 

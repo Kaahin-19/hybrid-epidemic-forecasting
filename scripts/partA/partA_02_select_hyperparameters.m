@@ -12,20 +12,31 @@
 %       simplest feasible candidate within one standard error of the minimum
 %       trajectory-level WIS.
 %
+%       A candidate is feasible only when it forecasts every origin of every
+%       trajectory of the stage. When no candidate is feasible in preliminary
+%       identification or final refinement, the stage evidence is saved with
+%       an unsuccessful selection, the dependent stages are not applicable, and
+%       a no-feasible-candidate record takes the place of the final
+%       configuration handover. Artifacts of this configuration that belong to
+%       a superseded selection in a stage that is not applicable (and any
+%       earlier handover) are removed so that they cannot be reused; a
+%       successful selection removes an earlier no-feasible-candidate record.
+%
 %   Workflow:
 %       1. Initialize the configured selection run.
 %       2. Load the development trajectories.
 %       3. Construct the candidate grid and its complexity ranking.
 %       4. Perform preliminary identification on the development data.
 %       5. Validate the preliminary configuration across A1-A4.
-%       6. Refine and save the final configuration.
+%       6. Refine and save the final configuration, or record that no
+%          candidate is feasible.
 %
 %   See also PARTA_CONFIG, PARTA_01_GENERATE_TRUTH, PARTA_03_RUN_FORECASTS,
 %            BUILD_FORECAST_WINDOWS, FORECAST_OPEN, FORECAST_CLOSED,
 %            COMPUTE_WIS, COMPUTE_POINT_ERROR, COMPUTE_STRATIFIED_MEAN.
 %
 % A. M. Kaahin 2026-02-19
-% Modified: 2026-11-26
+% Modified: 2026-11-27
 
 %% 1. Initialization
 clear; close all; clc;
@@ -48,6 +59,8 @@ file_suffix  = model_type + "_" + exo_mode;
 selection_id = string(datetime('now', 'Format', 'yyyyMMdd''T''HHmmss.SSS')) + "_" + file_suffix;
 created      = string(datetime('now', 'Format', 'yyyy-MM-dd HH:mm:ss'));
 multipliers  = [cfg.selection.se_multiplier; cfg.selection.sensitivity_multipliers];
+
+paths = struct('development', fullfile(selection_dir, "partA_02_development_" + file_suffix + ".mat"), 'transfer', fullfile(forecast_dir, "partA_02_forecast_transfer_" + file_suffix + ".mat"), 'refinement', fullfile(selection_dir, "partA_02_refinement_" + file_suffix + ".mat"), 'handover', fullfile(selection_dir, "partA_02_global_hyperparameters_" + file_suffix + ".mat"), 'no_feasible', fullfile(selection_dir, "partA_02_no_feasible_candidate_" + file_suffix + ".mat"), 'assessment', fullfile(forecast_dir, "partA_03_forecast_assessment_" + file_suffix + ".mat"));
 
 protocol = struct('model_type', model_type, 'exo_mode', exo_mode, 'horizon', cfg.forecast.horizon, 'num_draws', cfg.intervals.num_draws, 'wis_alphas', cfg.forecast.wis_alphas, 'base_seed', cfg.run.seed, 'vary_epidemic_seed', cfg.intervals.include_epidemic_seed_variation, 'infeasibility_ids', cfg.forecast.infeasibility_ids);
 
@@ -106,10 +119,14 @@ development_const = parallel.pool.Constant(development);
 records = local_evaluate_candidates(candidate_grid, 1:num_candidates, development_const, stepper_const, protocol);
 clear development_const
 
-development_evidence = local_selection_evidence(records, development, candidate_grid, complexity, max_lag, multipliers, "development");
+development_evidence = local_selection_evidence(records, development, candidate_grid, complexity, max_lag, multipliers);
 
 preliminary_index         = development_evidence.selection.selected_index;
-preliminary_configuration = candidate_grid(preliminary_index, :);
+preliminary_configuration = nan(1, size(candidate_grid, 2));
+
+if ~isnan(preliminary_index)
+    preliminary_configuration = candidate_grid(preliminary_index, :);
+end
 
 development_artifact = development_evidence;
 development_artifact.stage                     = "development";
@@ -120,11 +137,17 @@ development_artifact.preliminary_configuration = preliminary_configuration;
 development_artifact.snapshot                  = cfg.snapshot.selection;
 development_artifact.created                   = created;
 
-development_path = fullfile(selection_dir, "partA_02_development_" + file_suffix + ".mat");
-save(development_path, '-struct', 'development_artifact');
+save(paths.development, '-struct', 'development_artifact');
 
 local_print_selection("Preliminary", development_evidence, preliminary_configuration);
-fprintf('Development artifact saved to: %s\n', development_path);
+fprintf('Development artifact saved to: %s\n', paths.development);
+
+if isnan(preliminary_index)
+    clear pool_cleanup stepper_const
+    local_record_no_feasible_candidate(paths, "development", ["transfer"; "refinement"; "assessment"], development_evidence, development_artifact);
+    fprintf('=== Part A Hyperparameter Selection Complete ===\n\n');
+    return;
+end
 
 %% 5. Cross-Scenario Validation
 refinement = local_load_role(cfg, manifest.datasets, "refinement", exo_mode);
@@ -144,11 +167,10 @@ transfer_forecasts = vertcat(transfer_cells{:});
 
 transfer_artifact = struct('stage', "transfer", 'model_type', model_type, 'exo_mode', exo_mode, 'configuration', preliminary_configuration, 'configuration_role', "preliminary", 'selection_id', selection_id, 'wis_alphas', cfg.forecast.wis_alphas, 'horizon', cfg.forecast.horizon, 'seed_policy', cfg.forecast.seed_policy, 'dataset_ids', [refinement.dataset_id]', 'forecasts', transfer_forecasts, 'snapshot', cfg.snapshot.forecast, 'created', created);
 
-transfer_path = fullfile(forecast_dir, "partA_02_forecast_transfer_" + file_suffix + ".mat");
-save(transfer_path, '-struct', 'transfer_artifact');
+save(paths.transfer, '-struct', 'transfer_artifact');
 
 transfer_status = vertcat(transfer_forecasts.status);
-fprintf('Preliminary configuration forecast at %d of %d refinement origins; transfer artifact saved to: %s\n', sum(transfer_status == "ok"), numel(transfer_status), transfer_path);
+fprintf('Preliminary configuration forecast at %d of %d refinement origins; transfer artifact saved to: %s\n', sum(transfer_status == "ok"), numel(transfer_status), paths.transfer);
 
 %% 6. Final Model Refinement
 fprintf('Stage 3: Final refinement - evaluating %d candidates on %d refinement trajectories\n', num_candidates - 1, numel(refinement));
@@ -158,11 +180,19 @@ records{preliminary_index} = local_record_from_forecasts(transfer_forecasts);
 
 clear pool_cleanup refinement_const stepper_const
 
-refinement_evidence = local_selection_evidence(records, refinement, candidate_grid, complexity, max_lag, multipliers, "refinement");
+refinement_evidence = local_selection_evidence(records, refinement, candidate_grid, complexity, max_lag, multipliers);
 
 final_index         = refinement_evidence.selection.selected_index;
-final_configuration = candidate_grid(final_index, :);
 selection           = refinement_evidence.selection;
+final_configuration = nan(1, size(candidate_grid, 2));
+comparison          = struct('preliminary_global_score', selection.global_score(preliminary_index), 'final_global_score', NaN, 'preliminary_stratum_score', selection.stratum_score(preliminary_index, :).', 'final_stratum_score', nan(numel(selection.stratum_ids), 1), 'preliminary_complexity', complexity(preliminary_index), 'final_complexity', NaN);
+
+if ~isnan(final_index)
+    final_configuration            = candidate_grid(final_index, :);
+    comparison.final_global_score  = selection.global_score(final_index);
+    comparison.final_stratum_score = selection.stratum_score(final_index, :).';
+    comparison.final_complexity    = complexity(final_index);
+end
 
 refinement_artifact = refinement_evidence;
 refinement_artifact.stage                     = "refinement";
@@ -173,21 +203,29 @@ refinement_artifact.preliminary_index         = preliminary_index;
 refinement_artifact.preliminary_configuration = preliminary_configuration;
 refinement_artifact.preliminary_source        = "Stage 2 transfer forecasts (identical trajectories, seeds, and protocol)";
 refinement_artifact.final_configuration       = final_configuration;
-refinement_artifact.comparison                = struct('preliminary_global_score', selection.global_score(preliminary_index), 'final_global_score', selection.global_score(final_index), 'preliminary_stratum_score', selection.stratum_score(preliminary_index, :).', 'final_stratum_score', selection.stratum_score(final_index, :).', 'preliminary_complexity', complexity(preliminary_index), 'final_complexity', complexity(final_index));
+refinement_artifact.comparison                = comparison;
 refinement_artifact.snapshot                  = cfg.snapshot.selection;
 refinement_artifact.created                   = created;
 
-refinement_file = "partA_02_refinement_" + file_suffix + ".mat";
-save(fullfile(selection_dir, refinement_file), '-struct', 'refinement_artifact');
-
-handover = struct('selected_configuration', final_configuration, 'snapshot', cfg.snapshot.selection, 'model_type', model_type, 'exo_mode', exo_mode, 'preliminary_configuration', preliminary_configuration, 'selection_stage', "refinement", 'selection_id', selection_id, 'source_artifact', refinement_file, 'created', created);
-
-handover_path = fullfile(selection_dir, "partA_02_global_hyperparameters_" + file_suffix + ".mat");
-save(handover_path, '-struct', 'handover');
+save(paths.refinement, '-struct', 'refinement_artifact');
 
 local_print_selection("Final", refinement_evidence, final_configuration);
-fprintf('Refinement artifact saved to: %s\n', fullfile(selection_dir, refinement_file));
-fprintf('Final configuration handover saved to: %s\n', handover_path);
+fprintf('Refinement artifact saved to: %s\n', paths.refinement);
+
+if isnan(final_index)
+    local_record_no_feasible_candidate(paths, "refinement", "assessment", refinement_evidence, refinement_artifact);
+    fprintf('=== Part A Hyperparameter Selection Complete ===\n\n');
+    return;
+end
+
+[~, refinement_name, refinement_ext] = fileparts(paths.refinement);
+handover = struct('selected_configuration', final_configuration, 'snapshot', cfg.snapshot.selection, 'model_type', model_type, 'exo_mode', exo_mode, 'preliminary_configuration', preliminary_configuration, 'selection_stage', "refinement", 'selection_id', selection_id, 'source_artifact', refinement_name + refinement_ext, 'created', created);
+
+save(paths.handover, '-struct', 'handover');
+local_remove_superseded(paths.no_feasible);
+
+fprintf('Selection outcome: final configuration %s\n', mat2str(final_configuration));
+fprintf('Final configuration handover saved to: %s\n', paths.handover);
 fprintf('=== Part A Hyperparameter Selection Complete ===\n\n');
 
 %% 7. Local Functions
@@ -339,7 +377,7 @@ for w = 1:num_windows
 end
 end
 
-function evidence = local_selection_evidence(records, trajectories, candidate_grid, complexity, max_lag, multipliers, stage)
+function evidence = local_selection_evidence(records, trajectories, candidate_grid, complexity, max_lag, multipliers)
 %LOCAL_SELECTION_EVIDENCE Stack candidate records and apply the one-SE rule to their trajectory-level WIS.
 fields     = fieldnames(records{1});
 evaluation = struct();
@@ -351,12 +389,6 @@ end
 
 feasible = all(evaluation.status == "ok", [2, 3]);
 
-if ~any(feasible)
-    failed_ids = evaluation.error_id(evaluation.status == "infeasible");
-    [ids, ~, id_index] = unique(failed_ids);
-    error('PARTA_02:NoFeasibleCandidate', 'No candidate produced scoreable forecasts at every origin of every %s trajectory. Recorded infeasible forecasts by identifier: %s.', stage, strjoin(compose("%s = %d", ids, accumarray(id_index, 1)), ', '));
-end
-
 trajectory_scores = mean(evaluation.wis, 3);
 trajectory_scores(~feasible, :) = NaN;
 
@@ -364,15 +396,20 @@ strata    = [trajectories.stratum]';
 is_random = ~[trajectories.is_canonical]';
 selection = local_select_one_se(trajectory_scores, feasible, complexity, max_lag, strata, is_random, multipliers);
 
-grid_upper = max(candidate_grid, [], 1);
-selection.minimum_on_grid_boundary  = any(candidate_grid(selection.best_index, :) == grid_upper);
-selection.selected_on_grid_boundary = any(candidate_grid(selection.selected_index, :) == grid_upper);
+selection.minimum_on_grid_boundary  = false;
+selection.selected_on_grid_boundary = false;
+
+if any(feasible)
+    grid_upper = max(candidate_grid, [], 1);
+    selection.minimum_on_grid_boundary  = any(candidate_grid(selection.best_index, :) == grid_upper);
+    selection.selected_on_grid_boundary = any(candidate_grid(selection.selected_index, :) == grid_upper);
+end
 
 evidence = struct('dataset_ids', [trajectories.dataset_id]', 'families', [trajectories.family]', 'strata', strata, 'is_random', is_random, 'window_days', [trajectories(1).window_data.window_day]', 'candidate_grid', candidate_grid, 'complexity', complexity, 'max_lag', max_lag, 'evaluation', evaluation, 'feasible', feasible, 'trajectory_scores', trajectory_scores, 'selection', selection);
 end
 
 function selection = local_select_one_se(trajectory_scores, feasible, complexity, max_lag, strata, is_random, multipliers)
-%LOCAL_SELECT_ONE_SE Select the simplest feasible candidate within a multiple of one SE of the minimum WIS.
+%LOCAL_SELECT_ONE_SE Select the simplest feasible candidate within a multiple of one SE of the minimum WIS; indices are NaN without a feasible candidate.
 num_candidates = size(trajectory_scores, 1);
 num_strata     = numel(unique(strata));
 global_score   = nan(num_candidates, 1);
@@ -386,22 +423,72 @@ for c = find(feasible).'
     stratum_se(c, :)    = stratum_error.';
 end
 
-[best_score, best_index] = min(global_score);
-thresholds       = best_score + multipliers * global_se(best_index);
-eligible         = feasible & global_score <= thresholds.';
-selected_indices = zeros(numel(multipliers), 1);
+best_score       = NaN;
+best_index       = NaN;
+best_se          = NaN;
+thresholds       = nan(numel(multipliers), 1);
+eligible         = false(num_candidates, numel(multipliers));
+selected_indices = nan(numel(multipliers), 1);
 
-for m = 1:numel(multipliers)
-    candidates          = find(eligible(:, m));
-    ranking             = sortrows([complexity(candidates), max_lag(candidates), global_score(candidates), candidates]);
-    selected_indices(m) = ranking(1, 4);
+if any(feasible)
+    [best_score, best_index] = min(global_score);
+    best_se    = global_se(best_index);
+    thresholds = best_score + multipliers * best_se;
+    eligible   = feasible & global_score <= thresholds.';
+
+    for m = 1:numel(multipliers)
+        candidates          = find(eligible(:, m));
+        ranking             = sortrows([complexity(candidates), max_lag(candidates), global_score(candidates), candidates]);
+        selected_indices(m) = ranking(1, 4);
+    end
 end
 
-selection = struct('stratum_ids', unique(strata, 'stable'), 'global_score', global_score, 'global_se', global_se, 'stratum_score', stratum_score, 'stratum_se', stratum_se, 'best_index', best_index, 'best_score', best_score, 'se', global_se(best_index), 'multipliers', multipliers, 'thresholds', thresholds, 'eligible', eligible, 'selected_indices', selected_indices, 'selected_index', selected_indices(1), 'threshold', thresholds(1));
+selection = struct('stratum_ids', unique(strata, 'stable'), 'global_score', global_score, 'global_se', global_se, 'stratum_score', stratum_score, 'stratum_se', stratum_se, 'best_index', best_index, 'best_score', best_score, 'se', best_se, 'multipliers', multipliers, 'thresholds', thresholds, 'eligible', eligible, 'selected_indices', selected_indices, 'selected_index', selected_indices(1), 'threshold', thresholds(1));
 end
 
 function local_print_selection(label, evidence, configuration)
 %LOCAL_PRINT_SELECTION Print the one-SE selection summary of one stage.
 selection = evidence.selection;
+
+if isnan(selection.selected_index)
+    [ids, counts] = local_infeasibility_counts(evidence.evaluation);
+    fprintf('%s configuration: none | feasible 0/%d | no candidate produced scoreable forecasts at every origin of every trajectory; recorded infeasible forecasts by identifier: %s\n', label, numel(evidence.feasible), strjoin(compose("%s = %d", ids, counts), ', '));
+    return;
+end
+
 fprintf('%s configuration: %s | feasible %d/%d | minimum WIS %.4g at %s | SE %.3g | threshold %.4g | eligible %d\n', label, mat2str(configuration), nnz(evidence.feasible), numel(evidence.feasible), selection.best_score, mat2str(evidence.candidate_grid(selection.best_index, :)), selection.se, selection.threshold, nnz(selection.eligible(:, 1)));
+end
+
+function [ids, counts] = local_infeasibility_counts(evaluation)
+%LOCAL_INFEASIBILITY_COUNTS Recorded infeasible forecasts of a selection stage by error identifier.
+[ids, ~, id_index] = unique(evaluation.error_id(evaluation.status == "infeasible"));
+counts = accumarray(id_index, 1, [numel(ids), 1]);
+end
+
+function local_record_no_feasible_candidate(paths, failed_stage, not_applicable, evidence, stage_artifact)
+%LOCAL_RECORD_NO_FEASIBLE_CANDIDATE Remove superseded artifacts of the stages that are not applicable and save the no-feasible-candidate record.
+superseded = paths.handover;
+for stage = not_applicable.'
+    superseded(end + 1, 1) = paths.(stage);
+end
+local_remove_superseded(superseded);
+
+[ids, counts]  = local_infeasibility_counts(evidence.evaluation);
+[~, name, ext] = fileparts(paths.(failed_stage));
+
+record = struct('outcome', "no_feasible_candidate", 'failed_stage', failed_stage, 'not_applicable_stages', not_applicable, 'model_type', stage_artifact.model_type, 'exo_mode', stage_artifact.exo_mode, 'selection_id', stage_artifact.selection_id, 'source_artifact', name + ext, 'num_candidates', numel(evidence.feasible), 'infeasibility_ids', ids, 'infeasibility_counts', counts, 'snapshot', stage_artifact.snapshot, 'created', stage_artifact.created);
+save(paths.no_feasible, '-struct', 'record');
+
+fprintf('Selection outcome: no feasible candidate in %s; not applicable: %s\n', failed_stage, strjoin(not_applicable, ', '));
+fprintf('No-feasible-candidate record saved to: %s\n', paths.no_feasible);
+end
+
+function local_remove_superseded(artifact_paths)
+%LOCAL_REMOVE_SUPERSEDED Delete existing artifacts of this configuration that a newer selection supersedes.
+for k = 1:numel(artifact_paths)
+    if isfile(artifact_paths(k))
+        delete(artifact_paths(k));
+        fprintf('Removed superseded artifact: %s\n', artifact_paths(k));
+    end
+end
 end

@@ -9,16 +9,19 @@
 %       relative to Rt persistence, model-selection diagnostics, preliminary
 %       versus final performance on the refinement data, and forecast
 %       feasibility. Evaluation figures use logarithmic WIS scales and a
-%       fixed model/input ordering, and are annotated when the evaluated
-%       configuration set is incomplete.
+%       fixed model/input ordering, and are annotated with the configurations
+%       without a feasible candidate and when the evaluated configuration set
+%       is incomplete. Selection panels without a feasible candidate are drawn
+%       and labelled as such.
 %
 %       The representative forecast figures are configuration-specific and
-%       are drawn for the configurations of cfg.figures (all available
-%       forecast artifacts, or the selected configurations); figures outside
-%       that scope are left as they are. All other figures are comparative
-%       and always use every accumulated result. Plotting categories without
-%       data in a panel are not drawn, and shared legends list the categories
-%       drawn in any panel.
+%       are drawn for the configurations of cfg.figures (all configurations,
+%       or the selected ones) from the forecast artifacts that the evaluation
+%       artifact records as completed; figures outside that scope, and stages
+%       that are not applicable, are left without a new figure. All other
+%       figures are comparative and always use every accumulated result.
+%       Plotting categories without data in a panel are not drawn, and shared
+%       legends list the categories drawn in any panel.
 %
 %   Workflow:
 %       1. Initialize figure paths, source artifacts, and shared styling.
@@ -31,7 +34,7 @@
 %            PLOT_DISTRIBUTION, APPLY_PANEL_STYLE.
 %
 % A. M. Kaahin 2026-06-01
-% Modified: 2026-11-26
+% Modified: 2026-11-27
 
 %% 1. Initialization
 clear; close all; clc;
@@ -56,12 +59,27 @@ family_ids   = [cfg.scenarios.id]';
 family_names = [cfg.scenarios.name]';
 
 figure_configurations = cfg.figures.configurations;
-configuration_suffixes = figure_configurations(:, 1) + "_" + figure_configurations(:, 2);
-forecast_files = [fullfile(forecast_dir, "partA_02_forecast_transfer_" + configuration_suffixes + ".mat"); fullfile(forecast_dir, "partA_03_forecast_assessment_" + configuration_suffixes + ".mat")];
-forecast_files = forecast_files(isfile(forecast_files));
-evaluation_artifact = fullfile(evaluation_dir, 'partA_04_evaluation_results.mat');
+evaluation_artifact   = fullfile(evaluation_dir, 'partA_04_evaluation_results.mat');
+has_evaluation        = exist(evaluation_artifact, 'file') == 2;
 
 fprintf('Figure scope: %s (%s)\n', cfg.figures.scope, strjoin(figure_configurations(:, 1) + "/" + figure_configurations(:, 2), ", "));
+
+if has_evaluation
+    evaluation = load(evaluation_artifact);
+    configuration_status = evaluation.configuration_status;
+
+    in_scope       = ismember(configuration_status.Model + "/" + configuration_status.ExoMode, figure_configurations(:, 1) + "/" + figure_configurations(:, 2));
+    suffixes       = configuration_status.Model + "_" + configuration_status.ExoMode;
+    has_transfer   = in_scope & configuration_status.Transfer == "completed";
+    has_assessment = in_scope & configuration_status.Assessment == "completed";
+
+    forecast_files = [fullfile(forecast_dir, "partA_02_forecast_transfer_" + suffixes(has_transfer) + ".mat"); fullfile(forecast_dir, "partA_03_forecast_assessment_" + suffixes(has_assessment) + ".mat")];
+    forecast_ids   = [configuration_status.SelectionId(has_transfer); configuration_status.SelectionId(has_assessment)];
+
+    for c = find(in_scope & configuration_status.SelectionOutcome == "no_feasible_candidate").'
+        fprintf('No representative forecast figure for the stages that are not applicable to %s / %s: no feasible candidate in %s.\n', configuration_status.Model(c), configuration_status.ExoMode(c), configuration_status.FailedStage(c));
+    end
+end
 
 %% 2. Synthetic Rt Trajectories
 if exist(cfg.output.dataset_manifest, 'file') ~= 2
@@ -129,8 +147,10 @@ else
 end
 
 %% 3. Representative Fixed-Lead Forecasts
-if isempty(forecast_files)
-    fprintf('Skipping forecast comparisons - no forecast artifacts of the figure scope in %s.\n', forecast_dir);
+if ~has_evaluation
+    fprintf('Skipping forecast comparisons - no evaluation artifact in %s identifies the evaluated forecast artifacts.\n', evaluation_dir);
+elseif isempty(forecast_files)
+    fprintf('Skipping forecast comparisons - no completed forecast stage in the figure scope.\n');
 else
     lead        = cfg.forecast.plot_lead_time;
     plot_alphas = sort(cfg.forecast.plot_alphas);
@@ -139,6 +159,10 @@ else
 
     for f = 1:numel(forecast_files)
         loaded = load(forecast_files(f));
+
+        if loaded.selection_id ~= forecast_ids(f)
+            error('PARTA_05:StaleEvaluation', 'The forecast artifact %s (selection %s) is not the one evaluated in %s (selection %s). Rerun partA_04.', forecast_files(f), loaded.selection_id, evaluation_artifact, forecast_ids(f));
+        end
 
         fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 11.5], 'Color', 'w');
         tl  = tiledlayout(fig, 2, 2, 'Padding', 'compact', 'TileSpacing', 'compact');
@@ -177,14 +201,13 @@ else
 end
 
 %% 4. Rt Evaluation and Infectious-Projection Figures
-if exist(evaluation_artifact, 'file') ~= 2
+if ~has_evaluation
     fprintf('Skipping evaluation figures - no evaluation artifact in %s.\n', evaluation_dir);
 else
     fprintf('Drawing evaluation figures from partA_04 artifact...\n');
 
-    evaluation = load(evaluation_artifact);
-    summaries  = evaluation.summaries;
-    note       = local_coverage_note(evaluation.coverage, evaluation.is_complete);
+    summaries = evaluation.summaries;
+    note      = local_status_note(configuration_status, evaluation.is_complete);
 
     for s = 1:numel(stages)
         window_scores = evaluation.window_scores(evaluation.window_scores.Stage == stages(s) & evaluation.window_scores.Status == "ok", :);
@@ -294,6 +317,11 @@ else
 
     for s = 1:numel(selection_stages)
         stage_candidates = candidates(candidates.SelectionStage == selection_stages(s), :);
+
+        if isempty(stage_candidates)
+            continue;
+        end
+
         groups   = local_configuration_order(stage_candidates.Model, stage_candidates.ExoMode);
         n_panels = numel(groups);
         n_cols   = ceil(sqrt(n_panels));
@@ -309,75 +337,93 @@ else
             ax = nexttile(tl);
             group_candidates = stage_candidates(local_configuration_label(stage_candidates.Model, stage_candidates.ExoMode) == groups(i), :);
             threshold = evaluation.selection_summary.Threshold(local_configuration_label(evaluation.selection_summary.Model, evaluation.selection_summary.ExoMode) == groups(i) & evaluation.selection_summary.SelectionStage == selection_stages(s));
+            panel_style = struct('x_limits', [min(group_candidates.Complexity) - 0.5, max(group_candidates.Complexity) + 0.5], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name);
 
-            plotted_wis = [group_candidates.GlobalWIS(group_candidates.Feasible); threshold];
-            spec = struct('series', local_series_with_data(local_selection_series(group_candidates, threshold, style)), 'style', struct('x_limits', [min(group_candidates.Complexity) - 0.5, max(group_candidates.Complexity) + 0.5], 'y_limits', [min(plotted_wis) / 1.5, max(plotted_wis) * 1.5], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+            if any(group_candidates.Feasible)
+                plotted_wis = [group_candidates.GlobalWIS(group_candidates.Feasible); threshold];
+                panel_style.y_limits = [min(plotted_wis) / 1.5, max(plotted_wis) * 1.5];
 
-            [h, labels] = plot_series(ax, spec);
-            [legend_handles, legend_labels] = local_merge_legend(legend_handles, legend_labels, h, labels);
-            set(ax, 'YScale', 'log', 'YMinorGrid', 'off');
+                [h, labels] = plot_series(ax, struct('series', local_series_with_data(local_selection_series(group_candidates, threshold, style)), 'style', panel_style));
+                [legend_handles, legend_labels] = local_merge_legend(legend_handles, legend_labels, h, labels);
+                set(ax, 'YScale', 'log', 'YMinorGrid', 'off');
+            else
+                apply_panel_style(ax, panel_style);
+                set(ax, 'YTick', []);
+                text(ax, 0.5, 0.5, sprintf('No feasible candidate (0/%d)', height(group_candidates)), 'Units', 'normalized', 'HorizontalAlignment', 'center', 'FontName', style.font_name, 'FontSize', style.tick_font_size);
+            end
+
             title(ax, groups(i), 'Interpreter', 'none', 'FontName', style.font_name, 'FontSize', style.axis_font_size, 'FontWeight', 'normal');
         end
 
         xlabel(tl, local_noted_label("Candidate complexity (estimated coefficients)", note), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
         ylabel(tl, "Global mean WIS (log scale)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
-        local_tile_legend(legend_handles, legend_labels, style);
+
+        if ~isempty(legend_labels)
+            local_tile_legend(legend_handles, legend_labels, style);
+        end
 
         exportgraphics(fig, fullfile(figure_dir, "partA_05_selection_diagnostics_" + selection_stages(s) + ".pdf"), 'ContentType', 'vector');
         close(fig);
     end
 
     refinement_summary = summaries.scenario_summary(summaries.scenario_summary.Stage == "refinement", :);
+    executed           = configuration_status(configuration_status.SelectionOutcome ~= "not_executed", :);
     comparison_strata  = [family_ids; "All"];
     comparison_names   = [family_names; "Equal-family global mean"];
-    groups             = local_configuration_order(refinement_summary.Model, refinement_summary.ExoMode);
+    groups             = local_configuration_order(executed.Model, executed.ExoMode);
     roles              = ["preliminary"; "final"];
     role_labels        = ["Preliminary configuration"; "Final configuration"];
     role_markers       = ["o"; "s"];
 
-    fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 16.0], 'Color', 'w');
-    tl  = tiledlayout(fig, numel(comparison_strata), 1, 'Padding', 'compact', 'TileSpacing', 'compact');
+    if ~isempty(refinement_summary)
+        fig = figure('Visible', 'off', 'Units', 'centimeters', 'Position', [2, 2, 17.0, 16.0], 'Color', 'w');
+        tl  = tiledlayout(fig, numel(comparison_strata), 1, 'Padding', 'compact', 'TileSpacing', 'compact');
 
-    for p = 1:numel(comparison_strata)
-        ax     = nexttile(tl);
-        series = repmat(local_series_template(), numel(roles), 1);
+        legend_handles = gobjects(0, 1);
+        legend_labels  = strings(0, 1);
 
-        for r = 1:numel(roles)
-            rows = refinement_summary(refinement_summary.Stratum == comparison_strata(p) & refinement_summary.ConfigurationRole == roles(r), :);
-            [~, position] = ismember(local_configuration_label(rows.Model, rows.ExoMode), groups);
+        for p = 1:numel(comparison_strata)
+            ax     = nexttile(tl);
+            series = repmat(local_series_template(), numel(roles), 1);
 
-            series(r).type        = "line";
-            series(r).x           = position;
-            series(r).y           = rows.MeanWIS;
-            series(r).color       = style.palette(2 * r, :);
-            series(r).line_style  = "none";
-            series(r).marker      = role_markers(r);
-            series(r).marker_size = style.marker_size + 1.5;
-            series(r).label       = role_labels(r);
+            for r = 1:numel(roles)
+                rows = refinement_summary(refinement_summary.Stratum == comparison_strata(p) & refinement_summary.ConfigurationRole == roles(r), :);
+                [~, position] = ismember(local_configuration_label(rows.Model, rows.ExoMode), groups);
+
+                series(r).type        = "line";
+                series(r).x           = position;
+                series(r).y           = rows.MeanWIS;
+                series(r).color       = style.palette(2 * r, :);
+                series(r).line_style  = "none";
+                series(r).marker      = role_markers(r);
+                series(r).marker_size = style.marker_size + 1.5;
+                series(r).label       = role_labels(r);
+            end
+
+            plotted_wis = vertcat(series.y);
+            spec = struct('series', local_series_with_data(series), 'style', struct('x_limits', [0.5, numel(groups) + 0.5], 'y_limits', [min(plotted_wis) / 1.5, max(plotted_wis) * 1.5], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+
+            [h, labels] = plot_series(ax, spec);
+            [legend_handles, legend_labels] = local_merge_legend(legend_handles, legend_labels, h, labels);
+            set(ax, 'YScale', 'log', 'YMinorGrid', 'off', 'XTick', 1:numel(groups), 'XTickLabel', []);
+            title(ax, comparison_names(p), 'Interpreter', 'none', 'FontName', style.font_name, 'FontSize', style.axis_font_size, 'FontWeight', 'normal');
         end
 
-        plotted_wis = vertcat(series.y);
-        spec = struct('series', series, 'style', struct('x_limits', [0.5, numel(groups) + 0.5], 'y_limits', [min(plotted_wis) / 1.5, max(plotted_wis) * 1.5], 'grid', true, 'axis_font_size', style.axis_font_size, 'tick_font_size', style.tick_font_size, 'font_name', style.font_name));
+        infeasible = evaluation.selection_summary(evaluation.selection_summary.SelectionStage == "refinement" & isnan(evaluation.selection_summary.PreliminaryWIS), :);
+        comparison_note = note;
 
-        [h, labels] = plot_series(ax, spec);
-        set(ax, 'YScale', 'log', 'YMinorGrid', 'off', 'XTick', 1:numel(groups), 'XTickLabel', []);
-        title(ax, comparison_names(p), 'Interpreter', 'none', 'FontName', style.font_name, 'FontSize', style.axis_font_size, 'FontWeight', 'normal');
+        if ~isempty(infeasible)
+            comparison_note = strtrim(sprintf("Preliminary configuration infeasible on the refinement data (means over available origins): %s. %s", strjoin(local_configuration_label(infeasible.Model, infeasible.ExoMode), ", "), note));
+        end
+
+        set(ax, 'XTickLabel', groups, 'XTickLabelRotation', 30);
+        xlabel(tl, local_noted_label("Model / exogenous mode", comparison_note), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+        ylabel(tl, "Mean WIS on the refinement data (log scale)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
+        local_tile_legend(legend_handles, legend_labels, style);
+
+        exportgraphics(fig, fullfile(figure_dir, 'partA_05_preliminary_vs_final.pdf'), 'ContentType', 'vector');
+        close(fig);
     end
-
-    infeasible = evaluation.selection_summary(evaluation.selection_summary.SelectionStage == "refinement" & isnan(evaluation.selection_summary.PreliminaryWIS), :);
-    comparison_note = note;
-
-    if ~isempty(infeasible)
-        comparison_note = strtrim(sprintf("Preliminary configuration infeasible on the refinement data (means over available origins): %s. %s", strjoin(local_configuration_label(infeasible.Model, infeasible.ExoMode), ", "), note));
-    end
-
-    set(ax, 'XTickLabel', groups, 'XTickLabelRotation', 30);
-    xlabel(tl, local_noted_label("Model / exogenous mode", comparison_note), 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
-    ylabel(tl, "Mean WIS on the refinement data (log scale)", 'Interpreter', 'tex', 'FontName', style.font_name, 'FontSize', style.axis_font_size);
-    local_tile_legend(h, labels, style);
-
-    exportgraphics(fig, fullfile(figure_dir, 'partA_05_preliminary_vs_final.pdf'), 'ContentType', 'vector');
-    close(fig);
 
     feasibility = evaluation.feasibility_summary;
     groups      = local_configuration_order(feasibility.Model, feasibility.ExoMode);
@@ -647,11 +693,17 @@ lg.NumColumns  = min(numel(labels), 4);
 lg.Layout.Tile = 'north';
 end
 
-function note = local_coverage_note(coverage, is_complete)
-%LOCAL_COVERAGE_NOTE Note stating the evaluated configurations when the set is incomplete.
+function note = local_status_note(configuration_status, is_complete)
+%LOCAL_STATUS_NOTE Note naming the configurations without a feasible candidate and stating the evaluated configurations when the set is incomplete.
+unsuccessful = configuration_status.SelectionOutcome == "no_feasible_candidate";
 note = "";
-if ~is_complete
-    note = sprintf("Evaluated configurations: selection %d/%d, transfer %d/%d, assessment %d/%d.", sum(coverage.Selection), height(coverage), sum(coverage.Transfer), height(coverage), sum(coverage.Assessment), height(coverage));
+
+if ~is_complete || any(unsuccessful)
+    note = sprintf("Evaluated configurations: selection %d/%d, transfer %d/%d, assessment %d/%d.", nnz(configuration_status.SelectionOutcome ~= "not_executed"), height(configuration_status), nnz(configuration_status.Transfer == "completed"), height(configuration_status), nnz(configuration_status.Assessment == "completed"), height(configuration_status));
+end
+
+if any(unsuccessful)
+    note = note + " No feasible candidate: " + strjoin(local_configuration_label(configuration_status.Model(unsuccessful), configuration_status.ExoMode(unsuccessful)) + " (" + configuration_status.FailedStage(unsuccessful) + ")", ", ") + ".";
 end
 end
 

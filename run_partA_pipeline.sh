@@ -18,6 +18,7 @@ Usage:
   ./run_partA_pipeline.sh
   ./run_partA_pipeline.sh --models <ids> --exo <ids>
   ./run_partA_pipeline.sh --models <ids> --exo <ids> --fresh
+  ./run_partA_pipeline.sh --models <ids> --exo <ids> --reuse-selection
   ./run_partA_pipeline.sh --help
 
 Description:
@@ -42,6 +43,14 @@ Description:
   runs are kept and evaluated together with the new ones when they were
   produced under the same configuration; incompatible artifacts stop the
   evaluation stage.
+
+  When no candidate of a combination is feasible in preliminary
+  identification or final refinement, its selection stage records a
+  no-feasible-candidate outcome (shown as "no feasible candidate"), its
+  dependent stages are not applicable (its assessment is shown as "not
+  applicable"), and the pipeline continues with the remaining
+  combinations. Evaluation and figures report the combination as having
+  no feasible candidate. Any other MATLAB error stops the pipeline.
 
   Each invocation creates a timestamped run folder under:
     results/partA/logs/<run_id>/
@@ -81,6 +90,7 @@ Examples:
   ./run_partA_pipeline.sh --models 3,4 --exo 3
   ./run_partA_pipeline.sh --models 1,2,3,4 --exo 0,1,2,3
   ./run_partA_pipeline.sh --models 1,2,3,4 --exo 0,1,2,3 --fresh
+  ./run_partA_pipeline.sh --models 3 --exo 0,2,3 --reuse-selection
 
 Options:
   --models <ids>  Model type IDs to run. Default: all model type IDs.
@@ -89,6 +99,14 @@ Options:
                   (model_selection, forecasts, evaluation, tables, figures)
                   before execution. Run logs are kept. With a subset of
                   combinations, only the selected combinations are rerun.
+  --reuse-selection
+                  Skip hyperparameter selection for selected combinations
+                  that already have a recorded selection outcome (a final
+                  configuration handover or a no-feasible-candidate record)
+                  and run the later stages from it; combinations without one
+                  are selected as usual. The assessment and evaluation stages
+                  check that the reused artifacts are consistent and match
+                  the current configuration. Cannot be combined with --fresh.
   --help, -h      Show this help message.
 EOF
 }
@@ -358,11 +376,46 @@ final_stage_progress() {
   local step_name="$1"
   local log_path="$2"
 
-  case "$step_name" in
-    truth|model_selection|forecast)
-      current_stage_progress "$step_name" "$log_path"
+  case "$(stage_outcome "$step_name" "$log_path")" in
+    no_feasible_candidate)
+      printf 'no feasible candidate'
+      ;;
+    not_applicable)
+      printf 'not applicable'
+      ;;
+    *)
+      case "$step_name" in
+        truth|model_selection|forecast)
+          current_stage_progress "$step_name" "$log_path"
+          ;;
+      esac
       ;;
   esac
+}
+
+# Prints the manifest status of a completed stage: partA_02 records a
+# selection without a feasible candidate, and partA_03 reports the
+# assessment of such a selection as not applicable.
+stage_outcome() {
+  local step_name="$1"
+  local log_path="$2"
+
+  if [[ "$step_name" == "model_selection" ]] && grep -Eq '^Selection outcome: no feasible candidate' "$log_path" 2>/dev/null; then
+    printf 'no_feasible_candidate'
+  elif [[ "$step_name" == "forecast" ]] && grep -Eq '^Assessment not applicable' "$log_path" 2>/dev/null; then
+    printf 'not_applicable'
+  else
+    printf 'completed'
+  fi
+}
+
+# Succeeds when a combination has a recorded selection outcome: a final
+# configuration handover or a no-feasible-candidate record.
+selection_outcome_recorded() {
+  local suffix="$1_$2"
+  local selection_dir="$REPO_ROOT/results/partA/model_selection"
+
+  [[ -f "$selection_dir/partA_02_global_hyperparameters_${suffix}.mat" || -f "$selection_dir/partA_02_no_feasible_candidate_${suffix}.mat" ]]
 }
 
 run_matlab_code() {
@@ -414,8 +467,8 @@ run_matlab_code() {
     render_stage "$stage_index" "$total_stages" "$label" "$progress" "✓ $(format_duration "$elapsed_secs")"
     printf '\n'
 
-    log_status "Completed ${description} in ${elapsed_secs}s"
-    append_manifest "$step_name" "$model_name" "$exo_name" "completed" "$log_path" "${elapsed_secs}s"
+    log_status "Completed ${description} in ${elapsed_secs}s ($(stage_outcome "$step_name" "$log_path"))"
+    append_manifest "$step_name" "$model_name" "$exo_name" "$(stage_outcome "$step_name" "$log_path")" "$log_path" "${elapsed_secs}s"
   else
     render_stage "$stage_index" "$total_stages" "$label" "$progress" "✗ failed"
     printf '\n'
@@ -509,6 +562,7 @@ write_run_metadata() {
     printf 'Repository: %s\n' "$REPO_ROOT"
     printf 'Command: %s\n' "$(printf '%q ' "$0" "${args[@]}")"
     printf 'Fresh (--fresh): %s\n' "$([[ "$fresh_run" -eq 1 ]] && printf 'yes' || printf 'no')"
+    printf 'Reuse recorded selections (--reuse-selection): %s\n' "$([[ "$reuse_selection" -eq 1 ]] && printf 'yes' || printf 'no')"
     printf 'Selected model/exo combinations (%d):\n' "${#combo_models[@]}"
     for i in "${!combo_models[@]}"; do
       printf '  %s | %s\n' "${combo_models[$i]}" "${combo_exos[$i]}"
@@ -543,6 +597,7 @@ write_run_metadata() {
 models_spec=""
 exo_spec=""
 fresh_run=0
+reuse_selection=0
 
 args=("$@")
 idx=0
@@ -576,6 +631,10 @@ while [[ "$idx" -lt "${#args[@]}" ]]; do
       fresh_run=1
       ;;
 
+    --reuse-selection)
+      reuse_selection=1
+      ;;
+
     --help|-h)
       show_help
       exit 0
@@ -588,6 +647,8 @@ while [[ "$idx" -lt "${#args[@]}" ]]; do
 
   idx=$((idx + 1))
 done
+
+[[ "$fresh_run" -eq 0 || "$reuse_selection" -eq 0 ]] || die "--reuse-selection cannot be combined with --fresh."
 
 if [[ ! -f "$REPO_ROOT/startup.m" ]] || [[ ! -d "$REPO_ROOT/scripts" ]]; then
   die "Run this script from the repository root: $REPO_ROOT"
@@ -685,11 +746,33 @@ run_matlab_script \
 
 stage_index=$((stage_index + 1))
 
+declare -a no_feasible_combos=()
+
 for idx in "${!combo_models[@]}"; do
   model_name="${combo_models[$idx]}"
   exo_name="${combo_exos[$idx]}"
   safe_model="$(sanitize_name "$model_name")"
   safe_exo="$(sanitize_name "$exo_name")"
+
+  if [[ "$reuse_selection" -eq 1 ]] && selection_outcome_recorded "$model_name" "$exo_name"; then
+    if [[ -f "$REPO_ROOT/results/partA/model_selection/partA_02_no_feasible_candidate_${model_name}_${exo_name}.mat" ]]; then
+      selection_state="reused: no feasible candidate"
+      no_feasible_combos+=("${model_name} | ${exo_name}")
+    else
+      selection_state="reused"
+    fi
+
+    render_stage "$stage_index" "$TOTAL_STAGES" "Select ${model_name} | ${exo_name}" "" "$selection_state"
+    printf '\n'
+
+    log_status "Reusing the recorded selection outcome of ${model_name} | ${exo_name} (${selection_state})"
+    append_manifest "model_selection" "$model_name" "$exo_name" "reused" "-" "$selection_state"
+
+    stage_index=$((stage_index + 1))
+    continue
+  fi
+
+  selection_log="$RUN_LOG_DIR/${safe_model}_${safe_exo}_model_selection.log"
 
   PARTA_MODEL_TYPE="$model_name" \
   PARTA_EXO_MODE="$exo_name" \
@@ -701,8 +784,12 @@ for idx in "${!combo_models[@]}"; do
     "Selecting hyperparameters for ${model_name} | ${exo_name}" \
     "$model_name" \
     "$exo_name" \
-    "$RUN_LOG_DIR/${safe_model}_${safe_exo}_model_selection.log" \
+    "$selection_log" \
     "run('scripts/partA/partA_02_select_hyperparameters.m');"
+
+  if [[ "$(stage_outcome "model_selection" "$selection_log")" == "no_feasible_candidate" ]]; then
+    no_feasible_combos+=("${model_name} | ${exo_name}")
+  fi
 
   stage_index=$((stage_index + 1))
 done
@@ -766,6 +853,13 @@ log_status "Thesis-level figures generated under: $REPO_ROOT/results/partA/figur
 log_status "Run logs saved to: ${RUN_LOG_DIR}"
 
 printf '\nPipeline completed successfully.\n'
-printf 'Finished: %s\n\n' "$PIPELINE_FINISHED_AT"
+printf 'Finished: %s\n' "$PIPELINE_FINISHED_AT"
+
+if [[ "${#no_feasible_combos[@]}" -gt 0 ]]; then
+  printf 'No feasible candidate (dependent stages not applicable): %s\n' "$(IFS=','; printf '%s' "${no_feasible_combos[*]}" | sed 's/,/, /g')"
+  log_status "No feasible candidate: ${no_feasible_combos[*]}"
+fi
+
+printf '\n'
 printf 'Figures: results/partA/figures\n'
 printf 'Logs:    results/partA/logs/%s\n' "$RUN_ID"
