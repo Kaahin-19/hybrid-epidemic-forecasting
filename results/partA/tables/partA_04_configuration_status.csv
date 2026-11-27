@@ -1,8 +1,8 @@
 Model,ExoMode,SelectionOutcome,FailedStage,SelectionId,Development,Transfer,Refinement,Assessment
 AR,None,selected,,20261126T100728.001_AR_None,completed,completed,completed,completed
 ARX,S,selected,,20261126T102354.301_ARX_S,completed,completed,completed,completed
-ARX,I,not_executed,,,not_executed,not_executed,not_executed,not_executed
-ARX,Both,not_executed,,,not_executed,not_executed,not_executed,not_executed
+ARX,I,selected,,20261127T043423.449_ARX_I,completed,completed,completed,completed
+ARX,Both,selected,,20261127T090916.538_ARX_Both,completed,completed,completed,completed
 N4SID,None,selected,,20261127T023906.105_N4SID_None,completed,completed,completed,completed
 N4SID,S,selected,,20261126T214516.211_N4SID_S,completed,completed,completed,completed
 N4SID,I,selected,,20261127T024025.715_N4SID_I,completed,completed,completed,completed

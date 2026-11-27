@@ -1,0 +1,21 @@
+=== Part A Forecast Evaluation ===
+Configurations: 11 selected, 1 without a feasible candidate, 0 not executed of 12; assessment completed for 11 of 11 selected
+No feasible candidate: N4SID / Both in refinement (selection 20261127T025803.981_N4SID_Both)
+Scored 15488 forecast origins (15379 available) and 5808 infectious-projection origins.
+Evaluation artifact saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/evaluation/partA_04_evaluation_results.mat
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_window_scores.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_horizon_scores.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_scenario_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_horizon_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_interval_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_i_projection_window_scores.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_i_projection_horizon_scores.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_i_projection_scenario_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_i_projection_horizon_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_selection_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_candidate_diagnostics.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_trajectory_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_feasibility_summary.csv
+Table saved to: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/tables/partA_04_configuration_status.csv
+=== Part A Forecast Evaluation Complete ===
+
