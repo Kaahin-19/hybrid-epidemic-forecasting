@@ -1,0 +1,11 @@
+[2026-11-26 23:59:38] Run ID: 20261126_235938
+[2026-11-26 23:59:38] Running Part A synthetic forecasting pipeline
+[2026-11-26 23:59:38] Pipeline started
+[2026-11-26 23:59:53] Starting Generating or reusing Part A synthetic datasets
+[2026-11-27 00:00:06] Completed Generating or reusing Part A synthetic datasets in 13s
+[2026-11-27 00:00:06] Starting Selecting hyperparameters for N4SID | None
+[2026-11-27 00:01:39] Completed Selecting hyperparameters for N4SID | None in 93s
+[2026-11-27 00:01:39] Starting Selecting hyperparameters for N4SID | I
+[2026-11-27 00:21:07] Completed Selecting hyperparameters for N4SID | I in 1168s
+[2026-11-27 00:21:07] Starting Selecting hyperparameters for N4SID | Both
+[2026-11-27 00:32:59] Failed Selecting hyperparameters for N4SID | Both after 712s (exit 1). Log: /home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_235938/N4SID_Both_model_selection.log

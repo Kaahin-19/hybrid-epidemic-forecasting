@@ -1,0 +1,9 @@
+Timestamp	Step	Model	Exo	Status	LogFile	Details
+2026-11-26 23:59:53	truth	-	-	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_235938/partA_01_generate_truth.log	Generating or reusing Part A synthetic datasets
+2026-11-27 00:00:06	truth	-	-	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_235938/partA_01_generate_truth.log	13s
+2026-11-27 00:00:06	model_selection	N4SID	None	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_235938/N4SID_None_model_selection.log	Selecting hyperparameters for N4SID | None
+2026-11-27 00:01:39	model_selection	N4SID	None	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_235938/N4SID_None_model_selection.log	93s
+2026-11-27 00:01:39	model_selection	N4SID	I	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_235938/N4SID_I_model_selection.log	Selecting hyperparameters for N4SID | I
+2026-11-27 00:21:07	model_selection	N4SID	I	completed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_235938/N4SID_I_model_selection.log	1168s
+2026-11-27 00:21:07	model_selection	N4SID	Both	started	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_235938/N4SID_Both_model_selection.log	Selecting hyperparameters for N4SID | Both
+2026-11-27 00:32:59	model_selection	N4SID	Both	failed	/home/kaahin/degree_project/hybrid-epidemic-forecasting/results/partA/logs/20261126_235938/N4SID_Both_model_selection.log	exit=1; elapsed=712s
